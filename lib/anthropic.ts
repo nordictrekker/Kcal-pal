@@ -1,8 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ParsedNutrition } from "./types";
 
-// Model is pinned by the project spec (Tech Stack: do not deviate without asking).
-export const NUTRITION_MODEL = "claude-sonnet-4-5";
+// Pinned by the project spec.
+export const NUTRITION_MODEL = "claude-opus-4-8";
 
 export const TEXT_SYSTEM_PROMPT =
   "You are a nutrition database. Given a free-text meal description, return JSON only with shape {calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, serving_size: string, items: [{name, quantity, calories, protein_g, carbs_g, fat_g}], assumptions: string[]}. Estimate using USDA averages. If quantity is ambiguous assume one typical serving. Always return valid JSON, no prose.";
