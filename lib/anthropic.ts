@@ -73,16 +73,16 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
   };
 }
 
-// Parse a free-text meal description. Never fabricates: on any failure
-// returns ok:false so the caller can save nulls and surface an error.
-export async function parseTextMeal(description: string): Promise<ParseResult> {
+async function callAndParse(
+  userMessage: string,
+): Promise<ParseResult> {
   let raw: unknown = null;
   try {
     const resp = await getAnthropic().messages.create({
       model: NUTRITION_MODEL,
       max_tokens: 1024,
       system: TEXT_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: description }],
+      messages: [{ role: "user", content: userMessage }],
     });
     raw = resp;
 
@@ -117,3 +117,21 @@ export async function parseTextMeal(description: string): Promise<ParseResult> {
     return { ok: false, error: message, raw };
   }
 }
+
+// Parse a free-text meal description. Never fabricates: on any failure
+// returns ok:false so the caller can save nulls and surface an error.
+export async function parseTextMeal(description: string): Promise<ParseResult> {
+  return callAndParse(description);
+}
+
+// Fallback when OpenFoodFacts has no record for a barcode. We tell Claude
+// what was scanned and what the user thinks it is so it can estimate from
+// nearest-match products. Same JSON contract as the text path.
+export async function parseBarcodeFallback(args: {
+  barcode: string;
+  productGuess: string;
+}): Promise<ParseResult> {
+  const userMessage = `Barcode ${args.barcode} was scanned but not in the OpenFoodFacts database. The user describes the product as: ${args.productGuess}. Estimate nutrition for one typical serving.`;
+  return callAndParse(userMessage);
+}
+

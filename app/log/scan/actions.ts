@@ -1,0 +1,142 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { lookupOpenFoodFacts, type OffNutrition } from "@/lib/openfoodfacts";
+import { parseBarcodeFallback } from "@/lib/anthropic";
+import { MEALS } from "@/lib/food";
+import type { Meal } from "@/lib/types";
+
+export type LookupResult =
+  | {
+      ok: true;
+      source: "openfoodfacts";
+      barcode: string;
+      data: OffNutrition;
+    }
+  | {
+      ok: false;
+      reason: "not_found";
+      barcode: string;
+      // Returned so the client can hand the user a "type what it is" form
+      // for the Claude fallback.
+    }
+  | {
+      ok: false;
+      reason: "error";
+      barcode: string;
+      error: string;
+    };
+
+export async function lookupBarcode(barcode: string): Promise<LookupResult> {
+  const cleaned = String(barcode).trim();
+  if (!/^\d{6,14}$/.test(cleaned)) {
+    return { ok: false, reason: "error", barcode: cleaned, error: "Invalid barcode." };
+  }
+
+  try {
+    const off = await lookupOpenFoodFacts(cleaned);
+    if (off) {
+      return { ok: true, source: "openfoodfacts", barcode: cleaned, data: off };
+    }
+    return { ok: false, reason: "not_found", barcode: cleaned };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Lookup failed.";
+    return { ok: false, reason: "error", barcode: cleaned, error: message };
+  }
+}
+
+export type FallbackResult =
+  | { ok: true; data: OffNutrition }
+  | { ok: false; error: string };
+
+// Claude fallback when OFF has no entry. The user gives us the product name;
+// Claude estimates macros. We package the result in the same shape as OFF so
+// the confirm form is identical.
+export async function runClaudeFallback(args: {
+  barcode: string;
+  productGuess: string;
+}): Promise<FallbackResult> {
+  const guess = args.productGuess.trim();
+  if (!guess) return { ok: false, error: "Tell me what the product is." };
+
+  const result = await parseBarcodeFallback({
+    barcode: args.barcode,
+    productGuess: guess,
+  });
+
+  if (!result.ok) return { ok: false, error: result.error };
+
+  const d = result.data;
+  return {
+    ok: true,
+    data: {
+      description: guess,
+      calories: d.calories,
+      protein_g: d.protein_g,
+      carbs_g: d.carbs_g,
+      fat_g: d.fat_g,
+      fiber_g: d.fiber_g,
+      serving_size: d.serving_size || null,
+      basis: "serving",
+    },
+  };
+}
+
+function isMeal(v: string): v is Meal {
+  return (MEALS as string[]).includes(v);
+}
+
+function readNumberOrNull(v: FormDataEntryValue | null): number | null {
+  if (v === null) return null;
+  const s = String(v).trim();
+  if (s === "") return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+export type SaveState = { ok: boolean; error?: string };
+
+export async function saveBarcodeEntry(
+  _prev: SaveState,
+  formData: FormData,
+): Promise<SaveState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const barcode = String(formData.get("barcode") ?? "").trim();
+  if (!barcode) return { ok: false, error: "Missing barcode." };
+
+  const description = String(formData.get("description") ?? "").trim();
+  if (!description) return { ok: false, error: "Missing product name." };
+
+  const mealRaw = String(formData.get("meal") ?? "");
+  const meal: Meal = isMeal(mealRaw) ? mealRaw : "snack";
+
+  const serving = String(formData.get("serving_size") ?? "").trim() || null;
+
+  const { error } = await supabase.from("food_entries").insert({
+    user_id: user.id,
+    meal,
+    description,
+    source: "barcode",
+    barcode,
+    serving_size: serving,
+    calories: readNumberOrNull(formData.get("calories")),
+    protein_g: readNumberOrNull(formData.get("protein_g")),
+    carbs_g: readNumberOrNull(formData.get("carbs_g")),
+    fat_g: readNumberOrNull(formData.get("fat_g")),
+    fiber_g: readNumberOrNull(formData.get("fiber_g")),
+    // The form values may have been edited from the original lookup, so
+    // we don't try to round-trip the raw response here.
+    edited_by_user: false,
+  });
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/today");
+  return { ok: true };
+}

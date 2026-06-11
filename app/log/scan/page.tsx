@@ -1,0 +1,29 @@
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { ScanFlow } from "./scan-flow";
+
+export const dynamic = "force-dynamic";
+
+export default async function ScanPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  return (
+    <main className="mx-auto max-w-md p-4 space-y-4">
+      <header className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Scan barcode</h1>
+        <Link
+          href="/today"
+          className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+        >
+          Today →
+        </Link>
+      </header>
+      <ScanFlow />
+    </main>
+  );
+}
