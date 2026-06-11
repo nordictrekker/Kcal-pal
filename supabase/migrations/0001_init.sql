@@ -143,6 +143,12 @@ alter table apple_health_imports enable row level security;
 alter table apple_health_data enable row level security;
 alter table push_subscriptions enable row level security;
 
+-- Grant table-level access to the authenticated role. RLS policies below
+-- enforce per-row isolation, but Postgres rejects at the GRANT layer first
+-- without this — you'd get "permission denied for table" instead of RLS firing.
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
 -- Single-user policy: users can only see/touch their own rows.
 -- drop-then-create so a partial previous run can't block us.
 do $$
