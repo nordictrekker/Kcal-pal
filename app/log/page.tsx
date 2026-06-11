@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Camera } from "lucide-react";
+import { Camera, ImagePlus } from "lucide-react";
 import { defaultMeal } from "@/lib/food";
 import { LogForm } from "./log-form";
 
@@ -24,13 +24,22 @@ export default async function LogPage() {
         </Link>
       </header>
 
-      <Link
-        href="/log/scan"
-        className="flex h-12 w-full items-center justify-center gap-2 rounded-md border bg-secondary font-medium text-secondary-foreground hover:bg-secondary/80"
-      >
-        <Camera className="size-4" />
-        Scan barcode
-      </Link>
+      <div className="grid grid-cols-2 gap-2">
+        <Link
+          href="/log/scan"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-md border bg-secondary font-medium text-secondary-foreground hover:bg-secondary/80"
+        >
+          <Camera className="size-4" />
+          Scan
+        </Link>
+        <Link
+          href="/log/photo"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-md border bg-secondary font-medium text-secondary-foreground hover:bg-secondary/80"
+        >
+          <ImagePlus className="size-4" />
+          Photo
+        </Link>
+      </div>
 
       <div className="flex items-center gap-3">
         <div className="h-px flex-1 bg-border" />

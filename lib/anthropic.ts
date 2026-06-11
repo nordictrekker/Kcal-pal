@@ -7,6 +7,17 @@ export const NUTRITION_MODEL = "claude-opus-4-8";
 export const TEXT_SYSTEM_PROMPT =
   "You are a nutrition database. Given a free-text meal description, return JSON only with shape {calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, serving_size: string, items: [{name, quantity, calories, protein_g, carbs_g, fat_g}], assumptions: string[]}. Estimate using USDA averages. If quantity is ambiguous assume one typical serving. Always return valid JSON, no prose.";
 
+// Vision uses the same schema as text plus a confidence field (0..1)
+// because photo identification is fuzzier than text.
+export const VISION_SYSTEM_PROMPT =
+  "You are a nutrition database. Given a meal photo, return JSON only with shape {calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, serving_size: string, items: [{name, quantity, calories, protein_g, carbs_g, fat_g}], assumptions: string[], confidence: number}. Estimate using USDA averages. confidence is between 0 and 1 reflecting how clearly you can identify the meal and portion sizes from the image. If portion is ambiguous assume one typical serving and note it in assumptions. Always return valid JSON, no prose.";
+
+export type SupportedImageMediaType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/gif"
+  | "image/webp";
+
 let client: Anthropic | null = null;
 
 export function getAnthropic() {
@@ -73,16 +84,19 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
   };
 }
 
+type UserContent = string | Anthropic.Messages.ContentBlockParam[];
+
 async function callAndParse(
-  userMessage: string,
+  userContent: UserContent,
+  systemPrompt: string = TEXT_SYSTEM_PROMPT,
 ): Promise<ParseResult> {
   let raw: unknown = null;
   try {
     const resp = await getAnthropic().messages.create({
       model: NUTRITION_MODEL,
       max_tokens: 1024,
-      system: TEXT_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
+      system: systemPrompt,
+      messages: [{ role: "user", content: userContent }],
     });
     raw = resp;
 
@@ -133,5 +147,27 @@ export async function parseBarcodeFallback(args: {
 }): Promise<ParseResult> {
   const userMessage = `Barcode ${args.barcode} was scanned but not in the OpenFoodFacts database. The user describes the product as: ${args.productGuess}. Estimate nutrition for one typical serving.`;
   return callAndParse(userMessage);
+}
+
+// Parse a meal photo via vision. Schema includes confidence per spec.
+export async function parsePhotoMeal(args: {
+  imageBase64: string;
+  mediaType: SupportedImageMediaType;
+}): Promise<ParseResult> {
+  const content: Anthropic.Messages.ContentBlockParam[] = [
+    {
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: args.mediaType,
+        data: args.imageBase64,
+      },
+    },
+    {
+      type: "text",
+      text: "Analyze this meal photo and return only JSON matching the schema in your instructions.",
+    },
+  ];
+  return callAndParse(content, VISION_SYSTEM_PROMPT);
 }
 
