@@ -119,7 +119,7 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   try {
     const email = Deno.env.get("EIGHT_SLEEP_EMAIL");
     const password = Deno.env.get("EIGHT_SLEEP_PASSWORD");
@@ -135,6 +135,13 @@ Deno.serve(async () => {
         },
         500,
       );
+    }
+
+    // Internal auth: caller must present the project's secret key.
+    // Verify JWT is disabled on this function since sb_secret_* isn't a JWT.
+    const auth = req.headers.get("Authorization") ?? "";
+    if (auth !== `Bearer ${serviceKey}`) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);

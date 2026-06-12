@@ -1,0 +1,10 @@
+# Supabase project config for `supabase functions deploy`.
+# Functions that take an sb_secret_* via Authorization Bearer must disable
+# Verify JWT — the gateway tries to validate the token as a JWT otherwise
+# and 401s. Auth is enforced inside each function instead.
+
+[functions.sync-oura]
+verify_jwt = false
+
+[functions.sync-eight-sleep]
+verify_jwt = false
