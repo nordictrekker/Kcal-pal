@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { MacroTotals } from "./macro-totals";
 import { EntryList } from "./entry-list";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
+import {
+  EightSleepCard,
+  type EightSleepSnapshot,
+} from "./eight-sleep-card";
 
 export const dynamic = "force-dynamic";
 
@@ -20,23 +24,33 @@ export default async function TodayPage() {
 
   const { start, end } = dayBounds();
 
-  const [{ data: profile }, { data: entries }, { data: ouraRows }] =
-    await Promise.all([
-      supabase.from("profiles").select("*").eq("user_id", user.id).single(),
-      supabase
-        .from("food_entries")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("consumed_at", start)
-        .lt("consumed_at", end)
-        .order("consumed_at", { ascending: true }),
-      supabase
-        .from("oura_daily")
-        .select("date,sleep_score,hrv_avg,readiness_score")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(1),
-    ]);
+  const [
+    { data: profile },
+    { data: entries },
+    { data: ouraRows },
+    { data: eightRows },
+  ] = await Promise.all([
+    supabase.from("profiles").select("*").eq("user_id", user.id).single(),
+    supabase
+      .from("food_entries")
+      .select("*")
+      .eq("user_id", user.id)
+      .gte("consumed_at", start)
+      .lt("consumed_at", end)
+      .order("consumed_at", { ascending: true }),
+    supabase
+      .from("oura_daily")
+      .select("date,sleep_score,hrv_avg,readiness_score")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(1),
+    supabase
+      .from("eight_sleep_daily")
+      .select("date,sleep_score,hrv_avg,bed_temp_avg_f")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(1),
+  ]);
 
   // Show today's Oura row if available; otherwise the most recent one
   // we have (last night's sleep may not be exported yet first thing
@@ -48,6 +62,16 @@ export default async function TodayPage() {
         sleep_score: ouraMostRecent.sleep_score as number | null,
         hrv_avg: ouraMostRecent.hrv_avg as number | null,
         readiness_score: ouraMostRecent.readiness_score as number | null,
+      }
+    : null;
+
+  const eightMostRecent = (eightRows ?? [])[0] ?? null;
+  const eightSnapshot: EightSleepSnapshot = eightMostRecent
+    ? {
+        date: eightMostRecent.date as string,
+        sleep_score: eightMostRecent.sleep_score as number | null,
+        hrv_avg: eightMostRecent.hrv_avg as number | null,
+        bed_temp_avg_f: eightMostRecent.bed_temp_avg_f as number | null,
       }
     : null;
 
@@ -75,6 +99,7 @@ export default async function TodayPage() {
       </header>
 
       <OuraCard data={ouraSnapshot} />
+      <EightSleepCard data={eightSnapshot} />
 
       <MacroTotals totals={totals} targets={targets} />
 

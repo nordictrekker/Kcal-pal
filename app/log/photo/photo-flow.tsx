@@ -218,6 +218,54 @@ function ConfirmForm({
   );
 }
 
+// Downsample to a max long edge (1568px = Opus 4.6's vision ceiling) and
+// re-encode as JPEG q=0.85 before upload. Reduces Claude vision cost
+// roughly 8x for typical 4032x3024 iPhone photos, and shrinks what we
+// store in Supabase Storage too. Returns the original file if the
+// browser can't decode it (e.g. HEIC) — the server-side type guard will
+// handle that case with a friendly message.
+async function resizeImage(
+  file: File,
+  maxLongEdge = 1568,
+  quality = 0.85,
+): Promise<File> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return file;
+  }
+
+  try {
+    const longEdge = Math.max(bitmap.width, bitmap.height);
+    if (longEdge <= maxLongEdge) return file;
+
+    const scale = maxLongEdge / longEdge;
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", quality),
+    );
+    if (!blob) return file;
+
+    const name = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], name, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } finally {
+    bitmap.close();
+  }
+}
+
 export function PhotoFlow() {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>({ kind: "picking" });
@@ -243,9 +291,12 @@ export function PhotoFlow() {
   function analyze() {
     if (stage.kind !== "previewing") return;
     setStage({ ...stage, kind: "analyzing" });
-    const fd = new FormData();
-    fd.append("photo", stage.file);
     startTransition(async () => {
+      // Resize before upload: Opus tops out at 1568px on the long edge
+      // for vision, so anything bigger is wasted tokens (~8x cost cut).
+      const resized = await resizeImage(stage.file);
+      const fd = new FormData();
+      fd.append("photo", resized);
       const r = await analyzePhoto(fd);
       if (r.ok) {
         setStage({
