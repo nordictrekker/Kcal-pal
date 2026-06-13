@@ -1,0 +1,25 @@
+{
+  "_comment": "Copy to .mcp.json (gitignored), fill in the tokens, then restart Claude Code so the MCP servers attach to a new session.",
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=nrfvsfmhzrkrokzzupen"
+      ],
+      "env": {
+        "_token_help": "Supabase dashboard → click your avatar → Account Settings → Access Tokens → Generate new token. Scope: full account access.",
+        "SUPABASE_ACCESS_TOKEN": "sbp_..."
+      }
+    },
+    "vercel": {
+      "command": "npx",
+      "args": ["-y", "@vercel/mcp-adapter@latest"],
+      "env": {
+        "_token_help": "Vercel dashboard → Settings → Tokens → Create Token. Scope: full access. Skip the Vercel block entirely if you'd rather set VAPID vars in the dashboard yourself.",
+        "VERCEL_API_TOKEN": "..."
+      }
+    }
+  }
+}

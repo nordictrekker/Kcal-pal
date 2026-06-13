@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Local deploy secrets
 scripts/deploy.env
+
+# MCP config holds access tokens — never commit
+.mcp.json
