@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ScanFlow } from "./scan-flow";
+import { ScanFlowClient } from "./scan-flow-client";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export default async function ScanPage() {
           Today →
         </Link>
       </header>
-      <ScanFlow />
+      <ScanFlowClient />
     </main>
   );
 }

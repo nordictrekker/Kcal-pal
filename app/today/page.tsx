@@ -124,6 +124,14 @@ export default async function TodayPage() {
   const totals = sumTotals(list);
   const p = profile as Profile | null;
 
+  // Only render the integration cards if the credentials are configured.
+  // Avoids a screaming red "not set" banner on the dashboard for things
+  // the user hasn't opted into.
+  const ouraEnabled = Boolean(process.env.OURA_PERSONAL_ACCESS_TOKEN);
+  const eightSleepEnabled = Boolean(
+    process.env.EIGHT_SLEEP_EMAIL && process.env.EIGHT_SLEEP_PASSWORD,
+  );
+
   const targets = {
     calories: p?.daily_calorie_target ?? 2000,
     protein_g: p?.daily_protein_target_g ?? 130,
@@ -143,8 +151,8 @@ export default async function TodayPage() {
         </form>
       </header>
 
-      <OuraCard data={ouraSnapshot} />
-      <EightSleepCard data={eightSnapshot} />
+      {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}
+      {eightSleepEnabled ? <EightSleepCard data={eightSnapshot} /> : null}
       <CycleCard initial={cycleSnapshot} />
 
       <MacroTotals totals={totals} targets={targets} />
