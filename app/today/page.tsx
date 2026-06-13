@@ -166,6 +166,9 @@ export default async function TodayPage() {
         <Link href="/import" className="underline-offset-4 hover:underline">
           Import Health
         </Link>
+        <Link href="/settings" className="underline-offset-4 hover:underline">
+          Settings
+        </Link>
       </nav>
 
       <Link
