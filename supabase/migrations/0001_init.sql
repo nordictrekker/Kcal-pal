@@ -149,6 +149,12 @@ alter table push_subscriptions enable row level security;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant usage, select on all sequences in schema public to authenticated;
 
+-- Same grants for service_role, which sb_secret_* keys map to. Service
+-- role bypasses RLS but still needs table-level GRANT. Edge Functions
+-- writing via the service role would otherwise hit "permission denied".
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;
+
 -- Single-user policy: users can only see/touch their own rows.
 -- drop-then-create so a partial previous run can't block us.
 do $$
