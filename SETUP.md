@@ -20,6 +20,7 @@ Project → Settings → Environment Variables. Add each, then redeploy.
 | `VAPID_SUBJECT` | `mailto:juliefloodreiff@gmail.com` |
 | `OURA_PERSONAL_ACCESS_TOKEN` | (optional) Oura PAT for the Sync now button |
 | `EIGHT_SLEEP_EMAIL` / `EIGHT_SLEEP_PASSWORD` | (optional) Eight Sleep login |
+| `HEALTH_INGEST_TOKEN` | Bearer token the iOS Shortcut sends to `/api/health/ingest`. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
 
 > The VAPID keypair above was generated for this project. Rotate with
 > `npx web-push generate-vapid-keys` if it's ever exposed.
@@ -91,6 +92,64 @@ select id, status_code, content from net._http_response order by id desc limit 1
 3. Settings → **Enable notifications** → **Send test**. Confirm the banner.
 4. Deploy `send-quarterly-push` + run `0004` for the automatic quarterly
    reminder.
+
+## Apple Health auto-push (iOS Shortcut)
+
+Replaces the third-party Health Auto Export app. A Shortcut on your phone
+reads HealthKit and POSTs to `/api/health/ingest`. Schedule it via a
+Shortcuts Automation and quarterly imports run by themselves.
+
+### One-time: build the Shortcut
+
+1. iPhone → **Shortcuts** app → **+** to create a new Shortcut → name it
+   "Send Health to Kcal-pal".
+2. Add a **Dictionary** action. Set Type to **Array**, then add one
+   Dictionary item per metric. For each item, add three keys:
+   - `metric` (Text) — e.g. `body_mass`, `body_fat_percentage`,
+     `resting_heart_rate`, `step_count`, `active_energy_burned`, `vo2max`.
+     The endpoint normalizes these names; case/punctuation don't matter.
+   - `value` (Number) — wire to a **Find Health Samples** action for that
+     metric, set "Limit" to 1, sort "Latest First", then use the
+     `Quantity` magic variable.
+   - `recorded_at` (Text) — use the `Start Date` magic variable from the
+     same Find action, formatted as ISO 8601.
+3. Wrap the array in another **Dictionary** with one key `samples` whose
+   value is the array.
+4. Add a **Get Contents of URL** action:
+   - URL: copy from **/settings → Apple Health auto-push → POST URL**
+   - Method: **POST**
+   - Request Body: **JSON**, set to the wrapped dictionary
+   - Headers: add one — `Authorization` = paste from **/settings → Apple
+     Health auto-push → Authorization header**
+5. Add a **Show Result** action (so you can confirm the response on the
+   first run); remove after testing.
+6. Run the Shortcut. Expect `{ "ok": true, "imported": N, … }`.
+
+### Schedule it
+
+In Shortcuts → **Automation** tab → **+** → **Time of Day** → pick a
+quarterly cadence (or monthly if you want fresher data) → **Run Shortcut**
+→ choose this one. Toggle **Run Immediately** off only if you want to be
+prompted; on for fire-and-forget.
+
+### What the endpoint accepts
+
+`POST /api/health/ingest` (Authorization: `Bearer $HEALTH_INGEST_TOKEN`),
+JSON body either:
+
+```json
+{ "samples": [
+  { "metric": "body_mass", "value": 165, "unit": "lb",
+    "recorded_at": "2026-06-13T07:00:00Z" }
+] }
+```
+
+…or the metric-grouped form (`{ "metrics": [{ "name": "...", "data": [...] }] }`)
+which is identical to the Health Auto Export JSON shape, so the same
+endpoint can also receive HAE if you ever want the fallback.
+
+Idempotent: re-pushing the same samples is a no-op (upsert on
+`user_id + metric + recorded_at`).
 
 ## Feature → route map
 

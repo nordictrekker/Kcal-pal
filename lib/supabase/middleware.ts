@@ -33,6 +33,7 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     path.startsWith("/login") ||
     path.startsWith("/auth") ||
+    path.startsWith("/api/health/ingest") || // token-authed inside the route
     path.startsWith("/_next") ||
     path === "/favicon.ico";
 

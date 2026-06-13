@@ -1,9 +1,11 @@
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { InstallCard } from "./install-card";
 import { Notifications } from "./notifications";
 import { ThemeToggle } from "./theme-toggle";
+import { ShortcutCard } from "./shortcut-card";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,14 @@ export default async function SettingsPage() {
   if (!user) redirect("/login");
 
   const vapidPublicKey = process.env.VAPID_PUBLIC_KEY ?? "";
+  const ingestToken = process.env.HEALTH_INGEST_TOKEN ?? "";
+
+  const hdrs = await headers();
+  const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "";
+  const proto = hdrs.get("x-forwarded-proto") ?? "https";
+  const ingestUrl = host
+    ? `${proto}://${host}/api/health/ingest`
+    : "/api/health/ingest";
 
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
@@ -40,6 +50,10 @@ export default async function SettingsPage() {
           server).
         </p>
       )}
+
+      {ingestToken ? (
+        <ShortcutCard ingestUrl={ingestUrl} token={ingestToken} />
+      ) : null}
 
       <p className="px-1 text-xs text-muted-foreground">
         Signed in as {user.email}.
