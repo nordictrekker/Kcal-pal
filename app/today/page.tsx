@@ -159,6 +159,15 @@ export default async function TodayPage() {
 
       <EntryList entries={list} />
 
+      <nav className="flex justify-center gap-4 pt-2 text-sm text-muted-foreground">
+        <Link href="/weekly" className="underline-offset-4 hover:underline">
+          Weekly
+        </Link>
+        <Link href="/import" className="underline-offset-4 hover:underline">
+          Import Health
+        </Link>
+      </nav>
+
       <Link
         href="/log"
         className="fixed inset-x-0 bottom-4 mx-auto flex h-12 w-[calc(100%-2rem)] max-w-md items-center justify-center rounded-full bg-primary font-medium text-primary-foreground shadow-lg"
