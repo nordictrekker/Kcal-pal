@@ -12,6 +12,12 @@ import {
   EightSleepCard,
   type EightSleepSnapshot,
 } from "./eight-sleep-card";
+import { CycleCard, type CycleSnapshot } from "./cycle-card";
+import {
+  isPhase,
+  phaseForCycleDay,
+  predictCycleDay,
+} from "@/lib/cycle";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +29,14 @@ export default async function TodayPage() {
   if (!user) redirect("/login");
 
   const { start, end } = dayBounds();
+  const today = new Date().toISOString().slice(0, 10);
 
   const [
     { data: profile },
     { data: entries },
     { data: ouraRows },
     { data: eightRows },
+    { data: cycleRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
     supabase
@@ -48,6 +56,13 @@ export default async function TodayPage() {
       .from("eight_sleep_daily")
       .select("date,sleep_score,hrv_avg,bed_temp_avg_f")
       .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(1),
+    supabase
+      .from("cycle_days")
+      .select("date,cycle_day,phase")
+      .eq("user_id", user.id)
+      .lte("date", today)
       .order("date", { ascending: false })
       .limit(1),
   ]);
@@ -75,6 +90,36 @@ export default async function TodayPage() {
       }
     : null;
 
+  // Cycle snapshot: prefer today's stored row; otherwise project forward
+  // from the most recent entry so the widget pre-fills with a sensible
+  // guess instead of asking for a fresh count every day.
+  const cycleMostRecent = (cycleRows ?? [])[0] ?? null;
+  let cycleSnapshot: CycleSnapshot;
+  if (cycleMostRecent && cycleMostRecent.date === today) {
+    const phaseRaw =
+      typeof cycleMostRecent.phase === "string" ? cycleMostRecent.phase : null;
+    cycleSnapshot = {
+      day: (cycleMostRecent.cycle_day as number | null) ?? null,
+      phase: phaseRaw && isPhase(phaseRaw) ? phaseRaw : null,
+      source: "today",
+    };
+  } else if (cycleMostRecent) {
+    const projected = predictCycleDay(
+      {
+        date: cycleMostRecent.date as string,
+        cycle_day: cycleMostRecent.cycle_day as number | null,
+      },
+      today,
+    );
+    cycleSnapshot = {
+      day: projected,
+      phase: projected ? phaseForCycleDay(projected) : null,
+      source: "predicted",
+    };
+  } else {
+    cycleSnapshot = { day: null, phase: null, source: "empty" };
+  }
+
   const list = (entries ?? []) as FoodEntry[];
   const totals = sumTotals(list);
   const p = profile as Profile | null;
@@ -100,6 +145,7 @@ export default async function TodayPage() {
 
       <OuraCard data={ouraSnapshot} />
       <EightSleepCard data={eightSnapshot} />
+      <CycleCard initial={cycleSnapshot} />
 
       <MacroTotals totals={totals} targets={targets} />
 
