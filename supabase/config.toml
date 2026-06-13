@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.send-quarterly-push]
 verify_jwt = false
+
+[functions.cleanup-orphans]
+verify_jwt = false

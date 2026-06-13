@@ -3,19 +3,17 @@
 Items deferred to Phase 10 (Polish) or marked for later. Kept in the repo so
 they survive between Claude sessions and aren't forgotten.
 
-## Phase 10 (Polish)
+## Done
 
-### Janitor: orphan storage cleanup
-The photo flow uploads to `food-photos` storage BEFORE the confirm screen.
-If the user cancels after analyze, the photo stays in storage forever.
+### Janitor: orphan storage cleanup ✓ (Phase 10)
+Edge Function `cleanup-orphans` deletes `food-photos` objects older than
+24h not referenced by any `food_entries.photo_url`. Scheduled daily at
+4 UTC via `0005_cleanup_cron.sql`.
 
-Approach when we get there:
-- Edge Function `cleanup-orphans` that queries `food-photos` storage for
-  objects older than ~24h whose path is not referenced by any
-  `food_entries.photo_url`.
-- Schedule via pg_cron (daily, off-peak).
-- Optional: also drop AI-parse `raw_ai_response` blobs older than N days
-  to keep the DB lean — we only need them for debugging recent edits.
+## Still open / future
+
+- Optional: drop AI-parse `raw_ai_response` blobs older than N days to keep
+  the DB lean — only needed for debugging recent edits.
 
 ### Other cost-optimization ideas to evaluate
 

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { InstallCard } from "./install-card";
 import { Notifications } from "./notifications";
+import { ThemeToggle } from "./theme-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,8 @@ export default async function SettingsPage() {
           Today →
         </Link>
       </header>
+
+      <ThemeToggle />
 
       <InstallCard />
 
