@@ -46,3 +46,6 @@ scripts/deploy.env
 
 # MCP config holds access tokens — never commit
 .mcp.json
+
+# Claude Code local settings (personal overrides — sandbox allowlist etc.)
+.claude/settings.local.json
