@@ -1,11 +1,11 @@
 -- ============================================================================
 -- Kcal-pal — one-paste cron + Vault setup for the remaining edge functions.
 --
--- Covers: sync-eight-sleep, send-quarterly-push, cleanup-orphans.
+-- Covers: send-quarterly-push, cleanup-orphans.
 -- (sync-oura is already set up.)
 --
 -- BEFORE RUNNING:
---   1. Deploy the three edge functions (Dashboard → Edge Functions), each
+--   1. Deploy the two edge functions (Dashboard → Edge Functions), each
 --      with Verify JWT OFF and the secrets listed in SETUP.md.
 --   2. Find-replace the token  __PASTE_SB_SECRET_KEY__  below with your
 --      sb_secret_… key (Project Settings → API → Secret keys → Reveal).
@@ -23,8 +23,6 @@ declare
   k text;
   v text;
   pairs text[][] := array[
-    ['sync_eight_sleep_url',  'https://nrfvsfmhzrkrokzzupen.supabase.co/functions/v1/sync-eight-sleep'],
-    ['sync_eight_sleep_auth', '__PASTE_SB_SECRET_KEY__'],
     ['quarterly_push_url',    'https://nrfvsfmhzrkrokzzupen.supabase.co/functions/v1/send-quarterly-push'],
     ['quarterly_push_auth',   '__PASTE_SB_SECRET_KEY__'],
     ['cleanup_orphans_url',   'https://nrfvsfmhzrkrokzzupen.supabase.co/functions/v1/cleanup-orphans'],
@@ -46,16 +44,6 @@ begin
 end $$;
 
 -- ---- Schedules ----
-
-select cron.unschedule('sync-eight-sleep-nightly')
-where exists (select 1 from cron.job where jobname = 'sync-eight-sleep-nightly');
-select cron.schedule('sync-eight-sleep-nightly', '30 6 * * *', $$
-  select net.http_post(
-    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sync_eight_sleep_url'),
-    headers := jsonb_build_object('Content-Type','application/json',
-      'Authorization','Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'sync_eight_sleep_auth')),
-    body := '{}'::jsonb, timeout_milliseconds := 60000);
-$$);
 
 select cron.unschedule('quarterly-health-push')
 where exists (select 1 from cron.job where jobname = 'quarterly-health-push');

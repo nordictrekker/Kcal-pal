@@ -67,20 +67,6 @@ create table if not exists oura_daily (
   primary key (user_id, date)
 );
 
--- Eight Sleep daily summary
-create table if not exists eight_sleep_daily (
-  user_id uuid not null references auth.users(id) on delete cascade,
-  date date not null,
-  sleep_score int,
-  total_sleep_min int,
-  hrv_avg numeric,
-  resting_hr int,
-  bed_temp_avg_f numeric,
-  toss_turns int,
-  raw jsonb,
-  primary key (user_id, date)
-);
-
 -- Cycle tracking (manual entry)
 create table if not exists cycle_days (
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -137,7 +123,6 @@ alter table profiles enable row level security;
 alter table food_entries enable row level security;
 alter table body_weights enable row level security;
 alter table oura_daily enable row level security;
-alter table eight_sleep_daily enable row level security;
 alter table cycle_days enable row level security;
 alter table apple_health_imports enable row level security;
 alter table apple_health_data enable row level security;
@@ -164,7 +149,7 @@ begin
   for t in
     select unnest(array[
       'profiles', 'food_entries', 'body_weights', 'oura_daily',
-      'eight_sleep_daily', 'cycle_days', 'apple_health_imports',
+      'cycle_days', 'apple_health_imports',
       'apple_health_data', 'push_subscriptions'
     ])
   loop

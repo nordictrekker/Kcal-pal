@@ -8,10 +8,6 @@ import { Button } from "@/components/ui/button";
 import { MacroTotals } from "./macro-totals";
 import { EntryList } from "./entry-list";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
-import {
-  EightSleepCard,
-  type EightSleepSnapshot,
-} from "./eight-sleep-card";
 import { CycleCard, type CycleSnapshot } from "./cycle-card";
 import {
   isPhase,
@@ -35,7 +31,6 @@ export default async function TodayPage() {
     { data: profile },
     { data: entries },
     { data: ouraRows },
-    { data: eightRows },
     { data: cycleRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
@@ -49,12 +44,6 @@ export default async function TodayPage() {
     supabase
       .from("oura_daily")
       .select("date,sleep_score,hrv_avg,readiness_score")
-      .eq("user_id", user.id)
-      .order("date", { ascending: false })
-      .limit(1),
-    supabase
-      .from("eight_sleep_daily")
-      .select("date,sleep_score,hrv_avg,bed_temp_avg_f")
       .eq("user_id", user.id)
       .order("date", { ascending: false })
       .limit(1),
@@ -77,16 +66,6 @@ export default async function TodayPage() {
         sleep_score: ouraMostRecent.sleep_score as number | null,
         hrv_avg: ouraMostRecent.hrv_avg as number | null,
         readiness_score: ouraMostRecent.readiness_score as number | null,
-      }
-    : null;
-
-  const eightMostRecent = (eightRows ?? [])[0] ?? null;
-  const eightSnapshot: EightSleepSnapshot = eightMostRecent
-    ? {
-        date: eightMostRecent.date as string,
-        sleep_score: eightMostRecent.sleep_score as number | null,
-        hrv_avg: eightMostRecent.hrv_avg as number | null,
-        bed_temp_avg_f: eightMostRecent.bed_temp_avg_f as number | null,
       }
     : null;
 
@@ -128,9 +107,6 @@ export default async function TodayPage() {
   // Avoids a screaming red "not set" banner on the dashboard for things
   // the user hasn't opted into.
   const ouraEnabled = Boolean(process.env.OURA_PERSONAL_ACCESS_TOKEN);
-  const eightSleepEnabled = Boolean(
-    process.env.EIGHT_SLEEP_EMAIL && process.env.EIGHT_SLEEP_PASSWORD,
-  );
 
   const targets = {
     calories: p?.daily_calorie_target ?? 2000,
@@ -152,7 +128,6 @@ export default async function TodayPage() {
       </header>
 
       {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}
-      {eightSleepEnabled ? <EightSleepCard data={eightSnapshot} /> : null}
       <CycleCard initial={cycleSnapshot} />
 
       <MacroTotals totals={totals} targets={targets} />

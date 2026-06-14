@@ -19,7 +19,6 @@ Project → Settings → Environment Variables. Add each, then redeploy.
 | `VAPID_PRIVATE_KEY` | `jywx9WEBu7vtbGu-c_FSey-7dlvNbc8mK_soKCFqq6Q` |
 | `VAPID_SUBJECT` | `mailto:juliefloodreiff@gmail.com` |
 | `OURA_PERSONAL_ACCESS_TOKEN` | (optional) Oura PAT for the Sync now button |
-| `EIGHT_SLEEP_EMAIL` / `EIGHT_SLEEP_PASSWORD` | (optional) Eight Sleep login |
 | `HEALTH_INGEST_TOKEN` | Bearer token the iOS Shortcut sends to `/api/health/ingest`. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
 
 > The VAPID keypair above was generated for this project. Rotate with
@@ -43,7 +42,6 @@ a JWT; auth is enforced inside each function).
 | Function | Secrets (Edge Functions → Secrets) |
 |---|---|
 | `sync-oura` | `OURA_PERSONAL_ACCESS_TOKEN`, `ALLOWED_EMAIL`, `SUPABASE_SERVICE_ROLE_KEY`=`sb_secret_…` |
-| `sync-eight-sleep` | `EIGHT_SLEEP_EMAIL`, `EIGHT_SLEEP_PASSWORD`, `ALLOWED_EMAIL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `send-quarterly-push` | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `ALLOWED_EMAIL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `cleanup-orphans` | `ALLOWED_EMAIL`, `SUPABASE_SERVICE_ROLE_KEY` |
 
@@ -66,9 +64,9 @@ select vault.create_secret('<sb_secret_… key>', '<name>_auth');
 | Migration | Vault names | Schedule |
 |---|---|---|
 | `0002_oura_cron.sql` | `sync_oura_url` / `sync_oura_auth` | 6:00 UTC daily ✓ done |
-| `0003_eight_sleep_cron.sql` | `sync_eight_sleep_url` / `sync_eight_sleep_auth` | 6:30 UTC daily |
 | `0004_quarterly_push_cron.sql` | `quarterly_push_url` / `quarterly_push_auth` | 09:00 UTC, 1st of Jan/Apr/Jul/Oct |
 | `0005_cleanup_cron.sql` | `cleanup_orphans_url` / `cleanup_orphans_auth` | 4:00 UTC daily |
+| `0006_drop_eight_sleep.sql` | — | (one-shot cleanup, no cron) |
 
 Test any function manually:
 

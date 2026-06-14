@@ -11,7 +11,7 @@
 #   supabase link --project-ref nrfvsfmhzrkrokzzupen
 #   bash scripts/deploy-edge-functions.sh
 #
-# config.toml already sets verify_jwt = false for all three functions, so the
+# config.toml already sets verify_jwt = false for these functions, so the
 # deploys honor that automatically.
 
 set -euo pipefail
@@ -36,18 +36,13 @@ supabase secrets set \
   ALLOWED_EMAIL="$ALLOWED_EMAIL" \
   SUPABASE_SERVICE_ROLE_KEY="$SB_SECRET_KEY"
 
-echo "==> Setting Eight Sleep secrets"
-supabase secrets set \
-  EIGHT_SLEEP_EMAIL="${EIGHT_SLEEP_EMAIL:-}" \
-  EIGHT_SLEEP_PASSWORD="${EIGHT_SLEEP_PASSWORD:-}"
-
 echo "==> Setting push secrets"
 supabase secrets set \
   VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" \
   VAPID_PRIVATE_KEY="$VAPID_PRIVATE_KEY" \
   VAPID_SUBJECT="$VAPID_SUBJECT"
 
-for fn in sync-eight-sleep send-quarterly-push cleanup-orphans; do
+for fn in send-quarterly-push cleanup-orphans; do
   echo "==> Deploying $fn"
   supabase functions deploy "$fn"
 done

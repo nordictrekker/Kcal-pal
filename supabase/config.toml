@@ -6,9 +6,6 @@
 [functions.sync-oura]
 verify_jwt = false
 
-[functions.sync-eight-sleep]
-verify_jwt = false
-
 [functions.send-quarterly-push]
 verify_jwt = false
 
