@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { timingSafeEqual } from "node:crypto";
 import type { HealthPoint } from "@/lib/apple-health";
+import { latestPeriodStart } from "@/lib/cycle";
 
 // Apple Health ingest endpoint for the iOS Shortcut auto-push.
 //
@@ -35,6 +36,9 @@ const METRIC_ALIASES: Record<string, string> = {
   active_energy: "active_energy",
   vo2max: "vo2_max",
   vo2_max: "vo2_max",
+  menstrual_flow: "menstrual_flow",
+  menstruation: "menstrual_flow",
+  period: "menstrual_flow",
 };
 
 function canonicalMetric(raw: string): string {
@@ -51,7 +55,15 @@ function canonicalMetric(raw: string): string {
   if (key.includes("step")) return "steps";
   if (key.includes("active") && key.includes("energy")) return "active_energy";
   if (key.includes("vo2")) return "vo2_max";
+  if (key.includes("menstr") || key.includes("period")) return "menstrual_flow";
   return key || "unknown";
+}
+
+// HealthKit menstrual-flow category values: 1=unspecified, 2=light,
+// 3=medium, 4=heavy, 5=none. A "flow day" is any value in 1..4. Exports
+// vary, so we treat 0 (some encode none as 0) and ≥5 as no-flow.
+function isFlowValue(v: number): boolean {
+  return v >= 1 && v <= 4;
 }
 
 function toIso(raw: unknown): string | null {
@@ -232,6 +244,33 @@ export async function POST(request: Request) {
     }
   }
 
+  // Cycle automation: if menstrual-flow samples arrived, find the most
+  // recent period start and advance the profile if it's newer than what we
+  // have. This is what makes the cycle tracker self-update — no manual
+  // stepping once the user logs (or Oura writes) flow to Apple Health.
+  let periodStartUpdated: string | null = null;
+  const flowDays = points
+    .filter((p) => p.metric === "menstrual_flow" && isFlowValue(p.value))
+    .map((p) => p.recorded_at.slice(0, 10));
+  if (flowDays.length > 0) {
+    const newestStart = latestPeriodStart(flowDays);
+    if (newestStart) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("last_period_start")
+        .eq("user_id", user.id)
+        .single();
+      const current = (prof?.last_period_start as string | null) ?? null;
+      if (!current || newestStart > current) {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ last_period_start: newestStart })
+          .eq("user_id", user.id);
+        if (!error) periodStartUpdated = newestStart;
+      }
+    }
+  }
+
   // Date-range bookkeeping.
   let rangeStart: string | null = null;
   let rangeEnd: string | null = null;
@@ -253,6 +292,7 @@ export async function POST(request: Request) {
     ok: true,
     imported,
     weightsBackfilled,
+    periodStartUpdated,
     rangeStart,
     rangeEnd,
   });

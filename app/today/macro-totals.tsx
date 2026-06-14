@@ -50,10 +50,13 @@ export function MacroTotals({
   totals,
   targets,
   phaseAdjustment,
+  targetNote,
 }: {
   totals: Totals;
   targets: Totals;
   phaseAdjustment?: { phase: string; description: string } | null;
+  // Short explanation when targets are auto-computed (e.g. from Oura burn).
+  targetNote?: string | null;
 }) {
   const calPct = targets.calories > 0
     ? Math.min(100, (totals.calories / targets.calories) * 100)
@@ -81,6 +84,9 @@ export function MacroTotals({
               }}
             />
           </div>
+          {targetNote ? (
+            <p className="pt-1 text-xs text-muted-foreground">{targetNote}</p>
+          ) : null}
           {phaseAdjustment ? (
             <p className="pt-1 text-xs text-muted-foreground">
               <span className="capitalize">{phaseAdjustment.phase}</span>:{" "}

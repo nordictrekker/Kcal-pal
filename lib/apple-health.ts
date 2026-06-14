@@ -40,6 +40,9 @@ const METRIC_ALIASES: Record<string, string> = {
   active_energy_burned: "active_energy",
   vo2_max: "vo2_max",
   vo2max: "vo2_max",
+  menstrual_flow: "menstrual_flow",
+  menstruation: "menstrual_flow",
+  period: "menstrual_flow",
 };
 
 function canonicalMetric(raw: string): string {
@@ -57,6 +60,7 @@ function canonicalMetric(raw: string): string {
   if (key.includes("step")) return "steps";
   if (key.includes("active") && key.includes("energy")) return "active_energy";
   if (key.includes("vo2")) return "vo2_max";
+  if (key.includes("menstr") || key.includes("period")) return "menstrual_flow";
   return key || "unknown";
 }
 

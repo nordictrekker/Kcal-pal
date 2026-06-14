@@ -9,10 +9,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export type CycleSnapshot = {
-  // Either today's saved row, or the predicted value from earlier entries.
+  // today = manual entry for today; auto = derived from last period start
+  // (Apple Health); predicted = projected from an older manual entry.
   day: number | null;
   phase: Phase | null;
-  source: "today" | "predicted" | "empty";
+  source: "today" | "auto" | "predicted" | "empty";
 };
 
 const PHASE_LABEL: Record<Phase, string> = {
@@ -53,6 +54,8 @@ export function CycleCard({ initial }: { initial: CycleSnapshot }) {
 
   const showPredictedHint =
     initial.source === "predicted" && !savedFromPrediction && !pending;
+  const showAutoHint =
+    initial.source === "auto" && !savedFromPrediction && !pending;
 
   return (
     <Card>
@@ -60,6 +63,11 @@ export function CycleCard({ initial }: { initial: CycleSnapshot }) {
         <div className="flex items-center gap-2">
           <Droplet className="size-4 text-muted-foreground" />
           <span className="text-sm font-medium">Cycle</span>
+          {showAutoHint ? (
+            <span className="text-xs text-muted-foreground">
+              auto-tracked · adjust to override
+            </span>
+          ) : null}
           {showPredictedHint ? (
             <span className="text-xs text-muted-foreground">
               predicted — tap to confirm

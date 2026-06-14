@@ -16,6 +16,8 @@ import {
   isPhase,
   phaseForCycleDay,
   predictCycleDay,
+  cycleDayFromPeriodStart,
+  type CycleSettings,
 } from "@/lib/cycle";
 import {
   applyPhaseModifiers,
@@ -24,6 +26,8 @@ import {
 } from "@/lib/phase-modifiers";
 import { pickInsight, avgDailySteps } from "@/lib/insights";
 import { buildTrends } from "@/lib/trends";
+import { computeTargets } from "@/lib/targets";
+import { mean } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +67,7 @@ export default async function TodayPage() {
       .order("consumed_at", { ascending: true }),
     supabase
       .from("oura_daily")
-      .select("date,sleep_score,hrv_avg,readiness_score")
+      .select("date,sleep_score,hrv_avg,readiness_score,total_calories")
       .eq("user_id", user.id)
       .gte("date", fourteenDaysAgoDate)
       .order("date", { ascending: false }),
@@ -100,6 +104,16 @@ export default async function TodayPage() {
   );
   const ouraRows = trendOura;
   const cycleRows = trendCycle;
+  const p = profile as Profile | null;
+
+  // First run → onboarding wizard. Everything below assumes we know who
+  // the user is (age, weight, goal) for the smarter targets.
+  if (p && !p.onboarding_completed) redirect("/onboarding");
+
+  const cycleSettings: CycleSettings = {
+    cycleLength: p?.avg_cycle_length ?? 28,
+    periodLength: p?.avg_period_length ?? 5,
+  };
 
   // Show today's Oura row if available; otherwise the most recent one
   // we have (last night's sleep may not be exported yet first thing
@@ -114,9 +128,12 @@ export default async function TodayPage() {
       }
     : null;
 
-  // Cycle snapshot: prefer today's stored row; otherwise project forward
-  // from the most recent entry so the widget pre-fills with a sensible
-  // guess instead of asking for a fresh count every day.
+  // Cycle snapshot. Precedence:
+  //   1. An explicit manual entry logged for today (override always wins).
+  //   2. Automated derivation from last_period_start (kept current by the
+  //      Apple Health flow ingest) — this is the "set it and forget it" path.
+  //   3. Projection forward from the most recent manual cycle row.
+  //   4. Nothing yet.
   const cycleMostRecent = (cycleRows ?? [])[0] ?? null;
   let cycleSnapshot: CycleSnapshot;
   if (cycleMostRecent && cycleMostRecent.date === today) {
@@ -126,6 +143,17 @@ export default async function TodayPage() {
       day: (cycleMostRecent.cycle_day as number | null) ?? null,
       phase: phaseRaw && isPhase(phaseRaw) ? phaseRaw : null,
       source: "today",
+    };
+  } else if (p?.track_cycle && p.last_period_start) {
+    const derivedDay = cycleDayFromPeriodStart(
+      p.last_period_start,
+      cycleSettings,
+      today,
+    );
+    cycleSnapshot = {
+      day: derivedDay,
+      phase: derivedDay ? phaseForCycleDay(derivedDay, cycleSettings) : null,
+      source: "auto",
     };
   } else if (cycleMostRecent) {
     const projected = predictCycleDay(
@@ -137,7 +165,7 @@ export default async function TodayPage() {
     );
     cycleSnapshot = {
       day: projected,
-      phase: projected ? phaseForCycleDay(projected) : null,
+      phase: projected ? phaseForCycleDay(projected, cycleSettings) : null,
       source: "predicted",
     };
   } else {
@@ -154,7 +182,6 @@ export default async function TodayPage() {
 
   const list = (entries ?? []) as FoodEntry[];
   const totals = sumTotals(list);
-  const p = profile as Profile | null;
 
   const { avg: stepsAvg7d, yesterday: stepsYesterday } = avgDailySteps(
     (stepRows ?? []).map((r) => ({
@@ -178,13 +205,36 @@ export default async function TodayPage() {
   // the user hasn't opted into.
   const ouraEnabled = Boolean(process.env.OURA_PERSONAL_ACCESS_TOKEN);
 
-  const baseTargets = {
+  const manualTargets = {
     calories: p?.daily_calorie_target ?? 2000,
     protein_g: p?.daily_protein_target_g ?? 130,
     carbs_g: p?.daily_carb_target_g ?? 220,
     fat_g: p?.daily_fat_target_g ?? 70,
     fiber_g: p?.daily_fiber_target_g ?? 30,
   };
+
+  // Smarter targets. In auto mode this derives from biometrics + goal and
+  // prefers the real 7-day Oura energy burn (total_calories) over a static
+  // activity multiplier, so calories self-tune to how active the week was.
+  const ouraTdeeValues = (trendOura ?? [])
+    .slice(0, 7)
+    .map((o) => o.total_calories as number | null)
+    .filter((v): v is number => v != null && v > 0);
+  const ouraTdee7d = ouraTdeeValues.length ? mean(ouraTdeeValues) : null;
+
+  const computedTargets = computeTargets({
+    mode: p?.target_mode ?? "manual",
+    manual: manualTargets,
+    sex: p?.sex ?? null,
+    dateOfBirth: p?.date_of_birth ?? null,
+    heightIn: p?.height_in ?? null,
+    weightLbs: weightSnapshot?.weight_lbs ?? null,
+    activityLevel: p?.activity_level ?? null,
+    goal: p?.goal ?? null,
+    proteinPerKg: p?.protein_per_kg ?? null,
+    ouraTdee7d,
+  });
+  const baseTargets = computedTargets.targets;
 
   // If we have a current cycle phase, adjust targets by the per-phase
   // modifiers stored in the profile. No-op if phase is unknown.
@@ -202,12 +252,14 @@ export default async function TodayPage() {
   // Greeting + phase blurb. Tiny, warm, not chatty.
   const now = new Date();
   const hour = now.getHours();
-  const greeting =
+  const timeGreeting =
     hour < 5 ? "Late night"
     : hour < 12 ? "Good morning"
     : hour < 17 ? "Good afternoon"
     : hour < 22 ? "Good evening"
     : "Late night";
+  const firstName = p?.first_name?.trim();
+  const greeting = firstName ? `${timeGreeting}, ${firstName}` : timeGreeting;
 
   // Trend memory: 14-day rollups so the insight engine can spot patterns
   // (third luteal day in a row over carbs, protein-drought streaks, etc.)
@@ -304,6 +356,9 @@ export default async function TodayPage() {
         totals={totals}
         targets={targets}
         phaseAdjustment={phaseAdjustment}
+        targetNote={
+          computedTargets.source !== "manual" ? computedTargets.note : null
+        }
       />
 
       <EntryList entries={list} />

@@ -9,8 +9,16 @@ import {
   weekLabel,
   type DigestInput,
 } from "@/lib/digest";
-import { isPhase } from "@/lib/cycle";
+import {
+  isPhase,
+  phaseForCycleDay,
+  cycleDayFromPeriodStart,
+  type Phase,
+  type CycleSettings,
+} from "@/lib/cycle";
 import { avgDailySteps } from "@/lib/insights";
+import { computeTargets } from "@/lib/targets";
+import type { Profile } from "@/lib/types";
 
 const STALE_MS = 60 * 60 * 1000; // 1 hour — same-week digests can refresh
 
@@ -77,7 +85,7 @@ export async function regenerateDigest(): Promise<DigestState> {
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("daily_calorie_target,daily_protein_target_g,daily_carb_target_g,daily_fat_target_g,daily_fiber_target_g,daily_water_target_ml")
+      .select("*")
       .eq("user_id", user.id)
       .single(),
     supabase
@@ -87,9 +95,10 @@ export async function regenerateDigest(): Promise<DigestState> {
       .gte("consumed_at", fourteenDaysAgo),
     supabase
       .from("oura_daily")
-      .select("date,sleep_score,hrv_avg,readiness_score")
+      .select("date,sleep_score,hrv_avg,readiness_score,total_calories")
       .eq("user_id", user.id)
-      .gte("date", fourteenDaysAgoDate),
+      .gte("date", fourteenDaysAgoDate)
+      .order("date", { ascending: false }),
     supabase
       .from("cycle_days")
       .select("date,cycle_day,phase")
@@ -116,14 +125,41 @@ export async function regenerateDigest(): Promise<DigestState> {
       .gte("recorded_at", sevenDaysAgo),
   ]);
 
-  const targets = {
-    calories: (profile?.daily_calorie_target as number) ?? 2000,
-    protein_g: (profile?.daily_protein_target_g as number) ?? 130,
-    carbs_g: (profile?.daily_carb_target_g as number) ?? 220,
-    fat_g: (profile?.daily_fat_target_g as number) ?? 70,
-    fiber_g: (profile?.daily_fiber_target_g as number) ?? 30,
+  const prof = profile as Profile | null;
+  const manualTargets = {
+    calories: prof?.daily_calorie_target ?? 2000,
+    protein_g: prof?.daily_protein_target_g ?? 130,
+    carbs_g: prof?.daily_carb_target_g ?? 220,
+    fat_g: prof?.daily_fat_target_g ?? 70,
+    fiber_g: prof?.daily_fiber_target_g ?? 30,
   };
-  const waterTargetMl = (profile?.daily_water_target_ml as number) ?? 2400;
+  const waterTargetMl = prof?.daily_water_target_ml ?? 2400;
+
+  // Latest weight + Oura burn → smart targets, so the digest's under/over
+  // counts match what the user actually sees on Today.
+  const wAsc = weights ?? [];
+  const latestWeightLbs = wAsc.length
+    ? Number(wAsc[wAsc.length - 1].weight_lbs as number)
+    : null;
+  const ouraTdeeValues = (oura ?? [])
+    .slice(0, 7)
+    .map((o) => o.total_calories as number | null)
+    .filter((v): v is number => v != null && v > 0);
+  const ouraTdee7d = ouraTdeeValues.length
+    ? ouraTdeeValues.reduce((a, b) => a + b, 0) / ouraTdeeValues.length
+    : null;
+  const targets = computeTargets({
+    mode: prof?.target_mode ?? "manual",
+    manual: manualTargets,
+    sex: prof?.sex ?? null,
+    dateOfBirth: prof?.date_of_birth ?? null,
+    heightIn: prof?.height_in ?? null,
+    weightLbs: latestWeightLbs,
+    activityLevel: prof?.activity_level ?? null,
+    goal: prof?.goal ?? null,
+    proteinPerKg: prof?.protein_per_kg ?? null,
+    ouraTdee7d,
+  }).targets;
 
   const trends = buildTrends({
     food: (food ?? []).map((f) => ({
@@ -152,23 +188,32 @@ export async function regenerateDigest(): Promise<DigestState> {
     today: now,
   });
 
-  // Phase + cycle day from the most recent stored row.
-  const latestCycle = (cycle ?? [])[0] ?? null;
-  const phaseRaw =
-    latestCycle && typeof latestCycle.phase === "string"
-      ? latestCycle.phase
-      : null;
-  const phase = phaseRaw && isPhase(phaseRaw) ? phaseRaw : null;
-  const cycleDay = (latestCycle?.cycle_day as number | null) ?? null;
+  // Phase + cycle day: prefer the automated derivation from last_period_start
+  // (matches Today), falling back to the most recent manual cycle row.
+  const cycleSettings: CycleSettings = {
+    cycleLength: prof?.avg_cycle_length ?? 28,
+    periodLength: prof?.avg_period_length ?? 5,
+  };
+  let phase: Phase | null = null;
+  let cycleDay: number | null = null;
+  if (prof?.track_cycle && prof.last_period_start) {
+    cycleDay = cycleDayFromPeriodStart(prof.last_period_start, cycleSettings, today);
+    phase = cycleDay ? phaseForCycleDay(cycleDay, cycleSettings) : null;
+  } else {
+    const latestCycle = (cycle ?? [])[0] ?? null;
+    const phaseRaw =
+      latestCycle && typeof latestCycle.phase === "string"
+        ? latestCycle.phase
+        : null;
+    phase = phaseRaw && isPhase(phaseRaw) ? phaseRaw : null;
+    cycleDay = (latestCycle?.cycle_day as number | null) ?? null;
+  }
 
   // Weight: latest + 7-day delta from earliest reading in the window.
-  const w = weights ?? [];
-  const latestWeight = w.length
-    ? Number(w[w.length - 1].weight_lbs as number)
+  const earliestWeight = wAsc.length
+    ? Number(wAsc[0].weight_lbs as number)
     : null;
-  const earliestWeight = w.length
-    ? Number(w[0].weight_lbs as number)
-    : null;
+  const latestWeight = latestWeightLbs;
   const weekDeltaLbs =
     latestWeight !== null && earliestWeight !== null
       ? Number((latestWeight - earliestWeight).toFixed(1))

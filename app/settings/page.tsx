@@ -7,6 +7,7 @@ import { Notifications } from "./notifications";
 import { ThemeToggle } from "./theme-toggle";
 import { ShortcutCard } from "./shortcut-card";
 import { TargetsCard, type Targets } from "./targets-card";
+import { ProfileCard, type ProfileSettings } from "./profile-card";
 import { PhaseModifiersCard } from "./phase-card";
 import { normalizeModifiers } from "@/lib/phase-modifiers";
 import type { Profile } from "@/lib/types";
@@ -38,6 +39,19 @@ export default async function SettingsPage() {
     water_oz: Math.round((p?.daily_water_target_ml ?? 2400) / 29.5735),
   };
   const phaseModifiers = normalizeModifiers(p?.phase_modifiers);
+  const profileSettings: ProfileSettings = {
+    first_name: p?.first_name ?? "",
+    date_of_birth: p?.date_of_birth ?? "",
+    sex: p?.sex ?? "female",
+    height_in: p?.height_in ?? null,
+    activity_level: p?.activity_level ?? "moderate",
+    goal: p?.goal ?? "maintain",
+    target_mode: p?.target_mode ?? "manual",
+    track_cycle: p?.track_cycle ?? true,
+    last_period_start: p?.last_period_start ?? "",
+    avg_cycle_length: p?.avg_cycle_length ?? 28,
+    avg_period_length: p?.avg_period_length ?? 5,
+  };
 
   const hdrs = await headers();
   const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "";
@@ -57,6 +71,8 @@ export default async function SettingsPage() {
           Today →
         </Link>
       </header>
+
+      <ProfileCard initial={profileSettings} />
 
       <TargetsCard targets={targets} />
 

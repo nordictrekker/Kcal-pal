@@ -27,7 +27,7 @@ export async function syncOura(): Promise<SyncResult> {
   }
 
   try {
-    const rows = await fetchOuraDaily(token, 7);
+    const rows = await fetchOuraDaily(token, 14);
     const withUser = rows.map((r) => ({ ...r, user_id: user.id }));
 
     const { error } = await supabase

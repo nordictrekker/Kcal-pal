@@ -56,5 +56,19 @@ export type Profile = {
   height_in: number | null;
   goal: string;
   phase_modifiers: unknown; // jsonb; normalized via lib/phase-modifiers
+  // Onboarding / personalization
+  first_name: string | null;
+  date_of_birth: string | null; // YYYY-MM-DD
+  sex: string | null;
+  onboarding_completed: boolean;
+  // Smarter targets
+  activity_level: string | null;
+  target_mode: "manual" | "auto" | null;
+  protein_per_kg: number | null;
+  // Cycle automation
+  track_cycle: boolean;
+  last_period_start: string | null; // YYYY-MM-DD
+  avg_cycle_length: number | null;
+  avg_period_length: number | null;
   created_at: string;
 };
