@@ -10,6 +10,7 @@ import { EntryList } from "./entry-list";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
 import { CycleCard, type CycleSnapshot } from "./cycle-card";
 import { WeightCard, type WeightSnapshot } from "./weight-card";
+import { WaterCard } from "./water-card";
 import { PhaseFloral } from "./florals";
 import {
   isPhase,
@@ -22,6 +23,7 @@ import {
   normalizeModifiers,
 } from "@/lib/phase-modifiers";
 import { pickInsight, avgDailySteps } from "@/lib/insights";
+import { buildTrends } from "@/lib/trends";
 
 export const dynamic = "force-dynamic";
 
@@ -35,36 +37,43 @@ export default async function TodayPage() {
   const { start, end } = dayBounds();
   const today = new Date().toISOString().slice(0, 10);
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  // 14-day window powers the trend memory below; one query, used twice.
+  const fourteenDaysAgo = new Date(
+    Date.now() - 14 * 86_400_000,
+  ).toISOString();
+  const fourteenDaysAgoDate = fourteenDaysAgo.slice(0, 10);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
 
   const [
     { data: profile },
-    { data: entries },
-    { data: ouraRows },
-    { data: cycleRows },
+    { data: trendFood },
+    { data: trendOura },
+    { data: trendCycle },
     { data: weightRows },
     { data: stepRows },
+    { data: waterRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
     supabase
       .from("food_entries")
-      .select("*")
+      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g,id,user_id,meal,description,source,photo_url,barcode,serving_size,raw_ai_response,edited_by_user,created_at")
       .eq("user_id", user.id)
-      .gte("consumed_at", start)
-      .lt("consumed_at", end)
+      .gte("consumed_at", fourteenDaysAgo)
       .order("consumed_at", { ascending: true }),
     supabase
       .from("oura_daily")
       .select("date,sleep_score,hrv_avg,readiness_score")
       .eq("user_id", user.id)
-      .order("date", { ascending: false })
-      .limit(1),
+      .gte("date", fourteenDaysAgoDate)
+      .order("date", { ascending: false }),
     supabase
       .from("cycle_days")
       .select("date,cycle_day,phase")
       .eq("user_id", user.id)
+      .gte("date", fourteenDaysAgoDate)
       .lte("date", today)
-      .order("date", { ascending: false })
-      .limit(1),
+      .order("date", { ascending: false }),
     supabase
       .from("body_weights")
       .select("weight_lbs,measured_at")
@@ -77,7 +86,20 @@ export default async function TodayPage() {
       .eq("user_id", user.id)
       .eq("metric", "steps")
       .gte("recorded_at", sevenDaysAgo),
+    supabase
+      .from("water_logs")
+      .select("ml,logged_at")
+      .eq("user_id", user.id)
+      .gte("logged_at", fourteenDaysAgo),
   ]);
+
+  // Today's entries are a subset of the trend window — slice locally
+  // instead of issuing a second query.
+  const entries = (trendFood ?? []).filter(
+    (e) => (e.consumed_at as string) >= start && (e.consumed_at as string) < end,
+  );
+  const ouraRows = trendOura;
+  const cycleRows = trendCycle;
 
   // Show today's Oura row if available; otherwise the most recent one
   // we have (last night's sleep may not be exported yet first thing
@@ -141,6 +163,16 @@ export default async function TodayPage() {
     })),
   );
 
+  // Today's hydration total, plus a 14-day water history for trend memory.
+  const waterAll = (waterRows ?? []).map((r) => ({
+    ml: Number(r.ml),
+    logged_at: r.logged_at as string,
+  }));
+  const waterTodayMl = waterAll
+    .filter((w) => new Date(w.logged_at) >= startOfToday)
+    .reduce((sum, w) => sum + w.ml, 0);
+  const waterTargetMl = p?.daily_water_target_ml ?? 2400;
+
   // Only render the integration cards if the credentials are configured.
   // Avoids a screaming red "not set" banner on the dashboard for things
   // the user hasn't opted into.
@@ -177,9 +209,35 @@ export default async function TodayPage() {
     : hour < 22 ? "Good evening"
     : "Late night";
 
-  // Holistic insight — pulls from phase, recovery, activity, macros. Replaces
-  // the static phase descriptor with something that actually responds to the
-  // day. Falls back to null on the rare case nothing matches (shouldn't —
+  // Trend memory: 14-day rollups so the insight engine can spot patterns
+  // (third luteal day in a row over carbs, protein-drought streaks, etc.)
+  // instead of judging today in isolation.
+  const trends = buildTrends({
+    food: (trendFood ?? []).map((f) => ({
+      consumed_at: f.consumed_at as string,
+      calories: (f.calories as number | null) ?? null,
+      protein_g: (f.protein_g as number | null) ?? null,
+      carbs_g: (f.carbs_g as number | null) ?? null,
+      fat_g: (f.fat_g as number | null) ?? null,
+      fiber_g: (f.fiber_g as number | null) ?? null,
+    })),
+    oura: (trendOura ?? []).map((o) => ({
+      date: o.date as string,
+      sleep_score: (o.sleep_score as number | null) ?? null,
+      hrv_avg: (o.hrv_avg as number | null) ?? null,
+      readiness_score: (o.readiness_score as number | null) ?? null,
+    })),
+    cycle: (trendCycle ?? []).map((c) => ({
+      date: c.date as string,
+      phase: (c.phase as string | null) ?? null,
+    })),
+    water: waterAll,
+    targets: baseTargets,
+    today: now,
+  });
+
+  // Holistic insight — pulls from phase, recovery, activity, macros, trends,
+  // hydration. Falls back to null on the rare case nothing matches (shouldn't —
   // there's a neutral default rule).
   const insight = pickInsight({
     phase: cycleSnapshot.phase,
@@ -190,8 +248,10 @@ export default async function TodayPage() {
       hrv: ouraSnapshot?.hrv_avg ?? null,
     },
     activity: { stepsAvg7d, stepsYesterday },
+    hydration: { todayMl: waterTodayMl, targetMl: waterTargetMl },
     todayMacros: totals,
     targets,
+    trends,
     now,
   });
 
@@ -237,6 +297,7 @@ export default async function TodayPage() {
 
       {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}
       <WeightCard latest={weightSnapshot} />
+      <WaterCard todayMl={waterTodayMl} targetMl={waterTargetMl} />
       <CycleCard initial={cycleSnapshot} />
 
       <MacroTotals

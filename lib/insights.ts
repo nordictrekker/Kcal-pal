@@ -8,6 +8,7 @@
 
 import type { Phase } from "./cycle";
 import type { Totals } from "./food";
+import type { Trends } from "./trends";
 
 export type InsightContext = {
   phase: Phase | null;
@@ -21,8 +22,13 @@ export type InsightContext = {
     stepsAvg7d: number | null;
     stepsYesterday: number | null;
   };
+  hydration: {
+    todayMl: number;
+    targetMl: number;
+  };
   todayMacros: Totals;
   targets: Totals;
+  trends: Trends | null;
   now: Date;
 };
 
@@ -59,8 +65,109 @@ const lowReadiness = (c: InsightContext) =>
 const lowSleep = (c: InsightContext) =>
   c.oura.sleep !== null && c.oura.sleep < 70;
 
+// Trend predicates (only fire when we have enough history).
+const lutealCarbPattern = (c: InsightContext) =>
+  c.phase === "luteal" &&
+  c.trends !== null &&
+  (c.trends.phaseStreak ?? 0) >= 2 &&
+  (c.trends.overCarbsStreak ?? 0) >= 2;
+
+const proteinDroughtPattern = (c: InsightContext) =>
+  c.trends !== null && (c.trends.underProteinStreak ?? 0) >= 3;
+
+const readinessSlide = (c: InsightContext) =>
+  c.trends !== null &&
+  c.trends.readinessTrend7 !== null &&
+  c.trends.readinessTrend7 <= -1.5 && // losing ≥1.5 points/day = ~10 over a week
+  (c.trends.avgReadiness7 ?? 100) < 80;
+
+const lowFiberPattern = (c: InsightContext) =>
+  c.trends !== null && c.trends.daysUnderFiber7 >= 5;
+
+// Hydration predicates. Day is "young" until ~3pm; only start nudging
+// once it's late enough that being behind actually means behind.
+const hydrationBehind = (c: InsightContext) => {
+  if (c.hydration.targetMl <= 0) return false;
+  const dayProgress = Math.min(1, c.now.getHours() / 18);
+  const expected = c.hydration.targetMl * dayProgress;
+  return c.hydration.todayMl < expected * 0.6 && c.now.getHours() >= 13;
+};
+const hydrationWeekLow = (c: InsightContext) =>
+  c.trends !== null &&
+  c.trends.avgWaterMl7 !== null &&
+  c.hydration.targetMl > 0 &&
+  c.trends.avgWaterMl7 < c.hydration.targetMl * 0.7;
+
+const ozFromMl = (ml: number) => Math.round(ml / 29.5735);
+
 const RULES: Rule[] = [
-  // ─── Cycle + behavior interactions (highest priority) ────────────────────
+  // ─── Trend-aware rules (highest priority — patterns beat single-day signals) ──
+
+  {
+    id: "luteal_carb_pattern",
+    priority: 99,
+    when: lutealCarbPattern,
+    build: (c) => ({
+      id: "luteal_carb_pattern",
+      tone: "reassure",
+      text: `Day ${c.trends!.phaseStreak} of luteal and the third over-carbs day in a row — this isn't slipping, it's progesterone steering the ship. Lean in.`,
+    }),
+  },
+  {
+    id: "protein_drought",
+    priority: 97,
+    when: proteinDroughtPattern,
+    build: (c) => ({
+      id: "protein_drought",
+      tone: "suggest",
+      text: `Protein has trailed your target ${c.trends!.underProteinStreak} days running. Front-load it today — eggs, Greek yogurt, or a scoop of whey settles the deficit fast.`,
+    }),
+  },
+  {
+    id: "readiness_slide",
+    priority: 96,
+    when: readinessSlide,
+    build: () => ({
+      id: "readiness_slide",
+      tone: "rest",
+      text: "Recovery has been sliding all week. Today's a good day to do less — prioritize sleep tonight and skip the hard workout if it's on the schedule.",
+    }),
+  },
+  {
+    id: "fiber_pattern",
+    priority: 92,
+    when: lowFiberPattern,
+    build: () => ({
+      id: "fiber_pattern",
+      tone: "suggest",
+      text: "Fiber's been quiet most of the week. A handful of berries, half an avocado, or a side of greens at lunch closes the gap easily.",
+    }),
+  },
+
+  // ─── Hydration (mid-high — interrupts only when noticeably behind) ──────
+
+  {
+    id: "hydration_today_behind",
+    priority: 91,
+    when: hydrationBehind,
+    build: (c) => ({
+      id: "hydration_today_behind",
+      tone: "suggest",
+      text: `Water's running behind today — only ${ozFromMl(c.hydration.todayMl)} oz so far. A tall glass now will lift your afternoon more than a snack will.`,
+    }),
+  },
+  {
+    id: "hydration_week_low",
+    priority: 78,
+    when: (c) => hydrationWeekLow(c) && !hydrationBehind(c),
+    build: () => ({
+      id: "hydration_week_low",
+      tone: "suggest",
+      text: "Hydration's been light all week. Cravings, headaches, and low afternoon energy often track here first — keep a glass on the desk.",
+    }),
+  },
+
+  // ─── Cycle + behavior interactions ───────────────────────────────────────
 
   {
     id: "luteal_carb_reassurance",

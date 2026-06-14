@@ -13,6 +13,8 @@ const FIELDS = [
   ["daily_fiber_target_g", 0, 200],
 ] as const;
 
+const OZ_TO_ML = 29.5735;
+
 export async function updateTargets(
   formData: FormData,
 ): Promise<TargetsResult> {
@@ -31,6 +33,20 @@ export async function updateTargets(
       return { ok: false, error: `${name} must be an integer in [${lo}, ${hi}].` };
     }
     patch[name] = n;
+  }
+
+  // Water is entered in ounces but stored in millilitres so the schema
+  // stays unit-agnostic. Convert here, not in the UI.
+  const waterRaw = String(formData.get("daily_water_target_oz") ?? "").trim();
+  if (waterRaw !== "") {
+    const oz = Number(waterRaw);
+    if (!Number.isInteger(oz) || oz < 0 || oz > 250) {
+      return {
+        ok: false,
+        error: "daily_water_target_oz must be an integer in [0, 250].",
+      };
+    }
+    patch.daily_water_target_ml = Math.round(oz * OZ_TO_ML);
   }
 
   if (Object.keys(patch).length === 0) {

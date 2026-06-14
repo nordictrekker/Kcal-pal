@@ -11,6 +11,8 @@ import {
   type DayValue,
 } from "@/lib/stats";
 import { LineChart, ScatterChart } from "./charts";
+import { DigestCard } from "./digest-card";
+import { getCachedDigest } from "./digest-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,8 @@ export default async function WeeklyPage() {
 
   const days = lastNDays(DISPLAY_DAYS);
   const since = `${days[0]}T00:00:00.000Z`;
+
+  const digestState = await getCachedDigest();
 
   const [{ data: foods }, { data: oura }, { data: weights }] =
     await Promise.all([
@@ -95,7 +99,7 @@ export default async function WeeklyPage() {
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Weekly</h1>
+        <h1 className="font-serif text-3xl font-medium">Weekly</h1>
         <Link
           href="/today"
           className="text-sm text-muted-foreground underline-offset-4 hover:underline"
@@ -103,6 +107,8 @@ export default async function WeeklyPage() {
           Today →
         </Link>
       </header>
+
+      <DigestCard initial={digestState} />
 
       <section className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

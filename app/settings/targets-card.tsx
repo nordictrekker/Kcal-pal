@@ -14,6 +14,7 @@ export type Targets = {
   carbs_g: number;
   fat_g: number;
   fiber_g: number;
+  water_oz: number;
 };
 
 const FIELDS: Array<{ name: string; label: string; key: keyof Targets; unit: string }> = [
@@ -22,6 +23,7 @@ const FIELDS: Array<{ name: string; label: string; key: keyof Targets; unit: str
   { name: "daily_carb_target_g",    label: "Carbs",    key: "carbs_g",   unit: "g" },
   { name: "daily_fat_target_g",     label: "Fat",      key: "fat_g",     unit: "g" },
   { name: "daily_fiber_target_g",   label: "Fiber",    key: "fiber_g",   unit: "g" },
+  { name: "daily_water_target_oz",  label: "Water",    key: "water_oz",  unit: "oz" },
 ];
 
 export function TargetsCard({ targets }: { targets: Targets }) {

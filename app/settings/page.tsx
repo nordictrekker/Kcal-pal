@@ -35,6 +35,7 @@ export default async function SettingsPage() {
     carbs_g: p?.daily_carb_target_g ?? 220,
     fat_g: p?.daily_fat_target_g ?? 70,
     fiber_g: p?.daily_fiber_target_g ?? 30,
+    water_oz: Math.round((p?.daily_water_target_ml ?? 2400) / 29.5735),
   };
   const phaseModifiers = normalizeModifiers(p?.phase_modifiers);
 
