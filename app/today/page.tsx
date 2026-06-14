@@ -10,6 +10,7 @@ import { EntryList } from "./entry-list";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
 import { CycleCard, type CycleSnapshot } from "./cycle-card";
 import { WeightCard, type WeightSnapshot } from "./weight-card";
+import { PhaseFloral } from "./florals";
 import {
   isPhase,
   phaseForCycleDay,
@@ -20,6 +21,7 @@ import {
   describeAdjustments,
   normalizeModifiers,
 } from "@/lib/phase-modifiers";
+import { pickInsight, avgDailySteps } from "@/lib/insights";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,7 @@ export default async function TodayPage() {
 
   const { start, end } = dayBounds();
   const today = new Date().toISOString().slice(0, 10);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
   const [
     { data: profile },
@@ -39,6 +42,7 @@ export default async function TodayPage() {
     { data: ouraRows },
     { data: cycleRows },
     { data: weightRows },
+    { data: stepRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
     supabase
@@ -67,6 +71,12 @@ export default async function TodayPage() {
       .eq("user_id", user.id)
       .order("measured_at", { ascending: false })
       .limit(1),
+    supabase
+      .from("apple_health_data")
+      .select("value,recorded_at")
+      .eq("user_id", user.id)
+      .eq("metric", "steps")
+      .gte("recorded_at", sevenDaysAgo),
   ]);
 
   // Show today's Oura row if available; otherwise the most recent one
@@ -124,6 +134,13 @@ export default async function TodayPage() {
   const totals = sumTotals(list);
   const p = profile as Profile | null;
 
+  const { avg: stepsAvg7d, yesterday: stepsYesterday } = avgDailySteps(
+    (stepRows ?? []).map((r) => ({
+      value: Number(r.value),
+      recorded_at: r.recorded_at as string,
+    })),
+  );
+
   // Only render the integration cards if the credentials are configured.
   // Avoids a screaming red "not set" banner on the dashboard for things
   // the user hasn't opted into.
@@ -160,23 +177,37 @@ export default async function TodayPage() {
     : hour < 22 ? "Good evening"
     : "Late night";
 
-  const PHASE_VIBE: Record<string, string> = {
-    menstrual: "rest and replenish",
-    follicular: "fresh energy, lean into carbs",
-    ovulatory: "peak — fuel the high",
-    luteal: "wind-down, lean into fats and fiber",
-  };
-  const phaseLine = cycleSnapshot.phase
-    ? `Day ${cycleSnapshot.day} · ${PHASE_VIBE[cycleSnapshot.phase]}`
-    : null;
+  // Holistic insight — pulls from phase, recovery, activity, macros. Replaces
+  // the static phase descriptor with something that actually responds to the
+  // day. Falls back to null on the rare case nothing matches (shouldn't —
+  // there's a neutral default rule).
+  const insight = pickInsight({
+    phase: cycleSnapshot.phase,
+    cycleDay: cycleSnapshot.day,
+    oura: {
+      readiness: ouraSnapshot?.readiness_score ?? null,
+      sleep: ouraSnapshot?.sleep_score ?? null,
+      hrv: ouraSnapshot?.hrv_avg ?? null,
+    },
+    activity: { stepsAvg7d, stepsYesterday },
+    todayMacros: totals,
+    targets,
+    now,
+  });
 
   return (
     <main
       data-phase={cycleSnapshot.phase ?? undefined}
       className="mx-auto max-w-md p-4 space-y-5 pb-24"
     >
-      <header className="space-y-1">
-        <div className="flex items-start justify-between">
+      <header className="relative space-y-2">
+        {cycleSnapshot.phase ? (
+          <PhaseFloral
+            phase={cycleSnapshot.phase}
+            className="pointer-events-none absolute -right-2 -top-2 h-20 w-32 text-primary opacity-[0.12]"
+          />
+        ) : null}
+        <div className="relative flex items-start justify-between">
           <div className="space-y-0.5">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               {greeting}
@@ -184,6 +215,12 @@ export default async function TodayPage() {
             <h1 className="font-serif text-3xl font-medium leading-tight">
               Today
             </h1>
+            {cycleSnapshot.phase && cycleSnapshot.day ? (
+              <p className="text-xs text-muted-foreground">
+                <span className="capitalize">{cycleSnapshot.phase}</span>
+                <span className="text-foreground/50"> · day {cycleSnapshot.day}</span>
+              </p>
+            ) : null}
           </div>
           <form action={signOut}>
             <Button variant="ghost" size="sm" type="submit">
@@ -191,10 +228,9 @@ export default async function TodayPage() {
             </Button>
           </form>
         </div>
-        {phaseLine ? (
-          <p className="text-sm text-muted-foreground">
-            <span className="capitalize">{cycleSnapshot.phase}</span>{" "}
-            <span className="text-foreground/60">· {phaseLine.split("· ")[1]}</span>
+        {insight ? (
+          <p className="relative max-w-[34ch] font-serif text-[15px] italic leading-snug text-foreground/80">
+            {insight.text}
           </p>
         ) : null}
       </header>
