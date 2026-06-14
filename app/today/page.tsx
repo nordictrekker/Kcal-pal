@@ -8,17 +8,17 @@ import { Button } from "@/components/ui/button";
 import { MacroTotals } from "./macro-totals";
 import { EntryList } from "./entry-list";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
-import { CycleCard, type CycleSnapshot } from "./cycle-card";
 import { WeightCard, type WeightSnapshot } from "./weight-card";
 import { WaterCard } from "./water-card";
 import { PhaseFloral } from "./florals";
 import {
-  isPhase,
   phaseForCycleDay,
-  predictCycleDay,
   cycleDayFromPeriodStart,
+  derivedPhases,
+  type Phase,
   type CycleSettings,
 } from "@/lib/cycle";
+import { lastNDays } from "@/lib/stats";
 import {
   applyPhaseModifiers,
   describeAdjustments,
@@ -53,7 +53,6 @@ export default async function TodayPage() {
     { data: profile },
     { data: trendFood },
     { data: trendOura },
-    { data: trendCycle },
     { data: weightRows },
     { data: stepRows },
     { data: waterRows },
@@ -70,13 +69,6 @@ export default async function TodayPage() {
       .select("date,sleep_score,hrv_avg,readiness_score,total_calories")
       .eq("user_id", user.id)
       .gte("date", fourteenDaysAgoDate)
-      .order("date", { ascending: false }),
-    supabase
-      .from("cycle_days")
-      .select("date,cycle_day,phase")
-      .eq("user_id", user.id)
-      .gte("date", fourteenDaysAgoDate)
-      .lte("date", today)
       .order("date", { ascending: false }),
     supabase
       .from("body_weights")
@@ -103,7 +95,6 @@ export default async function TodayPage() {
     (e) => (e.consumed_at as string) >= start && (e.consumed_at as string) < end,
   );
   const ouraRows = trendOura;
-  const cycleRows = trendCycle;
   const p = profile as Profile | null;
 
   // First run → onboarding wizard. Everything below assumes we know who
@@ -128,48 +119,15 @@ export default async function TodayPage() {
       }
     : null;
 
-  // Cycle snapshot. Precedence:
-  //   1. An explicit manual entry logged for today (override always wins).
-  //   2. Automated derivation from last_period_start (kept current by the
-  //      Apple Health flow ingest) — this is the "set it and forget it" path.
-  //   3. Projection forward from the most recent manual cycle row.
-  //   4. Nothing yet.
-  const cycleMostRecent = (cycleRows ?? [])[0] ?? null;
-  let cycleSnapshot: CycleSnapshot;
-  if (cycleMostRecent && cycleMostRecent.date === today) {
-    const phaseRaw =
-      typeof cycleMostRecent.phase === "string" ? cycleMostRecent.phase : null;
-    cycleSnapshot = {
-      day: (cycleMostRecent.cycle_day as number | null) ?? null,
-      phase: phaseRaw && isPhase(phaseRaw) ? phaseRaw : null,
-      source: "today",
-    };
-  } else if (p?.track_cycle && p.last_period_start) {
-    const derivedDay = cycleDayFromPeriodStart(
-      p.last_period_start,
-      cycleSettings,
-      today,
-    );
-    cycleSnapshot = {
-      day: derivedDay,
-      phase: derivedDay ? phaseForCycleDay(derivedDay, cycleSettings) : null,
-      source: "auto",
-    };
-  } else if (cycleMostRecent) {
-    const projected = predictCycleDay(
-      {
-        date: cycleMostRecent.date as string,
-        cycle_day: cycleMostRecent.cycle_day as number | null,
-      },
-      today,
-    );
-    cycleSnapshot = {
-      day: projected,
-      phase: projected ? phaseForCycleDay(projected, cycleSettings) : null,
-      source: "predicted",
-    };
-  } else {
-    cycleSnapshot = { day: null, phase: null, source: "empty" };
+  // Cycle is fully automated now: derived from last_period_start (kept
+  // current by Apple Health flow ingest). Adjust the date in Settings if
+  // the auto-tracker drifts. No cycle info if the user opted out or hasn't
+  // logged a period start yet.
+  let cycleDay: number | null = null;
+  let cyclePhase: Phase | null = null;
+  if (p?.track_cycle && p.last_period_start) {
+    cycleDay = cycleDayFromPeriodStart(p.last_period_start, cycleSettings, today);
+    cyclePhase = cycleDay ? phaseForCycleDay(cycleDay, cycleSettings) : null;
   }
 
   const weightMostRecent = (weightRows ?? [])[0] ?? null;
@@ -239,7 +197,7 @@ export default async function TodayPage() {
   // If we have a current cycle phase, adjust targets by the per-phase
   // modifiers stored in the profile. No-op if phase is unknown.
   const phaseModifiers = normalizeModifiers(p?.phase_modifiers);
-  const currentPhase = cycleSnapshot.phase;
+  const currentPhase = cyclePhase;
   const targets = applyPhaseModifiers(baseTargets, currentPhase, phaseModifiers);
   const adjustmentDescription = currentPhase
     ? describeAdjustments(phaseModifiers[currentPhase])
@@ -263,7 +221,9 @@ export default async function TodayPage() {
 
   // Trend memory: 14-day rollups so the insight engine can spot patterns
   // (third luteal day in a row over carbs, protein-drought streaks, etc.)
-  // instead of judging today in isolation.
+  // instead of judging today in isolation. Phases derived from
+  // last_period_start so they match the snapshot above.
+  const trendDays = lastNDays(14, now);
   const trends = buildTrends({
     food: (trendFood ?? []).map((f) => ({
       consumed_at: f.consumed_at as string,
@@ -279,10 +239,11 @@ export default async function TodayPage() {
       hrv_avg: (o.hrv_avg as number | null) ?? null,
       readiness_score: (o.readiness_score as number | null) ?? null,
     })),
-    cycle: (trendCycle ?? []).map((c) => ({
-      date: c.date as string,
-      phase: (c.phase as string | null) ?? null,
-    })),
+    cycle: derivedPhases(
+      p?.track_cycle ? (p.last_period_start ?? null) : null,
+      cycleSettings,
+      trendDays,
+    ),
     water: waterAll,
     targets: baseTargets,
     today: now,
@@ -292,8 +253,8 @@ export default async function TodayPage() {
   // hydration. Falls back to null on the rare case nothing matches (shouldn't —
   // there's a neutral default rule).
   const insight = pickInsight({
-    phase: cycleSnapshot.phase,
-    cycleDay: cycleSnapshot.day,
+    phase: cyclePhase,
+    cycleDay,
     oura: {
       readiness: ouraSnapshot?.readiness_score ?? null,
       sleep: ouraSnapshot?.sleep_score ?? null,
@@ -309,13 +270,13 @@ export default async function TodayPage() {
 
   return (
     <main
-      data-phase={cycleSnapshot.phase ?? undefined}
+      data-phase={cyclePhase ?? undefined}
       className="mx-auto max-w-md p-4 space-y-5 pb-24"
     >
       <header className="relative space-y-2">
-        {cycleSnapshot.phase ? (
+        {cyclePhase ? (
           <PhaseFloral
-            phase={cycleSnapshot.phase}
+            phase={cyclePhase}
             className="pointer-events-none absolute -right-2 -top-2 h-20 w-32 text-primary opacity-[0.12]"
           />
         ) : null}
@@ -327,10 +288,10 @@ export default async function TodayPage() {
             <h1 className="font-serif text-3xl font-medium leading-tight">
               Today
             </h1>
-            {cycleSnapshot.phase && cycleSnapshot.day ? (
+            {cyclePhase && cycleDay ? (
               <p className="text-xs text-muted-foreground">
-                <span className="capitalize">{cycleSnapshot.phase}</span>
-                <span className="text-foreground/50"> · day {cycleSnapshot.day}</span>
+                <span className="capitalize">{cyclePhase}</span>
+                <span className="text-foreground/50"> · day {cycleDay}</span>
               </p>
             ) : null}
           </div>
@@ -350,7 +311,6 @@ export default async function TodayPage() {
       {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}
       <WeightCard latest={weightSnapshot} />
       <WaterCard todayMl={waterTodayMl} targetMl={waterTargetMl} />
-      <CycleCard initial={cycleSnapshot} />
 
       <MacroTotals
         totals={totals}

@@ -101,3 +101,21 @@ export function latestPeriodStart(flowDays: string[]): string | null {
   }
   return clusterStart;
 }
+
+// Derive the phase for each day in a window, given the last period start.
+// Used by the trend engine so phase streaks track derived data rather
+// than the deprecated manual cycle_days table.
+export function derivedPhases(
+  lastPeriodStart: string | null,
+  settings: CycleSettings,
+  dayList: string[],
+): Array<{ date: string; phase: Phase | null }> {
+  if (!lastPeriodStart) return dayList.map((d) => ({ date: d, phase: null }));
+  return dayList.map((d) => {
+    const day = cycleDayFromPeriodStart(lastPeriodStart, settings, d);
+    return {
+      date: d,
+      phase: day ? phaseForCycleDay(day, settings) : null,
+    };
+  });
+}

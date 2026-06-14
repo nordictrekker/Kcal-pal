@@ -10,12 +10,13 @@ import {
   type DigestInput,
 } from "@/lib/digest";
 import {
-  isPhase,
   phaseForCycleDay,
   cycleDayFromPeriodStart,
+  derivedPhases,
   type Phase,
   type CycleSettings,
 } from "@/lib/cycle";
+import { lastNDays } from "@/lib/stats";
 import { avgDailySteps } from "@/lib/insights";
 import { computeTargets } from "@/lib/targets";
 import type { Profile } from "@/lib/types";
@@ -78,7 +79,6 @@ export async function regenerateDigest(): Promise<DigestState> {
     { data: profile },
     { data: food },
     { data: oura },
-    { data: cycle },
     { data: water },
     { data: weights },
     { data: steps },
@@ -98,13 +98,6 @@ export async function regenerateDigest(): Promise<DigestState> {
       .select("date,sleep_score,hrv_avg,readiness_score,total_calories")
       .eq("user_id", user.id)
       .gte("date", fourteenDaysAgoDate)
-      .order("date", { ascending: false }),
-    supabase
-      .from("cycle_days")
-      .select("date,cycle_day,phase")
-      .eq("user_id", user.id)
-      .gte("date", fourteenDaysAgoDate)
-      .lte("date", today)
       .order("date", { ascending: false }),
     supabase
       .from("water_logs")
@@ -161,6 +154,12 @@ export async function regenerateDigest(): Promise<DigestState> {
     ouraTdee7d,
   }).targets;
 
+  const cycleSettings: CycleSettings = {
+    cycleLength: prof?.avg_cycle_length ?? 28,
+    periodLength: prof?.avg_period_length ?? 5,
+  };
+  const trendDays = lastNDays(14, now);
+
   const trends = buildTrends({
     food: (food ?? []).map((f) => ({
       consumed_at: f.consumed_at as string,
@@ -176,10 +175,11 @@ export async function regenerateDigest(): Promise<DigestState> {
       hrv_avg: (o.hrv_avg as number | null) ?? null,
       readiness_score: (o.readiness_score as number | null) ?? null,
     })),
-    cycle: (cycle ?? []).map((c) => ({
-      date: c.date as string,
-      phase: (c.phase as string | null) ?? null,
-    })),
+    cycle: derivedPhases(
+      prof?.track_cycle ? (prof.last_period_start ?? null) : null,
+      cycleSettings,
+      trendDays,
+    ),
     water: (water ?? []).map((w) => ({
       ml: Number(w.ml),
       logged_at: w.logged_at as string,
@@ -188,25 +188,13 @@ export async function regenerateDigest(): Promise<DigestState> {
     today: now,
   });
 
-  // Phase + cycle day: prefer the automated derivation from last_period_start
-  // (matches Today), falling back to the most recent manual cycle row.
-  const cycleSettings: CycleSettings = {
-    cycleLength: prof?.avg_cycle_length ?? 28,
-    periodLength: prof?.avg_period_length ?? 5,
-  };
+  // Phase + cycle day derived from last_period_start (kept current by the
+  // Apple Health flow ingest). Matches the snapshot shown on /today.
   let phase: Phase | null = null;
   let cycleDay: number | null = null;
   if (prof?.track_cycle && prof.last_period_start) {
     cycleDay = cycleDayFromPeriodStart(prof.last_period_start, cycleSettings, today);
     phase = cycleDay ? phaseForCycleDay(cycleDay, cycleSettings) : null;
-  } else {
-    const latestCycle = (cycle ?? [])[0] ?? null;
-    const phaseRaw =
-      latestCycle && typeof latestCycle.phase === "string"
-        ? latestCycle.phase
-        : null;
-    phase = phaseRaw && isPhase(phaseRaw) ? phaseRaw : null;
-    cycleDay = (latestCycle?.cycle_day as number | null) ?? null;
   }
 
   // Weight: latest + 7-day delta from earliest reading in the window.
