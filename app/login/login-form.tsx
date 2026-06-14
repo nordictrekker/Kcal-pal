@@ -1,10 +1,11 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
-import { sendMagicLink, verifyOtpCode } from "./actions";
+import { sendMagicLink, verifyMagicLinkUrl } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -17,7 +18,7 @@ function SendButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? "Sending…" : "Send code"}
+      {pending ? "Sending…" : "Send sign-in link"}
     </Button>
   );
 }
@@ -26,7 +27,7 @@ function VerifyButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? "Verifying…" : "Verify"}
+      {pending ? "Verifying…" : "Sign in"}
     </Button>
   );
 }
@@ -45,9 +46,7 @@ export function LoginForm({
       <CardHeader>
         <CardTitle>Kcal-pal</CardTitle>
         <CardDescription>
-          {sent
-            ? "Enter the 6-digit code from your email."
-            : "Sign in with a 6-digit code."}
+          {sent ? "Paste the sign-in link from your email." : "Sign in."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -72,22 +71,26 @@ export function LoginForm({
           </form>
         ) : (
           <>
-            <form action={verifyOtpCode} className="space-y-4">
+            <ol className="space-y-1 text-xs text-muted-foreground">
+              <li>1. Open the email from Supabase.</li>
+              <li>
+                2. <span className="font-medium">Long-press</span> the
+                sign-in link → <span className="font-medium">Copy Link</span>.
+              </li>
+              <li>3. Paste it below and tap Sign in.</li>
+            </ol>
+            <form action={verifyMagicLinkUrl} className="space-y-4">
               <input type="hidden" name="email" value={email ?? ""} />
               <div className="space-y-2">
-                <Label htmlFor="token">Code</Label>
-                <Input
-                  id="token"
-                  name="token"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="\d{6}"
-                  maxLength={6}
-                  autoComplete="one-time-code"
+                <Label htmlFor="url">Sign-in link</Label>
+                <Textarea
+                  id="url"
+                  name="url"
                   required
                   autoFocus
-                  placeholder="123456"
-                  className="text-center text-2xl tracking-widest tabular-nums"
+                  rows={3}
+                  placeholder="https://…supabase.co/auth/v1/verify?token=…"
+                  className="font-mono text-xs"
                 />
               </div>
               {error ? (
@@ -96,10 +99,9 @@ export function LoginForm({
               <VerifyButton />
             </form>
             <p className="text-xs text-muted-foreground">
-              Sent to <span className="font-medium">{email}</span>. On
-              desktop you can also click the link in the email. On
-              iPhone (installed app), use the code — clicking the link
-              opens Safari outside the app.
+              Sent to <span className="font-medium">{email}</span>. On a
+              desktop browser you can just click the link in the email
+              instead.
             </p>
             <form action={sendMagicLink}>
               <input type="hidden" name="email" value={email ?? ""} />
@@ -107,7 +109,7 @@ export function LoginForm({
                 type="submit"
                 className="text-xs text-muted-foreground underline-offset-4 hover:underline"
               >
-                Re-send code
+                Re-send link
               </button>
             </form>
           </>

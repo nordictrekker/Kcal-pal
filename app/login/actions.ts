@@ -8,14 +8,16 @@ function allowedEmail(): string {
   return (process.env.ALLOWED_EMAIL ?? "").trim().toLowerCase();
 }
 
-function reject(reason: string): never {
-  redirect(`/login?error=${encodeURIComponent(reason)}`);
+function reject(reason: string, email?: string): never {
+  const params = new URLSearchParams({ error: reason });
+  if (email) {
+    params.set("sent", "1");
+    params.set("email", email);
+  }
+  redirect(`/login?${params.toString()}`);
 }
 
-// Step 1: send the email. Supabase still emits the magic-link template,
-// but we direct the user to use the 6-digit code embedded in that email
-// instead of clicking the link — iOS Safari isolates cookies from the
-// installed PWA, so the click-link PKCE flow fails inside Add-to-Home-Screen.
+// Send the standard Supabase magic-link email.
 export async function sendMagicLink(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const allowed = allowedEmail();
@@ -32,49 +34,74 @@ export async function sendMagicLink(formData: FormData) {
     email,
     options: {
       shouldCreateUser: true,
-      // Still set so the magic link works for desktop browsers (where
-      // there's no PWA cookie isolation), but the code path is the
-      // primary one inside the iOS PWA.
       emailRedirectTo: `${origin}/auth/callback`,
     },
   });
 
   if (error) reject(error.message);
 
-  // Preserve email in the URL so the verify form is pre-filled.
   redirect(`/login?sent=1&email=${encodeURIComponent(email)}`);
 }
 
-// Step 2: verify the 6-digit code typed into the PWA. No external browser
-// involved — the auth cookies land in the PWA's own storage.
-export async function verifyOtpCode(formData: FormData) {
+// Verify by extracting the hashed token from a pasted magic-link URL.
+// This sidesteps the iOS PWA cookie-isolation issue: instead of clicking
+// the link (which opens Safari, separate cookie jar), the user
+// long-presses → Copy Link → pastes into the PWA, and we verify the
+// token_hash directly from within the PWA's own context. No PKCE
+// verifier required.
+export async function verifyMagicLinkUrl(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const token = String(formData.get("token") ?? "").trim().replace(/\s+/g, "");
+  const pasted = String(formData.get("url") ?? "").trim();
   const allowed = allowedEmail();
 
   if (!allowed) reject("Server misconfigured: ALLOWED_EMAIL unset");
-  if (email !== allowed) reject("Not authorized");
-  if (!/^\d{6}$/.test(token)) reject("Enter the 6-digit code from your email.");
+  if (!pasted) reject("Paste the sign-in link from your email.", email);
+
+  let parsed: URL;
+  try {
+    parsed = new URL(pasted);
+  } catch {
+    reject("That doesn't look like a valid URL.", email);
+  }
+
+  // Accept both the Supabase verify URL (?token=hash) and a fallback for
+  // pre-resolved callback URLs (?code= — PKCE; would fail on free tier
+  // iOS PWA anyway, included for desktop completeness).
+  const tokenHash = parsed.searchParams.get("token");
+  const code = parsed.searchParams.get("code");
 
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.verifyOtp({
-    email,
-    token,
-    type: "email",
-  });
 
-  if (error || !data.user) {
-    reject(error?.message ?? "Verification failed.");
+  if (tokenHash) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      type: "magiclink",
+      token_hash: tokenHash,
+    });
+    if (error || !data.user) {
+      reject(error?.message ?? "Verification failed.", email);
+    }
+    const userEmail = (data.user!.email ?? "").trim().toLowerCase();
+    if (userEmail !== allowed) {
+      await supabase.auth.signOut();
+      reject("Not authorized");
+    }
+    redirect("/today");
   }
 
-  // Belt-and-suspenders: re-check the email matches the allowlist.
-  const userEmail = (data.user!.email ?? "").trim().toLowerCase();
-  if (userEmail !== allowed) {
-    await supabase.auth.signOut();
-    reject("Not authorized");
+  if (code) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error || !data.user) {
+      reject(error?.message ?? "Verification failed.", email);
+    }
+    const userEmail = (data.user!.email ?? "").trim().toLowerCase();
+    if (userEmail !== allowed) {
+      await supabase.auth.signOut();
+      reject("Not authorized");
+    }
+    redirect("/today");
   }
 
-  redirect("/today");
+  reject("Couldn't find a sign-in token in that URL.", email);
 }
 
 export async function signOut() {
