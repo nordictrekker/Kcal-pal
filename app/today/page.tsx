@@ -9,6 +9,7 @@ import { MacroTotals } from "./macro-totals";
 import { EntryList } from "./entry-list";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
 import { CycleCard, type CycleSnapshot } from "./cycle-card";
+import { WeightCard, type WeightSnapshot } from "./weight-card";
 import {
   isPhase,
   phaseForCycleDay,
@@ -32,6 +33,7 @@ export default async function TodayPage() {
     { data: entries },
     { data: ouraRows },
     { data: cycleRows },
+    { data: weightRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
     supabase
@@ -53,6 +55,12 @@ export default async function TodayPage() {
       .eq("user_id", user.id)
       .lte("date", today)
       .order("date", { ascending: false })
+      .limit(1),
+    supabase
+      .from("body_weights")
+      .select("weight_lbs,measured_at")
+      .eq("user_id", user.id)
+      .order("measured_at", { ascending: false })
       .limit(1),
   ]);
 
@@ -99,6 +107,14 @@ export default async function TodayPage() {
     cycleSnapshot = { day: null, phase: null, source: "empty" };
   }
 
+  const weightMostRecent = (weightRows ?? [])[0] ?? null;
+  const weightSnapshot: WeightSnapshot = weightMostRecent
+    ? {
+        weight_lbs: Number(weightMostRecent.weight_lbs),
+        measured_at: weightMostRecent.measured_at as string,
+      }
+    : null;
+
   const list = (entries ?? []) as FoodEntry[];
   const totals = sumTotals(list);
   const p = profile as Profile | null;
@@ -128,6 +144,7 @@ export default async function TodayPage() {
       </header>
 
       {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}
+      <WeightCard latest={weightSnapshot} />
       <CycleCard initial={cycleSnapshot} />
 
       <MacroTotals totals={totals} targets={targets} />

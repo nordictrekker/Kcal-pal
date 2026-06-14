@@ -6,6 +6,8 @@ import { InstallCard } from "./install-card";
 import { Notifications } from "./notifications";
 import { ThemeToggle } from "./theme-toggle";
 import { ShortcutCard } from "./shortcut-card";
+import { TargetsCard, type Targets } from "./targets-card";
+import type { Profile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,20 @@ export default async function SettingsPage() {
 
   const vapidPublicKey = process.env.VAPID_PUBLIC_KEY ?? "";
   const ingestToken = process.env.HEALTH_INGEST_TOKEN ?? "";
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("user_id", user.id)
+    .single();
+  const p = profile as Profile | null;
+  const targets: Targets = {
+    calories: p?.daily_calorie_target ?? 2000,
+    protein_g: p?.daily_protein_target_g ?? 130,
+    carbs_g: p?.daily_carb_target_g ?? 220,
+    fat_g: p?.daily_fat_target_g ?? 70,
+    fiber_g: p?.daily_fiber_target_g ?? 30,
+  };
 
   const hdrs = await headers();
   const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "";
@@ -37,6 +53,8 @@ export default async function SettingsPage() {
           Today →
         </Link>
       </header>
+
+      <TargetsCard targets={targets} />
 
       <ThemeToggle />
 
