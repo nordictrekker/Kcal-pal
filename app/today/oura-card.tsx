@@ -5,6 +5,7 @@ import { Activity, RefreshCw } from "lucide-react";
 import { syncOura, type SyncResult } from "./sync-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export type OuraSnapshot = {
   date: string;
@@ -13,23 +14,47 @@ export type OuraSnapshot = {
   readiness_score: number | null;
 } | null;
 
+// 85+ → vibrant; 70–84 → neutral; <70 → invite rest.
+type ReadinessBand = "high" | "mid" | "low" | "unknown";
+function bandFor(score: number | null): ReadinessBand {
+  if (score === null) return "unknown";
+  if (score >= 85) return "high";
+  if (score >= 70) return "mid";
+  return "low";
+}
+
+function readinessVibe(band: ReadinessBand): string | null {
+  switch (band) {
+    case "high": return "Feeling strong today.";
+    case "low":  return "Lean into recovery — protein, fiber, sleep.";
+    default:     return null;
+  }
+}
+
 function Stat({
   label,
   value,
   unit,
+  emphasized,
 }: {
   label: string;
   value: number | null;
   unit?: string;
+  emphasized?: boolean;
 }) {
   return (
     <div className="text-center">
-      <div className="text-2xl font-semibold tabular-nums">
+      <div
+        className={cn(
+          "font-serif text-3xl font-medium tabular-nums leading-none",
+          emphasized && "text-primary",
+        )}
+      >
         {value === null || value === undefined
           ? "—"
           : Math.round(Number(value))}
       </div>
-      <div className="text-xs text-muted-foreground">
+      <div className="mt-1 text-xs text-muted-foreground">
         {label}
         {unit ? ` (${unit})` : ""}
       </div>
@@ -40,6 +65,8 @@ function Stat({
 export function OuraCard({ data }: { data: OuraSnapshot }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<SyncResult | null>(null);
+  const band = bandFor(data?.readiness_score ?? null);
+  const vibe = readinessVibe(band);
 
   function handleSync() {
     start(async () => {
@@ -49,7 +76,13 @@ export function OuraCard({ data }: { data: OuraSnapshot }) {
   }
 
   return (
-    <Card>
+    <Card
+      className={cn(
+        "transition-shadow",
+        band === "high" &&
+          "shadow-[0_0_0_1px_var(--ring),0_8px_24px_-12px_color-mix(in_oklch,var(--primary)_40%,transparent)]",
+      )}
+    >
       <CardContent className="space-y-3 pt-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -76,11 +109,20 @@ export function OuraCard({ data }: { data: OuraSnapshot }) {
         </div>
 
         {data ? (
-          <div className="grid grid-cols-3 gap-3">
-            <Stat label="Sleep" value={data.sleep_score} />
-            <Stat label="HRV" value={data.hrv_avg} unit="ms" />
-            <Stat label="Readiness" value={data.readiness_score} />
-          </div>
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              <Stat label="Sleep" value={data.sleep_score} />
+              <Stat label="HRV" value={data.hrv_avg} unit="ms" />
+              <Stat
+                label="Readiness"
+                value={data.readiness_score}
+                emphasized={band === "high"}
+              />
+            </div>
+            {vibe ? (
+              <p className="text-xs text-muted-foreground">{vibe}</p>
+            ) : null}
+          </>
         ) : (
           <p className="text-sm text-muted-foreground">
             No Oura data yet. Tap Sync now to pull the last 7 days.

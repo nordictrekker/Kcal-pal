@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Personal nutrition tracker",
     start_url: "/today",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#171717",
+    background_color: "#f7f3ec",
+    theme_color: "#7a3a25",
     orientation: "portrait",
     icons: [
       {

@@ -150,15 +150,53 @@ export default async function TodayPage() {
       ? { phase: currentPhase, description: adjustmentDescription }
       : null;
 
+  // Greeting + phase blurb. Tiny, warm, not chatty.
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting =
+    hour < 5 ? "Late night"
+    : hour < 12 ? "Good morning"
+    : hour < 17 ? "Good afternoon"
+    : hour < 22 ? "Good evening"
+    : "Late night";
+
+  const PHASE_VIBE: Record<string, string> = {
+    menstrual: "rest and replenish",
+    follicular: "fresh energy, lean into carbs",
+    ovulatory: "peak — fuel the high",
+    luteal: "wind-down, lean into fats and fiber",
+  };
+  const phaseLine = cycleSnapshot.phase
+    ? `Day ${cycleSnapshot.day} · ${PHASE_VIBE[cycleSnapshot.phase]}`
+    : null;
+
   return (
-    <main className="mx-auto max-w-md p-4 space-y-6 pb-24">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Today</h1>
-        <form action={signOut}>
-          <Button variant="ghost" size="sm" type="submit">
-            Sign out
-          </Button>
-        </form>
+    <main
+      data-phase={cycleSnapshot.phase ?? undefined}
+      className="mx-auto max-w-md p-4 space-y-5 pb-24"
+    >
+      <header className="space-y-1">
+        <div className="flex items-start justify-between">
+          <div className="space-y-0.5">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {greeting}
+            </p>
+            <h1 className="font-serif text-3xl font-medium leading-tight">
+              Today
+            </h1>
+          </div>
+          <form action={signOut}>
+            <Button variant="ghost" size="sm" type="submit">
+              Sign out
+            </Button>
+          </form>
+        </div>
+        {phaseLine ? (
+          <p className="text-sm text-muted-foreground">
+            <span className="capitalize">{cycleSnapshot.phase}</span>{" "}
+            <span className="text-foreground/60">· {phaseLine.split("· ")[1]}</span>
+          </p>
+        ) : null}
       </header>
 
       {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}

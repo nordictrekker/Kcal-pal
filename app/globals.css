@@ -4,48 +4,109 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  /* Warm, considered base — off-white background, soft graphite ink. */
+  --background: oklch(0.985 0.005 60);
+  --foreground: oklch(0.20 0.012 50);
+  --card: oklch(0.995 0.003 60);
+  --card-foreground: oklch(0.20 0.012 50);
+  --popover: oklch(0.995 0.003 60);
+  --popover-foreground: oklch(0.20 0.012 50);
+  /* Default primary — warm clay. Overridden per-phase by [data-phase]. */
+  --primary: oklch(0.46 0.085 30);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.945 0.012 50);
+  --secondary-foreground: oklch(0.25 0.012 50);
+  --muted: oklch(0.95 0.008 50);
+  --muted-foreground: oklch(0.50 0.012 50);
+  --accent: oklch(0.93 0.018 35);
+  --accent-foreground: oklch(0.25 0.012 50);
+  --destructive: oklch(0.55 0.20 27);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
+  --border: oklch(0.91 0.012 50);
+  --input: oklch(0.91 0.012 50);
+  --ring: oklch(0.65 0.05 40);
+  --radius: 0.75rem;
+
+  /* Semantic macro colors — used by the totals bars so each macro is
+     instantly recognizable instead of all-primary. */
+  --macro-protein: oklch(0.62 0.16 25);   /* warm orange-red */
+  --macro-carbs:   oklch(0.62 0.13 220);  /* cool slate-blue */
+  --macro-fat:     oklch(0.68 0.13 80);   /* honeyed gold */
+  --macro-fiber:   oklch(0.58 0.11 155);  /* sage */
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
+  --background: oklch(0.165 0.012 50);
+  --foreground: oklch(0.96 0.005 60);
+  --card: oklch(0.22 0.012 50);
+  --card-foreground: oklch(0.96 0.005 60);
+  --popover: oklch(0.22 0.012 50);
+  --popover-foreground: oklch(0.96 0.005 60);
+  --primary: oklch(0.72 0.10 35);
+  --primary-foreground: oklch(0.18 0.012 50);
+  --secondary: oklch(0.28 0.012 50);
+  --secondary-foreground: oklch(0.96 0.005 60);
+  --muted: oklch(0.28 0.012 50);
+  --muted-foreground: oklch(0.72 0.012 50);
+  --accent: oklch(0.31 0.025 35);
+  --accent-foreground: oklch(0.96 0.005 60);
+  --destructive: oklch(0.70 0.18 22);
+  --destructive-foreground: oklch(0.18 0.012 50);
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.60 0.05 40);
+
+  --macro-protein: oklch(0.72 0.16 25);
+  --macro-carbs:   oklch(0.72 0.13 220);
+  --macro-fat:     oklch(0.78 0.13 80);
+  --macro-fiber:   oklch(0.68 0.11 155);
+}
+
+/* Cycle-phase accents.
+   The data-phase attribute is set on a container (typically /today's <main>).
+   Tasteful palette — earthy/seasonal, not garish. Light and dark are tuned
+   separately because dark mode needs lifted lightness for the same impact.
+*/
+[data-phase="menstrual"] {
+  --primary: oklch(0.50 0.13 25);    /* rust */
+  --primary-foreground: oklch(0.98 0 0);
+  --ring: oklch(0.65 0.10 25);
+  --accent: oklch(0.94 0.030 30);
+}
+[data-phase="follicular"] {
+  --primary: oklch(0.52 0.13 160);   /* mossy sage */
+  --primary-foreground: oklch(0.98 0 0);
+  --ring: oklch(0.68 0.09 160);
+  --accent: oklch(0.94 0.025 155);
+}
+[data-phase="ovulatory"] {
+  --primary: oklch(0.60 0.16 65);    /* warm amber */
+  --primary-foreground: oklch(0.15 0 0);
+  --ring: oklch(0.72 0.12 65);
+  --accent: oklch(0.95 0.035 70);
+}
+[data-phase="luteal"] {
+  --primary: oklch(0.52 0.12 290);   /* dusty lavender */
+  --primary-foreground: oklch(0.98 0 0);
+  --ring: oklch(0.66 0.09 290);
+  --accent: oklch(0.94 0.025 290);
+}
+
+.dark[data-phase="menstrual"], .dark [data-phase="menstrual"] {
+  --primary: oklch(0.70 0.14 30);
+  --primary-foreground: oklch(0.18 0.012 30);
+}
+.dark[data-phase="follicular"], .dark [data-phase="follicular"] {
+  --primary: oklch(0.72 0.13 160);
+  --primary-foreground: oklch(0.18 0.012 160);
+}
+.dark[data-phase="ovulatory"], .dark [data-phase="ovulatory"] {
+  --primary: oklch(0.78 0.14 70);
+  --primary-foreground: oklch(0.18 0.012 70);
+}
+.dark[data-phase="luteal"], .dark [data-phase="luteal"] {
+  --primary: oklch(0.72 0.12 290);
+  --primary-foreground: oklch(0.18 0.012 290);
 }
 
 @theme inline {
@@ -68,12 +129,17 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-macro-protein: var(--macro-protein);
+  --color-macro-carbs:   var(--macro-carbs);
+  --color-macro-fat:     var(--macro-fat);
+  --color-macro-fiber:   var(--macro-fiber);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-fraunces);
 }
 
 @layer base {
