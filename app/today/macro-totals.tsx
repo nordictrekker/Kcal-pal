@@ -41,9 +41,13 @@ function Bar({
 export function MacroTotals({
   totals,
   targets,
+  phaseAdjustment,
 }: {
   totals: Totals;
   targets: Totals;
+  // Optional "+5% kcal, +15% fat, -10% carbs" hint shown when targets
+  // have been adjusted for the current cycle phase.
+  phaseAdjustment?: { phase: string; description: string } | null;
 }) {
   return (
     <Card>
@@ -56,6 +60,12 @@ export function MacroTotals({
             of {targets.calories} kcal
           </span>
         </div>
+        {phaseAdjustment ? (
+          <p className="-mt-2 text-xs text-muted-foreground">
+            <span className="capitalize">{phaseAdjustment.phase}</span>:{" "}
+            {phaseAdjustment.description}
+          </p>
+        ) : null}
         <div className="space-y-3">
           <Bar
             label="Protein"

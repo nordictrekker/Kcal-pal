@@ -7,6 +7,8 @@ import { Notifications } from "./notifications";
 import { ThemeToggle } from "./theme-toggle";
 import { ShortcutCard } from "./shortcut-card";
 import { TargetsCard, type Targets } from "./targets-card";
+import { PhaseModifiersCard } from "./phase-card";
+import { normalizeModifiers } from "@/lib/phase-modifiers";
 import type { Profile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +36,7 @@ export default async function SettingsPage() {
     fat_g: p?.daily_fat_target_g ?? 70,
     fiber_g: p?.daily_fiber_target_g ?? 30,
   };
+  const phaseModifiers = normalizeModifiers(p?.phase_modifiers);
 
   const hdrs = await headers();
   const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "";
@@ -55,6 +58,8 @@ export default async function SettingsPage() {
       </header>
 
       <TargetsCard targets={targets} />
+
+      <PhaseModifiersCard initial={phaseModifiers} />
 
       <ThemeToggle />
 

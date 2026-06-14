@@ -54,5 +54,6 @@ export type Profile = {
   daily_fiber_target_g: number;
   height_in: number | null;
   goal: string;
+  phase_modifiers: unknown; // jsonb; normalized via lib/phase-modifiers
   created_at: string;
 };

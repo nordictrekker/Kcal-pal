@@ -15,6 +15,11 @@ import {
   phaseForCycleDay,
   predictCycleDay,
 } from "@/lib/cycle";
+import {
+  applyPhaseModifiers,
+  describeAdjustments,
+  normalizeModifiers,
+} from "@/lib/phase-modifiers";
 
 export const dynamic = "force-dynamic";
 
@@ -124,13 +129,26 @@ export default async function TodayPage() {
   // the user hasn't opted into.
   const ouraEnabled = Boolean(process.env.OURA_PERSONAL_ACCESS_TOKEN);
 
-  const targets = {
+  const baseTargets = {
     calories: p?.daily_calorie_target ?? 2000,
     protein_g: p?.daily_protein_target_g ?? 130,
     carbs_g: p?.daily_carb_target_g ?? 220,
     fat_g: p?.daily_fat_target_g ?? 70,
     fiber_g: p?.daily_fiber_target_g ?? 30,
   };
+
+  // If we have a current cycle phase, adjust targets by the per-phase
+  // modifiers stored in the profile. No-op if phase is unknown.
+  const phaseModifiers = normalizeModifiers(p?.phase_modifiers);
+  const currentPhase = cycleSnapshot.phase;
+  const targets = applyPhaseModifiers(baseTargets, currentPhase, phaseModifiers);
+  const adjustmentDescription = currentPhase
+    ? describeAdjustments(phaseModifiers[currentPhase])
+    : null;
+  const phaseAdjustment =
+    currentPhase && adjustmentDescription
+      ? { phase: currentPhase, description: adjustmentDescription }
+      : null;
 
   return (
     <main className="mx-auto max-w-md p-4 space-y-6 pb-24">
@@ -147,7 +165,11 @@ export default async function TodayPage() {
       <WeightCard latest={weightSnapshot} />
       <CycleCard initial={cycleSnapshot} />
 
-      <MacroTotals totals={totals} targets={targets} />
+      <MacroTotals
+        totals={totals}
+        targets={targets}
+        phaseAdjustment={phaseAdjustment}
+      />
 
       <EntryList entries={list} />
 
