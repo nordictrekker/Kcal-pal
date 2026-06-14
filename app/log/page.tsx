@@ -4,6 +4,9 @@ import Link from "next/link";
 import { Camera, ImagePlus } from "lucide-react";
 import { defaultMeal } from "@/lib/food";
 import { LogForm } from "./log-form";
+import { SavedMeals, type SavedMealItem } from "./saved-meals";
+
+export const dynamic = "force-dynamic";
 
 export default async function LogPage() {
   const supabase = await createClient();
@@ -11,6 +14,21 @@ export default async function LogPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const { data: savedRaw } = await supabase
+    .from("saved_meals")
+    .select("id,label,description,calories,protein_g,last_used_at,use_count")
+    .eq("user_id", user.id)
+    .order("last_used_at", { ascending: false, nullsFirst: false })
+    .order("use_count", { ascending: false })
+    .limit(20);
+  const saved: SavedMealItem[] = (savedRaw ?? []).map((s) => ({
+    id: s.id as string,
+    label: s.label as string,
+    description: s.description as string,
+    calories: s.calories as number | null,
+    protein_g: s.protein_g as number | null,
+  }));
 
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
@@ -23,6 +41,8 @@ export default async function LogPage() {
           Today →
         </Link>
       </header>
+
+      <SavedMeals items={saved} />
 
       <div className="grid grid-cols-2 gap-2">
         <Link

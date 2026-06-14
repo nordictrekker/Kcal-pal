@@ -4,6 +4,8 @@ import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Pencil, Trash2 } from "lucide-react";
 import { updateEntry, deleteEntry, type EditState } from "./actions";
+import { saveEntryAsTemplate } from "../log/saved-actions";
+import { SaveEntryButton } from "../log/saved-meals";
 import type { FoodEntry } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,6 +113,12 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
           </p>
         )}
       </div>
+      <SaveEntryButton
+        onSave={async (label) => {
+          const r = await saveEntryAsTemplate(entry.id, label);
+          if (!r.ok) throw new Error(r.error ?? "Save failed");
+        }}
+      />
       <button
         type="button"
         onClick={() => setEditing(true)}
