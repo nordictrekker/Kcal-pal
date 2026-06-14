@@ -1,9 +1,15 @@
 import { LoginForm } from "./login-form";
 
+type SearchParams = Promise<{
+  error?: string;
+  sent?: string;
+  email?: string;
+}>;
+
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string }>;
+  searchParams: SearchParams;
 }) {
   return <LoginFormWrapper searchParams={searchParams} />;
 }
@@ -11,12 +17,16 @@ export default function LoginPage({
 async function LoginFormWrapper({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string }>;
+  searchParams: SearchParams;
 }) {
   const params = await searchParams;
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
-      <LoginForm error={params.error} sent={params.sent === "1"} />
+      <LoginForm
+        error={params.error}
+        sent={params.sent === "1"}
+        email={params.email}
+      />
     </main>
   );
 }
