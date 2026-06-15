@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Camera, ImagePlus } from "lucide-react";
+import { Camera, ImagePlus, BookOpen } from "lucide-react";
 import { defaultMeal } from "@/lib/food";
 import { LogForm } from "./log-form";
 import { SavedMeals, type SavedMealItem } from "./saved-meals";
@@ -44,7 +44,7 @@ export default async function LogPage() {
 
       <SavedMeals items={saved} />
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <Link
           href="/log/scan"
           className="flex h-12 w-full items-center justify-center gap-2 rounded-md border bg-secondary font-medium text-secondary-foreground hover:bg-secondary/80"
@@ -58,6 +58,13 @@ export default async function LogPage() {
         >
           <ImagePlus className="size-4" />
           Photo
+        </Link>
+        <Link
+          href="/recipes"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-md border bg-secondary font-medium text-secondary-foreground hover:bg-secondary/80"
+        >
+          <BookOpen className="size-4" />
+          Recipes
         </Link>
       </div>
 

@@ -17,6 +17,7 @@ export type WizardPrefill = {
   weight_lbs: number | null;
   activity_level: string;
   goal: "lose" | "maintain" | "gain";
+  goal_weight_lbs: number | null;
   target_mode: "auto" | "manual";
   track_cycle: boolean;
   last_period_start: string | null;
@@ -91,6 +92,9 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
   );
   const [activity, setActivity] = useState(prefill.activity_level);
   const [goal, setGoal] = useState<WizardPrefill["goal"]>(prefill.goal);
+  const [goalWeight, setGoalWeight] = useState(
+    prefill.goal_weight_lbs ? String(prefill.goal_weight_lbs) : "",
+  );
   const [targetMode, setTargetMode] = useState<WizardPrefill["target_mode"]>(
     prefill.target_mode,
   );
@@ -219,11 +223,34 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
       subtitle: "Targets adjust to match.",
       valid: Boolean(goal),
       body: (
-        <OptionGrid
-          options={GOAL_OPTIONS}
-          value={goal}
-          onChange={(v) => setGoal(v as WizardPrefill["goal"])}
-        />
+        <div className="space-y-4">
+          <OptionGrid
+            options={GOAL_OPTIONS}
+            value={goal}
+            onChange={(v) => setGoal(v as WizardPrefill["goal"])}
+          />
+          {goal !== "maintain" ? (
+            <div className="space-y-2 rounded-lg border p-3">
+              <Label htmlFor="goalWeight">Goal weight (optional)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="goalWeight"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.5"
+                  value={goalWeight}
+                  onChange={(e) => setGoalWeight(e.target.value)}
+                  placeholder="lb"
+                  className="max-w-[140px] tabular-nums"
+                />
+                <span className="text-sm text-muted-foreground">lb</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                We&apos;ll project an ETA from your weight trend as data builds up.
+              </p>
+            </div>
+          ) : null}
+        </div>
       ),
     },
     {
@@ -333,6 +360,7 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
   }
 
   function finish() {
+    const goalWeightNum = Number(goalWeight);
     const payload: OnboardingPayload = {
       first_name: firstName.trim(),
       date_of_birth: dob,
@@ -341,6 +369,10 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
       weight_lbs: Number(weight),
       activity_level: activity,
       goal,
+      goal_weight_lbs:
+        goal !== "maintain" && goalWeight && Number.isFinite(goalWeightNum)
+          ? goalWeightNum
+          : null,
       target_mode: targetMode,
       track_cycle: trackCycle,
       last_period_start: trackCycle && periodStart ? periodStart : null,

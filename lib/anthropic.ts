@@ -92,12 +92,17 @@ async function callAndParse(
 ): Promise<ParseResult> {
   let raw: unknown = null;
   try {
-    const resp = await getAnthropic().messages.create({
-      model: NUTRITION_MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userContent }],
-    });
+    // 30s is generous for a single message — keeps a hung Anthropic call
+    // from holding a server-action thread forever.
+    const resp = await getAnthropic().messages.create(
+      {
+        model: NUTRITION_MODEL,
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userContent }],
+      },
+      { timeout: 30_000 },
+    );
     raw = resp;
 
     if (resp.stop_reason === "refusal") {
@@ -147,6 +152,107 @@ export async function parseBarcodeFallback(args: {
 }): Promise<ParseResult> {
   const userMessage = `Barcode ${args.barcode} was scanned but not in the OpenFoodFacts database. The user describes the product as: ${args.productGuess}. Estimate nutrition for one typical serving.`;
   return callAndParse(userMessage);
+}
+
+// ─── Recipe parsing ─────────────────────────────────────────────────────
+
+const RECIPE_SYSTEM_PROMPT =
+  "You are a culinary nutrition assistant. Given a recipe (title, ingredient list, and optional preparation notes), return JSON only with shape {name: string, servings: number, serving_size: string, calories_per_serving: number, protein_g_per_serving: number, carbs_g_per_serving: number, fat_g_per_serving: number, fiber_g_per_serving: number, ingredients: [{name: string, quantity: string}], assumptions: string[]}. Estimate nutrition with USDA averages. If servings isn't stated, infer from total volume/weight + a typical portion (note the assumption). Always return valid JSON, no prose.";
+
+export type ParsedRecipe = {
+  name: string;
+  servings: number;
+  serving_size: string;
+  calories_per_serving: number;
+  protein_g_per_serving: number;
+  carbs_g_per_serving: number;
+  fat_g_per_serving: number;
+  fiber_g_per_serving: number;
+  ingredients: Array<{ name: string; quantity: string }>;
+  assumptions: string[];
+};
+
+export type RecipeParseResult =
+  | { ok: true; data: ParsedRecipe; raw: unknown }
+  | { ok: false; error: string; raw: unknown };
+
+function normalizeRecipe(obj: Record<string, unknown>): ParsedRecipe {
+  const ingsRaw = Array.isArray(obj.ingredients) ? obj.ingredients : [];
+  const ingredients = ingsRaw.map((it) => {
+    const i = (it ?? {}) as Record<string, unknown>;
+    return {
+      name: typeof i.name === "string" ? i.name : "",
+      quantity: typeof i.quantity === "string" ? i.quantity : "",
+    };
+  });
+  const num = (v: unknown, d = 0) =>
+    typeof v === "number" && Number.isFinite(v) ? v : d;
+  return {
+    name: typeof obj.name === "string" ? obj.name : "Untitled recipe",
+    servings: Math.max(1, num(obj.servings, 1)),
+    serving_size:
+      typeof obj.serving_size === "string" ? obj.serving_size : "",
+    calories_per_serving: num(obj.calories_per_serving),
+    protein_g_per_serving: num(obj.protein_g_per_serving),
+    carbs_g_per_serving: num(obj.carbs_g_per_serving),
+    fat_g_per_serving: num(obj.fat_g_per_serving),
+    fiber_g_per_serving: num(obj.fiber_g_per_serving),
+    ingredients,
+    assumptions: Array.isArray(obj.assumptions)
+      ? obj.assumptions.filter((a): a is string => typeof a === "string")
+      : [],
+  };
+}
+
+// Parse a recipe given the raw page text (we fetch the URL server-side
+// and feed Claude the trimmed body). Never invents — null fields stay 0.
+export async function parseRecipe(args: {
+  url: string;
+  body: string;
+}): Promise<RecipeParseResult> {
+  let raw: unknown = null;
+  try {
+    const userMessage = `Source URL: ${args.url}\n\nPage content (recipe body, may include site chrome):\n\n${args.body.slice(
+      0,
+      18_000,
+    )}`;
+    const resp = await getAnthropic().messages.create(
+      {
+        model: NUTRITION_MODEL,
+        max_tokens: 2048,
+        system: RECIPE_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userMessage }],
+      },
+      { timeout: 45_000 },
+    );
+    raw = resp;
+    if (resp.stop_reason === "refusal") {
+      return { ok: false, error: "Model declined to parse this recipe.", raw };
+    }
+    let text = "";
+    for (const block of resp.content) if (block.type === "text") text += block.text;
+    const trimmed = text.trim();
+    const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const jsonText = fence ? fence[1].trim() : trimmed;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      return { ok: false, error: "Recipe didn't come back as valid JSON.", raw };
+    }
+    if (typeof parsed !== "object" || parsed === null) {
+      return { ok: false, error: "Unexpected recipe shape.", raw };
+    }
+    return {
+      ok: true,
+      data: normalizeRecipe(parsed as Record<string, unknown>),
+      raw,
+    };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Unknown error parsing recipe.";
+    return { ok: false, error: message, raw };
+  }
 }
 
 // Parse a meal photo via vision. Schema includes confidence per spec.

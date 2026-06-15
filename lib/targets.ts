@@ -61,6 +61,75 @@ export type ComputedTargets = {
   note: string | null; // short human explanation for the UI
 };
 
+// Linear fit on (day offset, weight) to estimate weight trend in lb/week.
+// Returns null if there's fewer than 4 distinct readings — too noisy.
+export function weightTrendLbsPerWeek(
+  readings: Array<{ measured_at: string; weight_lbs: number }>,
+): { lbsPerWeek: number; rSquared: number } | null {
+  if (readings.length < 4) return null;
+  const sorted = [...readings].sort((a, b) =>
+    a.measured_at.localeCompare(b.measured_at),
+  );
+  const t0 = Date.parse(sorted[0].measured_at);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const r of sorted) {
+    xs.push((Date.parse(r.measured_at) - t0) / 86_400_000); // days
+    ys.push(r.weight_lbs);
+  }
+  const n = xs.length;
+  const mx = xs.reduce((a, b) => a + b, 0) / n;
+  const my = ys.reduce((a, b) => a + b, 0) / n;
+  let num = 0;
+  let den = 0;
+  let totSS = 0;
+  for (let i = 0; i < n; i++) {
+    num += (xs[i] - mx) * (ys[i] - my);
+    den += (xs[i] - mx) ** 2;
+    totSS += (ys[i] - my) ** 2;
+  }
+  if (den === 0 || totSS === 0) return null;
+  const slope = num / den; // lb/day
+  const intercept = my - slope * mx;
+  let resSS = 0;
+  for (let i = 0; i < n; i++) {
+    const yhat = intercept + slope * xs[i];
+    resSS += (ys[i] - yhat) ** 2;
+  }
+  const rSquared = 1 - resSS / totSS;
+  return { lbsPerWeek: slope * 7, rSquared };
+}
+
+// Project an ETA to a goal weight given current weight, goal, and trend.
+// Returns null when the trend points the wrong way (gaining while trying
+// to lose, etc.) or there's no goal/no trend.
+export function projectGoalEta(args: {
+  currentLbs: number | null;
+  goalLbs: number | null;
+  trend: { lbsPerWeek: number; rSquared: number } | null;
+}): { etaDate: string; weeksAway: number } | null {
+  if (
+    args.currentLbs == null ||
+    args.goalLbs == null ||
+    args.trend == null ||
+    !Number.isFinite(args.trend.lbsPerWeek) ||
+    args.trend.lbsPerWeek === 0
+  ) {
+    return null;
+  }
+  const delta = args.goalLbs - args.currentLbs; // positive = need to gain
+  const trendSign = Math.sign(args.trend.lbsPerWeek);
+  const needSign = Math.sign(delta);
+  if (trendSign !== needSign) return null;
+  const weeks = Math.abs(delta / args.trend.lbsPerWeek);
+  if (!Number.isFinite(weeks) || weeks > 260) return null; // >5y = useless
+  const eta = new Date(Date.now() + weeks * 7 * 86_400_000);
+  return {
+    etaDate: eta.toISOString().slice(0, 10),
+    weeksAway: Math.round(weeks * 10) / 10,
+  };
+}
+
 function ageFromDob(dob: string): number | null {
   const t = Date.parse(`${dob}T00:00:00Z`);
   if (!Number.isFinite(t)) return null;

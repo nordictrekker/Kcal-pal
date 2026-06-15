@@ -15,6 +15,7 @@ export type ProfileSettings = {
   height_in: number | null;
   activity_level: string;
   goal: string;
+  goal_weight_lbs: number | null;
   target_mode: string;
   track_cycle: boolean;
   last_period_start: string;
@@ -144,6 +145,21 @@ export function ProfileCard({ initial }: { initial: ProfileSettings }) {
                   ["maintain", "Maintain"],
                   ["gain", "Gain"],
                 ]}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="goal_weight_lbs" className="text-xs text-muted-foreground">
+                Goal weight (lb)
+              </Label>
+              <Input
+                id="goal_weight_lbs"
+                name="goal_weight_lbs"
+                type="number"
+                inputMode="decimal"
+                step="0.5"
+                defaultValue={initial.goal_weight_lbs ?? ""}
+                className="h-9 tabular-nums"
+                placeholder="optional"
               />
             </div>
           </div>

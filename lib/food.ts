@@ -2,6 +2,10 @@ import type { Meal } from "./types";
 
 export const MEALS: Meal[] = ["breakfast", "lunch", "dinner", "snack"];
 
+export function isMeal(v: string): v is Meal {
+  return (MEALS as readonly string[]).includes(v);
+}
+
 export type Totals = {
   calories: number;
   protein_g: number;

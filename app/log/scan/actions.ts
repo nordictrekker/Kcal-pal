@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { lookupOpenFoodFacts, type OffNutrition } from "@/lib/openfoodfacts";
 import { parseBarcodeFallback } from "@/lib/anthropic";
-import { MEALS } from "@/lib/food";
+import { isMeal } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
 export type LookupResult =
@@ -81,10 +81,6 @@ export async function runClaudeFallback(args: {
       basis: "serving",
     },
   };
-}
-
-function isMeal(v: string): v is Meal {
-  return (MEALS as string[]).includes(v);
 }
 
 function readNumberOrNull(v: FormDataEntryValue | null): number | null {

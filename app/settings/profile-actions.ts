@@ -74,6 +74,14 @@ export async function updateProfileSettings(
     patch.protein_per_kg = v;
   }
 
+  const goalWeight = String(formData.get("goal_weight_lbs") ?? "").trim();
+  if (goalWeight) {
+    const v = Number(goalWeight);
+    if (!Number.isFinite(v) || v < 50 || v > 600)
+      return { ok: false, error: "Goal weight must be between 50 and 600 lb." };
+    patch.goal_weight_lbs = v;
+  }
+
   // Cycle settings.
   const trackCycle = formData.get("track_cycle");
   if (trackCycle !== null) patch.track_cycle = trackCycle === "on" || trackCycle === "true";

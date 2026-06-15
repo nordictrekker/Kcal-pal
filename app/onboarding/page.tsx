@@ -45,6 +45,7 @@ export default async function OnboardingPage() {
       : null,
     activity_level: p?.activity_level ?? "moderate",
     goal,
+    goal_weight_lbs: p?.goal_weight_lbs ?? null,
     target_mode: p?.target_mode === "manual" ? "manual" : "auto",
     track_cycle: p?.track_cycle ?? true,
     last_period_start: p?.last_period_start ?? null,

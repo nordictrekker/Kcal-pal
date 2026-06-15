@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseTextMeal } from "@/lib/anthropic";
-import { MEALS } from "@/lib/food";
+import { isMeal } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
 export type LogState = {
@@ -12,9 +12,8 @@ export type LogState = {
   warning?: string;
 };
 
-function isMeal(v: string): v is Meal {
-  return (MEALS as string[]).includes(v);
-}
+// Cap pasted/typed descriptions so the row size limit can never be hit.
+const MAX_DESC = 1000;
 
 export async function logTextMeal(
   _prev: LogState,
@@ -25,6 +24,9 @@ export async function logTextMeal(
 
   if (!description) {
     return { ok: false, error: "Describe what you ate." };
+  }
+  if (description.length > MAX_DESC) {
+    return { ok: false, error: `Description too long (max ${MAX_DESC} chars).` };
   }
   const meal: Meal = isMeal(mealRaw) ? mealRaw : "snack";
 

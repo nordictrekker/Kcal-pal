@@ -46,6 +46,7 @@ export default async function SettingsPage() {
     height_in: p?.height_in ?? null,
     activity_level: p?.activity_level ?? "moderate",
     goal: p?.goal ?? "maintain",
+    goal_weight_lbs: p?.goal_weight_lbs ?? null,
     target_mode: p?.target_mode ?? "manual",
     track_cycle: p?.track_cycle ?? true,
     last_period_start: p?.last_period_start ?? "",

@@ -7,7 +7,7 @@ import {
   parsePhotoMeal,
   type SupportedImageMediaType,
 } from "@/lib/anthropic";
-import { MEALS } from "@/lib/food";
+import { isMeal } from "@/lib/food";
 import type { Meal, ParsedNutrition } from "@/lib/types";
 
 const ALLOWED_TYPES: SupportedImageMediaType[] = [
@@ -107,10 +107,6 @@ export async function analyzePhoto(formData: FormData): Promise<AnalyzeResult> {
   }
 
   return { ok: true, photo_path: path, parsed: result.data };
-}
-
-function isMeal(v: string): v is Meal {
-  return (MEALS as string[]).includes(v);
 }
 
 function readNumberOrNull(v: FormDataEntryValue | null): number | null {

@@ -37,6 +37,8 @@ export async function syncOura(): Promise<SyncResult> {
     if (error) return { ok: false, error: error.message };
 
     revalidatePath("/today");
+    revalidatePath("/weekly");
+    revalidatePath("/recap");
     return { ok: true, daysSynced: rows.length };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown sync error";

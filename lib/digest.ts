@@ -112,12 +112,15 @@ export async function generateDigest(input: DigestInput): Promise<
   { ok: true; summary: string } | { ok: false; error: string }
 > {
   try {
-    const resp = await getAnthropic().messages.create({
-      model: NUTRITION_MODEL,
-      max_tokens: 400,
-      system: DIGEST_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildUserMessage(input) }],
-    });
+    const resp = await getAnthropic().messages.create(
+      {
+        model: NUTRITION_MODEL,
+        max_tokens: 400,
+        system: DIGEST_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: buildUserMessage(input) }],
+      },
+      { timeout: 30_000 },
+    );
 
     if (resp.stop_reason === "refusal") {
       return { ok: false, error: "Model declined to write the digest." };

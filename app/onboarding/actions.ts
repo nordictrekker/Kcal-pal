@@ -11,6 +11,7 @@ export type OnboardingPayload = {
   weight_lbs: number;
   activity_level: string;
   goal: "lose" | "maintain" | "gain";
+  goal_weight_lbs: number | null;
   target_mode: "auto" | "manual";
   track_cycle: boolean;
   last_period_start: string | null; // YYYY-MM-DD
@@ -65,6 +66,15 @@ export async function completeOnboarding(
   const cycleLen = Math.min(45, Math.max(21, Math.round(p.avg_cycle_length || 28)));
   const periodLen = Math.min(10, Math.max(2, Math.round(p.avg_period_length || 5)));
 
+  // Goal weight is optional — maintainers usually skip; losers/gainers fill it.
+  let goalWeight: number | null = null;
+  if (p.goal_weight_lbs != null && Number.isFinite(p.goal_weight_lbs)) {
+    if (p.goal_weight_lbs < 50 || p.goal_weight_lbs > 600) {
+      return { ok: false, error: "Goal weight looks off." };
+    }
+    goalWeight = p.goal_weight_lbs;
+  }
+
   const { error: profErr } = await supabase
     .from("profiles")
     .update({
@@ -74,6 +84,7 @@ export async function completeOnboarding(
       height_in: p.height_in,
       activity_level: p.activity_level,
       goal: p.goal,
+      goal_weight_lbs: goalWeight,
       target_mode: p.target_mode,
       track_cycle: p.track_cycle,
       last_period_start: lastPeriod,

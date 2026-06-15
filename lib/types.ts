@@ -70,5 +70,7 @@ export type Profile = {
   last_period_start: string | null; // YYYY-MM-DD
   avg_cycle_length: number | null;
   avg_period_length: number | null;
+  // Goal projection
+  goal_weight_lbs: number | null;
   created_at: string;
 };

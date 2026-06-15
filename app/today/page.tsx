@@ -33,7 +33,7 @@ import {
 } from "@/lib/phase-modifiers";
 import { pickInsight, avgDailySteps } from "@/lib/insights";
 import { buildTrends } from "@/lib/trends";
-import { computeTargets } from "@/lib/targets";
+import { computeTargets, weightTrendLbsPerWeek, projectGoalEta } from "@/lib/targets";
 import { mean } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
@@ -78,12 +78,14 @@ export default async function TodayPage() {
       .eq("user_id", user.id)
       .gte("date", fourteenDaysAgoDate)
       .order("date", { ascending: false }),
+    // Pull the last 60 days of weight readings — latest for the card,
+    // the rest feed the linear-trend projection below.
     supabase
       .from("body_weights")
       .select("weight_lbs,measured_at")
       .eq("user_id", user.id)
-      .order("measured_at", { ascending: false })
-      .limit(1),
+      .gte("measured_at", new Date(Date.now() - 60 * 86_400_000).toISOString())
+      .order("measured_at", { ascending: false }),
     supabase
       .from("apple_health_data")
       .select("value,recorded_at")
@@ -169,6 +171,28 @@ export default async function TodayPage() {
         measured_at: weightMostRecent.measured_at as string,
       }
     : null;
+
+  // Weight trend over the last 60 days + projected ETA to goal (when set).
+  const trend = weightTrendLbsPerWeek(
+    (weightRows ?? []).map((r) => ({
+      measured_at: r.measured_at as string,
+      weight_lbs: Number(r.weight_lbs),
+    })),
+  );
+  const goalEta = projectGoalEta({
+    currentLbs: weightSnapshot?.weight_lbs ?? null,
+    goalLbs: p?.goal_weight_lbs ?? null,
+    trend,
+  });
+  const weightProjection =
+    trend && weightSnapshot
+      ? {
+          lbsPerWeek: trend.lbsPerWeek,
+          goalLbs: p?.goal_weight_lbs ?? null,
+          etaDate: goalEta?.etaDate ?? null,
+          weeksAway: goalEta?.weeksAway ?? null,
+        }
+      : null;
 
   const list = (entries ?? []) as FoodEntry[];
   const totals = sumTotals(list);
@@ -348,7 +372,7 @@ export default async function TodayPage() {
       </header>
 
       {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}
-      <WeightCard latest={weightSnapshot} />
+      <WeightCard latest={weightSnapshot} projection={weightProjection} />
       <WaterCard todayMl={waterTodayMl} targetMl={waterTargetMl} />
       {cycleForecast && cycleDay ? (
         <CycleForecastCard

@@ -12,6 +12,13 @@ export type WeightSnapshot = {
   measured_at: string;
 } | null;
 
+export type WeightProjection = {
+  lbsPerWeek: number;
+  goalLbs: number | null;
+  etaDate: string | null;
+  weeksAway: number | null;
+} | null;
+
 function formatLb(n: number): string {
   return n.toFixed(n % 1 === 0 ? 0 : 1);
 }
@@ -31,7 +38,40 @@ function formatWhen(iso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function WeightCard({ latest }: { latest: WeightSnapshot }) {
+function formatEtaDate(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function ProjectionLine({ proj }: { proj: NonNullable<WeightProjection> }) {
+  const direction = proj.lbsPerWeek > 0 ? "+" : "";
+  const rate = `${direction}${proj.lbsPerWeek.toFixed(2)} lb/wk`;
+  if (proj.etaDate && proj.weeksAway != null && proj.goalLbs != null) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Trend: {rate} → goal {proj.goalLbs.toFixed(1)} lb by{" "}
+        <span className="text-foreground">{formatEtaDate(proj.etaDate)}</span>
+      </p>
+    );
+  }
+  return (
+    <p className="text-xs text-muted-foreground">
+      Trend: {rate} (set a goal weight in Settings to see an ETA)
+    </p>
+  );
+}
+
+export function WeightCard({
+  latest,
+  projection,
+}: {
+  latest: WeightSnapshot;
+  projection?: WeightProjection;
+}) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState<string>(
     latest ? formatLb(latest.weight_lbs) : "",
@@ -54,32 +94,35 @@ export function WeightCard({ latest }: { latest: WeightSnapshot }) {
     <Card>
       <CardContent className="pt-6">
         {!open ? (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Scale className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Weight</span>
-              {latest ? (
-                <span className="text-2xl font-semibold tabular-nums">
-                  {formatLb(latest.weight_lbs)}
-                </span>
-              ) : (
-                <span className="text-sm text-muted-foreground">—</span>
-              )}
-              {latest ? (
-                <span className="text-xs text-muted-foreground">
-                  lb · {formatWhen(latest.measured_at)}
-                </span>
-              ) : null}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Scale className="size-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Weight</span>
+                {latest ? (
+                  <span className="text-2xl font-semibold tabular-nums">
+                    {formatLb(latest.weight_lbs)}
+                  </span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">—</span>
+                )}
+                {latest ? (
+                  <span className="text-xs text-muted-foreground">
+                    lb · {formatWhen(latest.measured_at)}
+                  </span>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setOpen(true)}
+              >
+                <Plus className="size-4" />
+                <span className="ml-1">Log</span>
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setOpen(true)}
-            >
-              <Plus className="size-4" />
-              <span className="ml-1">Log</span>
-            </Button>
+            {projection ? <ProjectionLine proj={projection} /> : null}
           </div>
         ) : (
           <div className="space-y-3">
