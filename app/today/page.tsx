@@ -10,6 +10,7 @@ import { EntryList } from "./entry-list";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
 import { WeightCard, type WeightSnapshot } from "./weight-card";
 import { WaterCard } from "./water-card";
+import { CycleForecastCard } from "./cycle-forecast-card";
 import { PhaseFloral } from "./florals";
 import {
   phaseForCycleDay,
@@ -18,6 +19,12 @@ import {
   type Phase,
   type CycleSettings,
 } from "@/lib/cycle";
+import {
+  allPeriodStarts,
+  forecastCycle,
+  cycleLengthVariance,
+  type CycleForecast,
+} from "@/lib/cycles";
 import { lastNDays } from "@/lib/stats";
 import {
   applyPhaseModifiers,
@@ -56,6 +63,7 @@ export default async function TodayPage() {
     { data: weightRows },
     { data: stepRows },
     { data: waterRows },
+    { data: flowRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
     supabase
@@ -87,6 +95,15 @@ export default async function TodayPage() {
       .select("ml,logged_at")
       .eq("user_id", user.id)
       .gte("logged_at", fourteenDaysAgo),
+    // Last ~9 months of menstrual flow samples → drives forecast variance
+    // and cross-cycle comparisons.
+    supabase
+      .from("apple_health_data")
+      .select("value,recorded_at")
+      .eq("user_id", user.id)
+      .eq("metric", "menstrual_flow")
+      .gte("recorded_at", new Date(Date.now() - 270 * 86_400_000).toISOString())
+      .order("recorded_at", { ascending: true }),
   ]);
 
   // Today's entries are a subset of the trend window — slice locally
@@ -125,9 +142,24 @@ export default async function TodayPage() {
   // logged a period start yet.
   let cycleDay: number | null = null;
   let cyclePhase: Phase | null = null;
+  let cycleForecast: CycleForecast | null = null;
   if (p?.track_cycle && p.last_period_start) {
     cycleDay = cycleDayFromPeriodStart(p.last_period_start, cycleSettings, today);
     cyclePhase = cycleDay ? phaseForCycleDay(cycleDay, cycleSettings) : null;
+    // Period history → personalized forecast variance. Falls back to ±3.
+    const flowSamples = (flowRows ?? []).map((r) => ({
+      value: Number(r.value),
+      recorded_at: r.recorded_at as string,
+    }));
+    const starts = allPeriodStarts(flowSamples);
+    const stdev = cycleLengthVariance(starts);
+    const variance = stdev != null ? Math.max(1, Math.round(stdev)) : 3;
+    cycleForecast = forecastCycle(
+      p.last_period_start,
+      cycleSettings,
+      today,
+      variance,
+    );
   }
 
   const weightMostRecent = (weightRows ?? [])[0] ?? null;
@@ -262,6 +294,13 @@ export default async function TodayPage() {
     },
     activity: { stepsAvg7d, stepsYesterday },
     hydration: { todayMl: waterTodayMl, targetMl: waterTargetMl },
+    forecast: cycleForecast
+      ? {
+          daysUntilPeriod: cycleForecast.daysUntil,
+          inFertileWindow: cycleForecast.inFertileWindow,
+          overdue: cycleForecast.overdue,
+        }
+      : null,
     todayMacros: totals,
     targets,
     trends,
@@ -311,6 +350,13 @@ export default async function TodayPage() {
       {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}
       <WeightCard latest={weightSnapshot} />
       <WaterCard todayMl={waterTodayMl} targetMl={waterTargetMl} />
+      {cycleForecast && cycleDay ? (
+        <CycleForecastCard
+          forecast={cycleForecast}
+          cycleDay={cycleDay}
+          cycleLength={cycleSettings.cycleLength}
+        />
+      ) : null}
 
       <MacroTotals
         totals={totals}

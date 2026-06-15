@@ -13,44 +13,118 @@ import {
 import { LineChart, ScatterChart } from "./charts";
 import { DigestCard } from "./digest-card";
 import { getCachedDigest } from "./digest-actions";
+import { RangeTabs } from "./range-tabs";
+import { CycleCompareCard } from "./cycle-compare";
+import type { Profile } from "@/lib/types";
+import {
+  allPeriodStarts,
+  cycleAggregates,
+  type FlowSample,
+} from "@/lib/cycles";
+import type { CycleSettings } from "@/lib/cycle";
 
 export const dynamic = "force-dynamic";
 
-const DISPLAY_DAYS = 14;
-const WINDOW = 7;
+const RANGES = {
+  "14": { displayDays: 14, window: 7, label: "14 days" },
+  "30": { displayDays: 30, window: 7, label: "30 days" },
+  "90": { displayDays: 90, window: 14, label: "90 days" },
+} as const;
+type RangeKey = keyof typeof RANGES;
 
-export default async function WeeklyPage() {
+export default async function WeeklyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const days = lastNDays(DISPLAY_DAYS);
+  const params = await searchParams;
+  const rangeKey: RangeKey =
+    params.range && params.range in RANGES ? (params.range as RangeKey) : "14";
+  const range = RANGES[rangeKey];
+
+  const days = lastNDays(range.displayDays);
   const since = `${days[0]}T00:00:00.000Z`;
+
+  // Cycle compare window is fixed at ~270 days so cross-cycle deltas are
+  // available regardless of which range tab is active.
+  const cycleSince = new Date(Date.now() - 270 * 86_400_000).toISOString();
+  const cycleSinceDate = cycleSince.slice(0, 10);
 
   const digestState = await getCachedDigest();
 
-  const [{ data: foods }, { data: oura }, { data: weights }] =
-    await Promise.all([
-      supabase
-        .from("food_entries")
-        .select("consumed_at,calories,protein_g")
-        .eq("user_id", user.id)
-        .gte("consumed_at", since),
-      supabase
-        .from("oura_daily")
-        .select("date,sleep_score,hrv_avg")
-        .eq("user_id", user.id)
-        .gte("date", days[0]),
-      supabase
-        .from("body_weights")
-        .select("measured_at,weight_lbs")
-        .eq("user_id", user.id)
-        .gte("measured_at", since),
-    ]);
+  const [
+    { data: profile },
+    { data: foods },
+    { data: oura },
+    { data: weights },
+    { data: water },
+    { data: flowRows },
+    { data: cycleFood },
+    { data: cycleOura },
+    { data: cycleWater },
+    { data: cycleWeights },
+  ] = await Promise.all([
+    supabase.from("profiles").select("*").eq("user_id", user.id).single(),
+    supabase
+      .from("food_entries")
+      .select("consumed_at,calories,protein_g")
+      .eq("user_id", user.id)
+      .gte("consumed_at", since),
+    supabase
+      .from("oura_daily")
+      .select("date,sleep_score,hrv_avg")
+      .eq("user_id", user.id)
+      .gte("date", days[0]),
+    supabase
+      .from("body_weights")
+      .select("measured_at,weight_lbs")
+      .eq("user_id", user.id)
+      .gte("measured_at", since),
+    supabase
+      .from("water_logs")
+      .select("ml,logged_at")
+      .eq("user_id", user.id)
+      .gte("logged_at", since),
+    supabase
+      .from("apple_health_data")
+      .select("value,recorded_at")
+      .eq("user_id", user.id)
+      .eq("metric", "menstrual_flow")
+      .gte("recorded_at", cycleSince)
+      .order("recorded_at", { ascending: true }),
+    // Cycle-compare data over the wider window. Separate queries since
+    // the per-range food/oura/weight above is scoped tightly for charts.
+    supabase
+      .from("food_entries")
+      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g")
+      .eq("user_id", user.id)
+      .gte("consumed_at", cycleSince),
+    supabase
+      .from("oura_daily")
+      .select("date,sleep_score,hrv_avg,readiness_score")
+      .eq("user_id", user.id)
+      .gte("date", cycleSinceDate),
+    supabase
+      .from("water_logs")
+      .select("ml,logged_at")
+      .eq("user_id", user.id)
+      .gte("logged_at", cycleSince),
+    supabase
+      .from("body_weights")
+      .select("measured_at,weight_lbs")
+      .eq("user_id", user.id)
+      .gte("measured_at", cycleSince),
+  ]);
 
-  // Aggregate food per day.
+  const p = profile as Profile | null;
+
+  // Aggregate food per day for the active range.
   const calByDay = new Map<string, number>();
   const proByDay = new Map<string, number>();
   for (const f of foods ?? []) {
@@ -59,7 +133,7 @@ export default async function WeeklyPage() {
     proByDay.set(day, (proByDay.get(day) ?? 0) + ((f.protein_g as number) ?? 0));
   }
 
-  // Sleep + HRV per day (already one row per day).
+  // Sleep + HRV per day.
   const sleepByDay = new Map<string, number | null>();
   const hrvByDay = new Map<string, number | null>();
   for (const o of oura ?? []) {
@@ -67,13 +141,20 @@ export default async function WeeklyPage() {
     hrvByDay.set(o.date as string, (o.hrv_avg as number | null) ?? null);
   }
 
-  // Weight: average of any readings that day.
+  // Weight per day (average of readings).
   const weightBuckets = new Map<string, number[]>();
   for (const w of weights ?? []) {
     const day = localDay(w.measured_at as string);
     const arr = weightBuckets.get(day) ?? [];
     arr.push((w.weight_lbs as number) ?? 0);
     weightBuckets.set(day, arr);
+  }
+
+  // Water per day.
+  const waterByDay = new Map<string, number>();
+  for (const w of water ?? []) {
+    const day = localDay(w.logged_at as string);
+    waterByDay.set(day, (waterByDay.get(day) ?? 0) + Number(w.ml));
   }
 
   const series = (
@@ -88,6 +169,7 @@ export default async function WeeklyPage() {
     const arr = weightBuckets.get(d);
     return arr && arr.length ? mean(arr) : null;
   });
+  const waterSeries = series((d) => waterByDay.get(d) ?? null);
 
   // Correlation: protein on day N vs HRV on day N+1.
   const corrPairs = days.slice(0, -1).map((d, i) => ({
@@ -96,49 +178,123 @@ export default async function WeeklyPage() {
   }));
   const corr = pearson(corrPairs);
 
+  // Cross-cycle aggregates. Built off the 270-day window so the compare
+  // card has access to at least one complete prior cycle whenever data
+  // exists, no matter the chart range above.
+  const cycleSettings: CycleSettings = {
+    cycleLength: p?.avg_cycle_length ?? 28,
+    periodLength: p?.avg_period_length ?? 5,
+  };
+  const flowSamples: FlowSample[] = (flowRows ?? []).map((r) => ({
+    value: Number(r.value),
+    recorded_at: r.recorded_at as string,
+  }));
+  const starts = allPeriodStarts(flowSamples);
+
+  const foodByDay = new Map<
+    string,
+    { calories: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number }
+  >();
+  for (const f of cycleFood ?? []) {
+    const d = localDay(f.consumed_at as string);
+    const cur = foodByDay.get(d) ?? {
+      calories: 0,
+      protein_g: 0,
+      carbs_g: 0,
+      fat_g: 0,
+      fiber_g: 0,
+    };
+    cur.calories += (f.calories as number | null) ?? 0;
+    cur.protein_g += (f.protein_g as number | null) ?? 0;
+    cur.carbs_g += (f.carbs_g as number | null) ?? 0;
+    cur.fat_g += (f.fat_g as number | null) ?? 0;
+    cur.fiber_g += (f.fiber_g as number | null) ?? 0;
+    foodByDay.set(d, cur);
+  }
+
+  const ouraByDayCmp = (cycleOura ?? []).map((o) => ({
+    date: o.date as string,
+    sleep_score: (o.sleep_score as number | null) ?? null,
+    hrv_avg: (o.hrv_avg as number | null) ?? null,
+    readiness_score: (o.readiness_score as number | null) ?? null,
+  }));
+
+  const waterCmp = new Map<string, number>();
+  for (const w of cycleWater ?? []) {
+    const d = localDay(w.logged_at as string);
+    waterCmp.set(d, (waterCmp.get(d) ?? 0) + Number(w.ml));
+  }
+
+  const weightCmp = new Map<string, number>();
+  for (const w of cycleWeights ?? []) {
+    const d = localDay(w.measured_at as string);
+    // Last reading of the day wins (avoids fractional avg distortions).
+    weightCmp.set(d, Number(w.weight_lbs));
+  }
+
+  const cycles = cycleAggregates({
+    periodStarts: starts,
+    settings: cycleSettings,
+    foodByDay: Array.from(foodByDay, ([date, m]) => ({ date, ...m })),
+    ouraByDay: ouraByDayCmp,
+    waterByDay: Array.from(waterCmp, ([date, ml]) => ({ date, ml })),
+    weightByDay: Array.from(weightCmp, ([date, lbs]) => ({ date, lbs })),
+  });
+
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
       <header className="flex items-center justify-between">
-        <h1 className="font-serif text-3xl font-medium">Weekly</h1>
-        <Link
-          href="/today"
-          className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-        >
-          Today →
-        </Link>
+        <h1 className="font-serif text-3xl font-medium">Trends</h1>
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <Link href="/recap" className="underline-offset-4 hover:underline">
+            90-day recap
+          </Link>
+          <Link href="/today" className="underline-offset-4 hover:underline">
+            Today →
+          </Link>
+        </div>
       </header>
 
       <DigestCard initial={digestState} />
 
+      <RangeTabs active={rangeKey} />
+
       <section className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          7-day rolling averages
+          {range.window}-day rolling averages · {range.label}
         </h2>
         <LineChart
-          series={rollingAverage(calSeries, WINDOW)}
+          series={rollingAverage(calSeries, range.window)}
           label="Calories"
           unit=" kcal"
         />
         <LineChart
-          series={rollingAverage(proSeries, WINDOW)}
+          series={rollingAverage(proSeries, range.window)}
           label="Protein"
           unit="g"
         />
         <LineChart
-          series={rollingAverage(sleepSeries, WINDOW)}
+          series={rollingAverage(sleepSeries, range.window)}
           label="Sleep score"
         />
         <LineChart
-          series={rollingAverage(hrvSeries, WINDOW)}
+          series={rollingAverage(hrvSeries, range.window)}
           label="HRV"
           unit="ms"
         />
         <LineChart
-          series={rollingAverage(weightSeries, WINDOW)}
+          series={rollingAverage(weightSeries, range.window)}
           label="Weight"
           unit=" lb"
         />
+        <LineChart
+          series={rollingAverage(waterSeries, range.window)}
+          label="Water"
+          unit=" ml"
+        />
       </section>
+
+      <CycleCompareCard cycles={cycles} />
 
       <section className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

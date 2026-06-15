@@ -26,6 +26,13 @@ export type InsightContext = {
     todayMl: number;
     targetMl: number;
   };
+  // Optional forecast signals — set when the user tracks cycles and we
+  // have enough history. The fertile-window and pre-period rules read this.
+  forecast?: {
+    daysUntilPeriod: number;
+    inFertileWindow: boolean;
+    overdue: boolean;
+  } | null;
   todayMacros: Totals;
   targets: Totals;
   trends: Trends | null;
@@ -101,7 +108,52 @@ const hydrationWeekLow = (c: InsightContext) =>
 const ozFromMl = (ml: number) => Math.round(ml / 29.5735);
 
 const RULES: Rule[] = [
-  // ─── Trend-aware rules (highest priority — patterns beat single-day signals) ──
+  // ─── Forecast-driven rules (top priority — temporally specific) ───────────
+
+  {
+    id: "period_imminent",
+    priority: 100,
+    when: (c) =>
+      c.forecast != null &&
+      !c.forecast.overdue &&
+      c.forecast.daysUntilPeriod >= 0 &&
+      c.forecast.daysUntilPeriod <= 2,
+    build: (c) => {
+      const d = c.forecast!.daysUntilPeriod;
+      const when = d === 0 ? "today" : d === 1 ? "tomorrow" : `in ${d} days`;
+      return {
+        id: "period_imminent",
+        tone: "reassure",
+        text: `Period predicted ${when}. Expect appetite to spike — iron-rich foods (red meat, lentils, dark greens) and warmth help the next few days.`,
+      };
+    },
+  },
+  {
+    id: "period_overdue",
+    priority: 98,
+    when: (c) => c.forecast != null && c.forecast.overdue,
+    build: () => ({
+      id: "period_overdue",
+      tone: "reassure",
+      text: "Period running a few days late — totally normal for cycles to flex with stress or travel. If it stays off past a week, worth checking in.",
+    }),
+  },
+  {
+    id: "fertile_window",
+    priority: 87,
+    when: (c) =>
+      c.forecast != null &&
+      c.forecast.inFertileWindow &&
+      // Don't crowd out a more urgent message when readiness is low.
+      !lowReadiness(c),
+    build: () => ({
+      id: "fertile_window",
+      tone: "encourage",
+      text: "Fertile window — energy and libido often peak here. Estrogen is doing a lot of the lifting; protein and complex carbs keep up.",
+    }),
+  },
+
+  // ─── Trend-aware rules (patterns beat single-day signals) ────────────────
 
   {
     id: "luteal_carb_pattern",
