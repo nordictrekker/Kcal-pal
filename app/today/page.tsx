@@ -74,7 +74,9 @@ export default async function TodayPage() {
       .order("consumed_at", { ascending: true }),
     supabase
       .from("oura_daily")
-      .select("date,sleep_score,hrv_avg,readiness_score,total_calories")
+      .select(
+        "date,sleep_score,hrv_avg,readiness_score,total_calories,resilience_level,stress_high_min",
+      )
       .eq("user_id", user.id)
       .gte("date", fourteenDaysAgoDate)
       .order("date", { ascending: false }),
@@ -135,6 +137,8 @@ export default async function TodayPage() {
         sleep_score: ouraMostRecent.sleep_score as number | null,
         hrv_avg: ouraMostRecent.hrv_avg as number | null,
         readiness_score: ouraMostRecent.readiness_score as number | null,
+        resilience_level: ouraMostRecent.resilience_level as string | null,
+        stress_high_min: ouraMostRecent.stress_high_min as number | null,
       }
     : null;
 

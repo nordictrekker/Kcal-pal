@@ -12,7 +12,28 @@ export type OuraSnapshot = {
   sleep_score: number | null;
   hrv_avg: number | null;
   readiness_score: number | null;
+  resilience_level: string | null;
+  stress_high_min: number | null;
 } | null;
+
+// Oura resilience: accumulated capacity to handle stress, building over
+// weeks of recovery. Worth surfacing warmly — it's a slower, steadier
+// signal than day-to-day readiness.
+const RESILIENCE_COPY: Record<string, string> = {
+  limited: "building back",
+  adequate: "steady",
+  solid: "solid",
+  strong: "strong",
+  exceptional: "exceptional",
+};
+
+function fmtStress(min: number | null): string | null {
+  if (min == null) return null;
+  if (min < 60) return `${Math.round(min)}m`;
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
 
 // 85+ → vibrant; 70–84 → neutral; <70 → invite rest.
 type ReadinessBand = "high" | "mid" | "low" | "unknown";
@@ -119,6 +140,29 @@ export function OuraCard({ data }: { data: OuraSnapshot }) {
                 emphasized={band === "high"}
               />
             </div>
+            {(data.resilience_level &&
+              RESILIENCE_COPY[data.resilience_level]) ||
+            data.stress_high_min != null ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2 text-xs text-muted-foreground">
+                {data.resilience_level &&
+                RESILIENCE_COPY[data.resilience_level] ? (
+                  <span>
+                    Resilience:{" "}
+                    <span className="font-medium text-foreground">
+                      {RESILIENCE_COPY[data.resilience_level]}
+                    </span>
+                  </span>
+                ) : null}
+                {data.stress_high_min != null ? (
+                  <span>
+                    Daytime stress:{" "}
+                    <span className="font-medium text-foreground">
+                      {fmtStress(data.stress_high_min)}
+                    </span>
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {vibe ? (
               <p className="text-xs text-muted-foreground">{vibe}</p>
             ) : null}

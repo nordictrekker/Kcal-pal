@@ -47,11 +47,23 @@ Current branch: `claude/follow-instructions-g107z`. PR has NOT been
 opened; the user has not asked for one. Recent commit order, most
 recent first:
 
-0. Insight engine expansion — 6 new rules (under-fueling / low-energy-
-   availability, post-exertion easy day, HRV-dip overreach, sleep-debt
-   week, protein-consistency win, weekend permission) + a new
-   `proteinHitStreak` trend signal. Eight Sleep cron unscheduled; all
-   edge functions redeployed via MCP. (branch `pensive-newton-yax657`)
+All on branch `claude/pensive-newton-yax657` (preview deploys; Vercel
+production still tracks `follow-instructions-g107z` — merge/redirect
+when ready):
+
+0c. Oura recovery card now surfaces **resilience + daytime stress**
+    (data was already synced, never shown). Display-only for now.
+0b. **Weekly intelligence** — "Your cycle patterns" card (per-phase
+    baselines from the user's own history: appetite/sleep/recovery in
+    HER numbers) + "What moves your numbers" plain-language next-day
+    correlations (sleep→carbs/cal, water→readiness, protein→HRV). New
+    pure `phaseBaselines`/`describePhasePatterns` in lib/cycles.ts. No
+    new queries, no model calls.
+0a. Insight engine expansion — 6 new rules (under-fueling / low-energy-
+    availability, post-exertion easy day, HRV-dip overreach, sleep-debt
+    week, protein-consistency win, weekend permission) + a new
+    `proteinHitStreak` trend signal. Eight Sleep cron unscheduled; all
+    edge functions redeployed via MCP.
 1. Recipes + goal projection + audit polish
 2. 90-day recap page (HTML view, print-to-PDF, mailto: email)
 3. Cycle intelligence (forecasting + cross-cycle compare + 30/90d tabs)
@@ -97,15 +109,16 @@ architecture, optional spo2/stress/resilience) is now live.
 
 ### 4c. Vercel auto-deploys from the branch push, no action needed.
 
-### 4d. Apple Health auto-push
+### 4d. Apple Health ingestion — DEFERRED TO PHASE B (user decision, 2026-06-15)
 
-User was trying to set up the iOS Shortcut and hit pain (no
-"wrap in samples array" action; manual Dictionary nesting per metric
-is tedious). We recommended **Health Auto Export** app (~$5) which
-hits our endpoint directly with `{metrics: [...]}`. User has NOT
-confirmed setup yet. The Settings → Apple Health auto-push card
-still shows the POST URL + Authorization header for whichever path
-they pick.
+The user does **not** want to use Health Auto Export or any third-party
+bridge. Apple Health data (steps, weight, menstrual flow, HRV, sleep,
+active energy, workouts, symptoms, caffeine, etc.) will come in via
+**native HealthKit once we're an iOS app** — no web ingestion hacks.
+Do NOT build new features that depend on the `/api/health/ingest`
+endpoint, the iOS Shortcut, or HAE. The endpoint can stay for now but
+is frozen. This also pushes the roadmap's "auto-hydration from Apple
+Health" and "active-energy / body-fat from HAE" ideas to Phase B.
 
 ## 5. What's built (mental map of features)
 
@@ -259,23 +272,51 @@ supabase/functions/sync-oura/    Edge function for nightly Oura cron
 - **iOS PWA push** is wired up but limited. Don't expand it; Phase B
   brings native push.
 
-## 9. What was queued for next-session work
+## 9. Phase A backlog + roadmap
 
-User has been working through Phase A. Already shipped: cycle
-intelligence, 90-day recap, recipe library, goal projection,
-onboarding/profile polish. Still in the Phase A backlog (in order of
-priority I'd recommend):
+User reviewed a full Phase A roadmap (2026-06-15) and endorsed all of
+it, minus anything that depends on Health Auto Export / web Apple
+Health ingestion (→ Phase B, see §4d). Tags: ⚡ = uses data we already
+have; 🔌 = needs new plumbing.
 
-1. **More insight rules** — partially done (see commit 0 above; added
-   under-fueling, post-exertion easy day, HRV-dip overreach, sleep-debt
-   week, protein-consistency win, weekend permission). Still open: a
-   true *data-driven* weekend pattern (needs day-of-week macro history,
-   not just "it's Saturday"), and a sleep→next-day-protein-lag
-   correlation rule.
-2. **Onboarding polish** — progress bar smoothing, better default
-   selections per step, allow back-edit any prior step.
-3. **Long-term trends section** — already partially in via the
-   30/90d tabs on /weekly; could add a dedicated monthly view.
+**Shipped this session:** expanded insight rules; per-phase baselines
+card; plain-language correlations card; Oura resilience/stress surfaced.
+
+**Next up (recommended order), all non-HAE:**
+1. **Personalized baselines → daily insight** ⚡ — feed the new
+   `phaseBaselines` deltas into the /today insight line so the daily
+   message speaks in her numbers (extends commit 0b onto /today; note
+   it adds a wider historical query to the hot path).
+2. **Temperature-based ovulation confirmation** ⚡ — `oura_daily`
+   `temp_deviation` is synced (11/14 rows populated) but unused. A
+   biphasic-shift detector confirms ovulation vs the current calendar
+   estimate (nextPeriod−14). TRUST-CRITICAL: validate thresholds
+   against real data before shipping — false positives erode trust.
+3. **Adaptive targets** ⚡ — compare actual weight trend
+   (`weightTrendLbsPerWeek`, already built) to the rate the calorie
+   target implies; surface a gentle "your numbers suggest nudging the
+   target" note. Sensitive — keep it a suggestion, never silent.
+4. **Recipe / saved-meal gap filler** ⚡ — suggest a saved recipe that
+   closes today's macro gap.
+5. **Insight feedback loop** 🔌 — thumbs/dismiss on the daily line;
+   down-rank disliked rules (also unlocks the data-driven weekend
+   pattern + sleep→next-day-protein-lag rules).
+6. **Resilience/stress → insight rule** ⚡ — currently display-only;
+   add an InsightContext field + rule (e.g. low resilience → rest).
+7. **Onboarding polish** ⚡ — progress bar, back-edit any step, smarter
+   per-step defaults, optional connect-Oura step.
+8. **Long-term / monthly trends view** ⚡ — dedicated monthly +
+   cycle-over-cycle view with the weight-trend goal-ETA chart.
+9. **Edit a logged entry's macros** ⚡ — supports the "never fabricate,
+   let her fix" rule.
+10. **Offline logging (PWA)** 🔌; **full data export (CSV/JSON)** ⚡;
+    **USDA FoodData Central** 🔌 for AI-free common-food logging.
+11. **UX/aesthetic:** skeleton/loading + empty states ⚡, chart
+    annotations (period markers, target bands) ⚡, dark-mode contrast +
+    reduced-motion ⚡, subtle goal/streak delight ⚡.
+12. **Reliability:** sync observability (`sync_log` + "last synced" in
+    Settings) 🔌; unit tests for the pure libs (cycle/cycles/targets/
+    trends/insights) ⚡.
 
 **Deferred to Phase B** (don't build now):
 
