@@ -43,6 +43,10 @@ export type Trends = {
   // streak isn't "in-progress half-day" noise). null if no streak.
   underProteinStreak: number | null;
   overCarbsStreak: number | null;
+  // Consecutive logged days that HIT the protein target (≥90%), ending
+  // yesterday. Powers positive reinforcement — the engine should notice
+  // consistency, not only shortfalls. null if no streak.
+  proteinHitStreak: number | null;
 
   // 7-day averages.
   avgCalories7: number | null;
@@ -201,6 +205,9 @@ export function buildTrends(args: {
   const overCarbsStreak = countStreak(
     (d) => d.carbs_g > args.targets.carbs_g,
   );
+  const proteinHitStreak = countStreak(
+    (d) => d.protein_g >= args.targets.protein_g * 0.9,
+  );
 
   // 7-day averages. For macros, only days with entries count toward the
   // average (otherwise an unlogged day pulls everything to zero).
@@ -253,6 +260,7 @@ export function buildTrends(args: {
     daysUnderFiber7,
     underProteinStreak,
     overCarbsStreak,
+    proteinHitStreak,
     avgCalories7,
     avgProtein7,
     avgCarbs7,

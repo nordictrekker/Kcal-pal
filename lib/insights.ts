@@ -91,6 +91,49 @@ const readinessSlide = (c: InsightContext) =>
 const lowFiberPattern = (c: InsightContext) =>
   c.trends !== null && c.trends.daysUnderFiber7 >= 5;
 
+// Under-fueling: a week of intake well below target while still moving a
+// lot. For an active woman this is the early signal that matters most
+// (low energy availability → cycle disruption, poor recovery), so it
+// reassures-with-a-nudge rather than nags about "more food."
+const underFuelingPattern = (c: InsightContext) =>
+  c.trends !== null &&
+  c.trends.avgCalories7 !== null &&
+  c.targets.calories > 0 &&
+  c.trends.avgCalories7 < c.targets.calories * 0.8 &&
+  (c.activity.stepsAvg7d ?? 0) >= 8000;
+
+// Hard day yesterday on short sleep → today is a recovery day. Reads
+// yesterday's steps (not the 7-day average) so it fires on the spike.
+const postExertionEasyDay = (c: InsightContext) =>
+  lowSleep(c) &&
+  c.activity.stepsYesterday !== null &&
+  c.activity.stepsYesterday >= 11000;
+
+// Today's HRV sitting well below the personal 7-day baseline while
+// activity stays high — classic overreaching tell.
+const hrvDipOverreach = (c: InsightContext) =>
+  c.oura.hrv !== null &&
+  c.trends !== null &&
+  c.trends.avgHrv7 !== null &&
+  c.oura.hrv < c.trends.avgHrv7 * 0.85 &&
+  highActivity(c);
+
+// Sleep score has averaged low across the week (debt accumulating).
+const sleepDebtWeek = (c: InsightContext) =>
+  c.trends !== null &&
+  c.trends.avgSleep7 !== null &&
+  c.trends.avgSleep7 < 72;
+
+// Protein hit for several days running — worth naming, the engine
+// otherwise only ever speaks up about shortfalls.
+const proteinConsistencyWin = (c: InsightContext) =>
+  c.trends !== null && (c.trends.proteinHitStreak ?? 0) >= 3;
+
+const isWeekend = (c: InsightContext) => {
+  const day = c.now.getDay();
+  return day === 0 || day === 6;
+};
+
 // Hydration predicates. Day is "young" until ~3pm; only start nudging
 // once it's late enough that being behind actually means behind.
 const hydrationBehind = (c: InsightContext) => {
@@ -183,6 +226,18 @@ const RULES: Rule[] = [
       id: "readiness_slide",
       tone: "rest",
       text: "Recovery has been sliding all week. Today's a good day to do less — prioritize sleep tonight and skip the hard workout if it's on the schedule.",
+    }),
+  },
+  {
+    id: "under_fueling",
+    priority: 93,
+    when: underFuelingPattern,
+    build: (c) => ({
+      id: "under_fueling",
+      tone: "suggest",
+      text: `Intake's averaged ~${Math.round(
+        c.trends!.avgCalories7!,
+      )} cal against a busy movement week. Under-fueling shows up as flat recovery and cranky cycles long before the scale moves — a little more, especially protein and carbs, protects both.`,
     }),
   },
   {
@@ -299,6 +354,26 @@ const RULES: Rule[] = [
   },
 
   {
+    id: "post_exertion_easy_day",
+    priority: 86,
+    when: postExertionEasyDay,
+    build: () => ({
+      id: "post_exertion_easy_day",
+      tone: "rest",
+      text: "Big movement yesterday on short sleep — your body's asking for an easy day. Keep food steady (don't under-eat to 'match' the rest) and let recovery do its thing.",
+    }),
+  },
+  {
+    id: "hrv_dip_overreach",
+    priority: 84,
+    when: hrvDipOverreach,
+    build: () => ({
+      id: "hrv_dip_overreach",
+      tone: "rest",
+      text: "HRV dipped below your usual while you've been training hard — an early overreaching signal. Pull intensity back a notch and make sleep tonight non-negotiable.",
+    }),
+  },
+  {
     id: "low_sleep_glucose",
     priority: 82,
     when: (c) => lowSleep(c) && !lowReadiness(c),
@@ -327,6 +402,36 @@ const RULES: Rule[] = [
       id: "active_general",
       tone: "encourage",
       text: `Strong movement week — ~${k(c.activity.stepsAvg7d!)}k steps a day on average. Keep protein steady, don't fear the extra calories.`,
+    }),
+  },
+  {
+    id: "sleep_debt_week",
+    priority: 73,
+    when: (c) => sleepDebtWeek(c) && !lowReadiness(c),
+    build: () => ({
+      id: "sleep_debt_week",
+      tone: "suggest",
+      text: "Sleep scores have run low all week — debt adds up quietly. Protect tonight's wind-down; even 30 extra minutes lifts tomorrow's energy and steadies appetite.",
+    }),
+  },
+  {
+    id: "protein_consistency_win",
+    priority: 50,
+    when: proteinConsistencyWin,
+    build: (c) => ({
+      id: "protein_consistency_win",
+      tone: "encourage",
+      text: `${c.trends!.proteinHitStreak} days straight hitting your protein — that's the unglamorous habit that actually moves recovery and body composition. Quietly excellent.`,
+    }),
+  },
+  {
+    id: "weekend_permission",
+    priority: 38,
+    when: (c) => isWeekend(c) && (lateInDay(c) || overCarbsTarget(c)),
+    build: () => ({
+      id: "weekend_permission",
+      tone: "reassure",
+      text: "It's the weekend — meals out and a looser rhythm are part of a sustainable life, not a setback. Enjoy it; consistency is measured in weeks, not Saturdays.",
     }),
   },
   {

@@ -47,6 +47,11 @@ Current branch: `claude/follow-instructions-g107z`. PR has NOT been
 opened; the user has not asked for one. Recent commit order, most
 recent first:
 
+0. Insight engine expansion — 6 new rules (under-fueling / low-energy-
+   availability, post-exertion easy day, HRV-dip overreach, sleep-debt
+   week, protein-consistency win, weekend permission) + a new
+   `proteinHitStreak` trend signal. Eight Sleep cron unscheduled; all
+   edge functions redeployed via MCP. (branch `pensive-newton-yax657`)
 1. Recipes + goal projection + audit polish
 2. 90-day recap page (HTML view, print-to-PDF, mailto: email)
 3. Cycle intelligence (forecasting + cross-cycle compare + 30/90d tabs)
@@ -82,12 +87,13 @@ applied all of them yet. Order matters; idempotent so safe to re-run.
 If the user hits "column does not exist" runtime errors after pulling
 the branch, that's a missing migration.
 
-### 4b. Edge function redeploy
+### 4b. Edge function redeploy — DONE (2026-06-15)
 
-`supabase/functions/sync-oura/index.ts` was expanded to pull the new
-Oura fields (total_calories, sleep architecture, optional spo2/stress/
-resilience). The user needs to redeploy via the Supabase dashboard
-(no MCP, no CLI in sandbox).
+All three edge functions were redeployed via the Supabase MCP (now
+available in-session — see §8). Current versions:
+sync-oura v16, send-quarterly-push v8, cleanup-orphans v8 — all ACTIVE,
+all `verify_jwt: false`. The expanded Oura pull (total_calories, sleep
+architecture, optional spo2/stress/resilience) is now live.
 
 ### 4c. Vercel auto-deploys from the branch push, no action needed.
 
@@ -237,10 +243,16 @@ supabase/functions/sync-oura/    Edge function for nightly Oura cron
   JWT) — the edge function and `/api/health/ingest` both compare
   against `SUPABASE_SERVICE_ROLE_KEY` env var. Verify JWT must be
   OFF on any deployed edge function.
-- **No Supabase MCP in sandbox.** Don't waste a turn trying — past
-  sessions confirmed the sandbox has a hard-coded egress allowlist
-  excluding api.supabase.com. GitHub MCP works. Vercel MCP wasn't
-  available last session either.
+- **Supabase + Vercel MCP ARE available now** (as of 2026-06-15). The
+  earlier egress-allowlist limitation no longer applies in this
+  environment — we can query the DB, run SQL, deploy edge functions,
+  and inspect Vercel deploys directly. (GitHub MCP works too.)
+- **Eight Sleep is fully removed.** The nightly cron (`jobid 2`,
+  `sync-eight-sleep-nightly`) was unscheduled; the integration code was
+  already gone. The deployed `sync-eight-sleep` edge-function *shell*
+  still lingers because the MCP has no delete-function tool — delete it
+  with one click in the dashboard (Edge Functions → sync-eight-sleep →
+  Delete). Harmless until then (no cron invokes it).
 - **The `cycle_days` table is effectively deprecated.** Kept around
   for any historical rows. No UI writes to it. Don't add features
   that depend on it; use `last_period_start` derivation instead.
@@ -254,9 +266,12 @@ intelligence, 90-day recap, recipe library, goal projection,
 onboarding/profile polish. Still in the Phase A backlog (in order of
 priority I'd recommend):
 
-1. **More insight rules** using existing data — easy wins (e.g., low
-   sleep + high steps yesterday = "your body's calling for an easy
-   day", sleep + protein lag correlation, weekend macro pattern).
+1. **More insight rules** — partially done (see commit 0 above; added
+   under-fueling, post-exertion easy day, HRV-dip overreach, sleep-debt
+   week, protein-consistency win, weekend permission). Still open: a
+   true *data-driven* weekend pattern (needs day-of-week macro history,
+   not just "it's Saturday"), and a sleep→next-day-protein-lag
+   correlation rule.
 2. **Onboarding polish** — progress bar smoothing, better default
    selections per step, allow back-edit any prior step.
 3. **Long-term trends section** — already partially in via the
