@@ -69,23 +69,40 @@ export async function verifyMagicLinkUrl(formData: FormData) {
   // iOS PWA anyway, included for desktop completeness).
   const tokenHash = parsed.searchParams.get("token");
   const code = parsed.searchParams.get("code");
+  // The email link carries its own `type` (magiclink / signup / email /
+  // recovery / invite). verifyOtp rejects with "invalid or expired" if the
+  // type we pass doesn't match what the token was issued for — first-time
+  // sign-ups send `signup`, return logins send `magiclink`. Read it from
+  // the URL instead of hard-coding.
+  const urlType = parsed.searchParams.get("type") ?? "";
+  const validTypes = ["magiclink", "signup", "email", "recovery", "invite"] as const;
+  type VerifyType = (typeof validTypes)[number];
+  const candidateTypes: VerifyType[] = validTypes.includes(urlType as VerifyType)
+    ? [urlType as VerifyType]
+    : ["magiclink", "signup", "email"]; // fall back if type missing
 
   const supabase = await createClient();
 
   if (tokenHash) {
-    const { data, error } = await supabase.auth.verifyOtp({
-      type: "magiclink",
-      token_hash: tokenHash,
-    });
-    if (error || !data.user) {
-      reject(error?.message ?? "Verification failed.", email);
+    let lastError: string | null = null;
+    for (const type of candidateTypes) {
+      const { data, error } = await supabase.auth.verifyOtp({
+        type,
+        token_hash: tokenHash,
+      });
+      if (error || !data.user) {
+        lastError = error?.message ?? "Verification failed.";
+        // "invalid or expired" can mean wrong type; keep trying candidates.
+        continue;
+      }
+      const userEmail = (data.user.email ?? "").trim().toLowerCase();
+      if (userEmail !== allowed) {
+        await supabase.auth.signOut();
+        reject("Not authorized");
+      }
+      redirect("/today");
     }
-    const userEmail = (data.user!.email ?? "").trim().toLowerCase();
-    if (userEmail !== allowed) {
-      await supabase.auth.signOut();
-      reject("Not authorized");
-    }
-    redirect("/today");
+    reject(lastError ?? "Verification failed.", email);
   }
 
   if (code) {
