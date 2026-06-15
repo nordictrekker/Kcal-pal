@@ -19,8 +19,11 @@ import type { Profile } from "@/lib/types";
 import {
   allPeriodStarts,
   cycleAggregates,
+  phaseBaselines,
   type FlowSample,
 } from "@/lib/cycles";
+import { PhaseBaselinesCard } from "./phase-baselines";
+import { CorrelationsCard, type Corr } from "./correlations";
 import type { CycleSettings } from "@/lib/cycle";
 
 export const dynamic = "force-dynamic";
@@ -232,14 +235,52 @@ export default async function WeeklyPage({
     weightCmp.set(d, Number(w.weight_lbs));
   }
 
-  const cycles = cycleAggregates({
+  const cycleArgs = {
     periodStarts: starts,
     settings: cycleSettings,
     foodByDay: Array.from(foodByDay, ([date, m]) => ({ date, ...m })),
     ouraByDay: ouraByDayCmp,
     waterByDay: Array.from(waterCmp, ([date, ml]) => ({ date, ml })),
+  };
+  const cycles = cycleAggregates({
+    ...cycleArgs,
     weightByDay: Array.from(weightCmp, ([date, lbs]) => ({ date, lbs })),
   });
+  const baselines = phaseBaselines(cycleArgs);
+
+  // Personalized next-day correlations over the wide (270d) window — more
+  // pairs = more trustworthy r. Day N predictor → day N+1 outcome.
+  const cmpDays = lastNDays(270);
+  const sleepCmp = new Map<string, number | null>();
+  const readinessCmp = new Map<string, number | null>();
+  const hrvCmp = new Map<string, number | null>();
+  for (const o of ouraByDayCmp) {
+    sleepCmp.set(o.date, o.sleep_score);
+    readinessCmp.set(o.date, o.readiness_score);
+    hrvCmp.set(o.date, o.hrv_avg);
+  }
+  const calCmp = new Map<string, number>();
+  const carbCmp = new Map<string, number>();
+  const protCmp = new Map<string, number>();
+  for (const [date, m] of foodByDay) {
+    calCmp.set(date, m.calories);
+    carbCmp.set(date, m.carbs_g);
+    protCmp.set(date, m.protein_g);
+  }
+  const nextDayPairs = (
+    xByDay: ReadonlyMap<string, number | null>,
+    yByDay: ReadonlyMap<string, number | null>,
+  ) =>
+    cmpDays.slice(0, -1).map((d, i) => ({
+      x: xByDay.get(d) ?? null,
+      y: yByDay.get(cmpDays[i + 1]) ?? null,
+    }));
+  const corrs: Corr[] = [
+    { id: "sleep_carbs", ...pearson(nextDayPairs(sleepCmp, carbCmp)) },
+    { id: "sleep_cal", ...pearson(nextDayPairs(sleepCmp, calCmp)) },
+    { id: "water_readiness", ...pearson(nextDayPairs(waterCmp, readinessCmp)) },
+    { id: "protein_hrv", ...pearson(nextDayPairs(protCmp, hrvCmp)) },
+  ];
 
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
@@ -294,7 +335,11 @@ export default async function WeeklyPage({
         />
       </section>
 
+      <PhaseBaselinesCard baselines={baselines} />
+
       <CycleCompareCard cycles={cycles} />
+
+      <CorrelationsCard corrs={corrs} />
 
       <section className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

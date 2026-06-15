@@ -241,6 +241,216 @@ export function cycleAggregates(args: {
   return out;
 }
 
+// Per-PHASE baselines — averages of each metric bucketed by cycle phase
+// across the whole input window (i.e. "what does YOUR luteal actually
+// look like?"). Same day→phase assignment as cycleAggregates, but pooled
+// by phase instead of by cycle so a couple of cycles of data already give
+// a stable read.
+export type PhaseMetrics = {
+  days: number;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fiber: number | null;
+  readiness: number | null;
+  sleep: number | null;
+  hrv: number | null;
+  waterMl: number | null;
+};
+
+export type PhaseBaselines = {
+  byPhase: Record<Phase, PhaseMetrics>;
+  // Days with a known phase AND at least food OR oura data.
+  observedDays: number;
+};
+
+const PHASES: Phase[] = ["menstrual", "follicular", "ovulatory", "luteal"];
+
+export function phaseBaselines(args: {
+  periodStarts: string[];
+  settings: CycleSettings;
+  todayIso?: string;
+  foodByDay: DailyMacro[];
+  ouraByDay: DailyOuraIn[];
+  waterByDay: DailyWaterIn[];
+}): PhaseBaselines {
+  const today = args.todayIso ?? new Date().toISOString().slice(0, 10);
+  const starts = [...args.periodStarts].sort();
+
+  const fMap = new Map(args.foodByDay.map((d) => [d.date, d]));
+  const oMap = new Map(args.ouraByDay.map((d) => [d.date, d]));
+  const wMap = new Map(args.waterByDay.map((d) => [d.date, d.ml]));
+
+  type Buckets = {
+    cal: number[];
+    pro: number[];
+    carb: number[];
+    fib: number[];
+    rd: number[];
+    sl: number[];
+    hr: number[];
+    wa: number[];
+    days: Set<string>;
+  };
+  const blank = (): Buckets => ({
+    cal: [],
+    pro: [],
+    carb: [],
+    fib: [],
+    rd: [],
+    sl: [],
+    hr: [],
+    wa: [],
+    days: new Set(),
+  });
+  const buckets: Record<Phase, Buckets> = {
+    menstrual: blank(),
+    follicular: blank(),
+    ovulatory: blank(),
+    luteal: blank(),
+  };
+  let observedDays = 0;
+
+  for (let i = 0; i < starts.length; i++) {
+    const start = starts[i];
+    const nextStart = starts[i + 1] ?? null;
+    const lastDay = nextStart ? addDays(nextStart, -1) : today;
+    for (let d = start; d <= lastDay; d = addDays(d, 1)) {
+      const cd = cycleDayFromPeriodStart(start, args.settings, d);
+      if (!cd) continue;
+      const phase = phaseForCycleDay(cd, args.settings);
+      const b = buckets[phase];
+      const f = fMap.get(d);
+      const o = oMap.get(d);
+      const w = wMap.get(d);
+      let touched = false;
+      if (f) {
+        b.cal.push(f.calories);
+        b.pro.push(f.protein_g);
+        b.carb.push(f.carbs_g);
+        b.fib.push(f.fiber_g);
+        touched = true;
+      }
+      if (o?.readiness_score != null) { b.rd.push(o.readiness_score); touched = true; }
+      if (o?.sleep_score != null) b.sl.push(o.sleep_score);
+      if (o?.hrv_avg != null) b.hr.push(o.hrv_avg);
+      if (w != null) b.wa.push(w);
+      if (touched) {
+        b.days.add(d);
+        observedDays++;
+      }
+    }
+  }
+
+  const m = (xs: number[]): number | null => (xs.length ? mean(xs) : null);
+  const byPhase = {} as Record<Phase, PhaseMetrics>;
+  for (const phase of PHASES) {
+    const b = buckets[phase];
+    byPhase[phase] = {
+      days: b.days.size,
+      calories: m(b.cal),
+      protein: m(b.pro),
+      carbs: m(b.carb),
+      fiber: m(b.fib),
+      readiness: m(b.rd),
+      sleep: m(b.sl),
+      hrv: m(b.hr),
+      waterMl: m(b.wa),
+    };
+  }
+
+  return { byPhase, observedDays };
+}
+
+// Turn baselines into a few warm, plain-language observations. Reference
+// point is the follicular phase (low-progesterone "even keel") when we
+// have it, so deltas read as "vs your usual." Returns highest-signal
+// first; empty when there isn't enough contrast to say anything honest.
+export function describePhasePatterns(b: PhaseBaselines): string[] {
+  const out: { priority: number; text: string }[] = [];
+  const ref = b.byPhase.follicular;
+  const luteal = b.byPhase.luteal;
+
+  const enough = (p: PhaseMetrics) => p.days >= 3;
+
+  // Appetite: luteal vs follicular calories.
+  if (
+    enough(luteal) && enough(ref) &&
+    luteal.calories != null && ref.calories != null
+  ) {
+    const delta = Math.round(luteal.calories - ref.calories);
+    if (delta >= 75) {
+      out.push({
+        priority: 100,
+        text: `Your appetite runs about +${delta} cal/day in your luteal phase vs follicular — that's progesterone doing its job, not slipping. Fuel it.`,
+      });
+    } else if (delta <= -75) {
+      out.push({
+        priority: 60,
+        text: `Interestingly your intake dips ~${Math.abs(delta)} cal/day in luteal vs follicular — keep an eye on energy that week.`,
+      });
+    }
+  }
+
+  // Sleep: which phase sleeps worst, framed gently.
+  const sleepVals = PHASES
+    .map((p) => ({ p, v: b.byPhase[p].sleep, days: b.byPhase[p].days }))
+    .filter((x) => x.v != null && x.days >= 3) as {
+      p: Phase; v: number; days: number;
+    }[];
+  if (sleepVals.length >= 2) {
+    const worst = sleepVals.reduce((a, c) => (c.v < a.v ? c : a));
+    const best = sleepVals.reduce((a, c) => (c.v > a.v ? c : a));
+    if (best.v - worst.v >= 6) {
+      out.push({
+        priority: 80,
+        text: `Sleep quality is lowest in your ${worst.p} phase (avg ${Math.round(
+          worst.v,
+        )} vs ${Math.round(best.v)} at your best) — protect wind-down that week.`,
+      });
+    }
+  }
+
+  // HRV: lowest-recovery phase.
+  const hrvVals = PHASES
+    .map((p) => ({ p, v: b.byPhase[p].hrv, days: b.byPhase[p].days }))
+    .filter((x) => x.v != null && x.days >= 3) as {
+      p: Phase; v: number; days: number;
+    }[];
+  if (hrvVals.length >= 2) {
+    const worst = hrvVals.reduce((a, c) => (c.v < a.v ? c : a));
+    const best = hrvVals.reduce((a, c) => (c.v > a.v ? c : a));
+    if ((best.v - worst.v) / best.v >= 0.1) {
+      out.push({
+        priority: 70,
+        text: `Recovery (HRV) sits lowest in your ${worst.p} phase — a natural week to train a little easier and lean on sleep.`,
+      });
+    }
+  }
+
+  // Protein consistency callout — positive if it holds across phases.
+  const protVals = PHASES
+    .map((p) => b.byPhase[p].protein)
+    .filter((v): v is number => v != null);
+  if (
+    enough(luteal) && enough(ref) &&
+    luteal.protein != null && ref.protein != null &&
+    protVals.length >= 3
+  ) {
+    const drop = ref.protein - luteal.protein;
+    if (drop >= 12) {
+      out.push({
+        priority: 50,
+        text: `Protein tends to slide ~${Math.round(
+          drop,
+        )}g/day in luteal — the one nutrient worth holding steady when cravings pull toward carbs.`,
+      });
+    }
+  }
+
+  return out.sort((a, b) => b.priority - a.priority).map((o) => o.text);
+}
+
 // Helper: standard deviation of observed cycle lengths (for forecast variance).
 export function cycleLengthVariance(periodStarts: string[]): number | null {
   if (periodStarts.length < 3) return null;
