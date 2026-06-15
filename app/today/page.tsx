@@ -371,10 +371,10 @@ export default async function TodayPage() {
 
       <nav className="flex justify-center gap-4 pt-2 text-sm text-muted-foreground">
         <Link href="/weekly" className="underline-offset-4 hover:underline">
-          Weekly
+          Trends
         </Link>
-        <Link href="/import" className="underline-offset-4 hover:underline">
-          Import Health
+        <Link href="/recap" className="underline-offset-4 hover:underline">
+          Recap
         </Link>
         <Link href="/settings" className="underline-offset-4 hover:underline">
           Settings

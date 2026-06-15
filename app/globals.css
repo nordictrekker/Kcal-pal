@@ -152,3 +152,20 @@
     color: var(--foreground);
   }
 }
+
+/* Print stylesheet — used by the 90-day recap's "Save as PDF" button.
+   Strip color theming so the export is clean B&W and prints reliably
+   on any provider's portal. */
+@media print {
+  :root {
+    --background: white;
+    --foreground: black;
+    --muted-foreground: #555;
+    --border: #ccc;
+  }
+  html, body { background: white !important; color: black !important; }
+  .print\:hidden { display: none !important; }
+  .print\:max-w-none { max-width: none !important; }
+  .print\:border-none { border: none !important; }
+  .print\:shadow-none { box-shadow: none !important; }
+}
