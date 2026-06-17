@@ -37,6 +37,7 @@ export default async function SettingsPage() {
     fat_g: p?.daily_fat_target_g ?? 70,
     fiber_g: p?.daily_fiber_target_g ?? 30,
     water_oz: Math.round((p?.daily_water_target_ml ?? 2400) / 29.5735),
+    water_mode: (p?.water_goal_mode ?? "auto") as "auto" | "manual",
   };
   const phaseModifiers = normalizeModifiers(p?.phase_modifiers);
   const profileSettings: ProfileSettings = {

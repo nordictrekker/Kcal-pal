@@ -24,7 +24,15 @@ export async function updateTargets(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
 
-  const patch: Record<string, number> = {};
+  const patch: Record<string, number | string> = {};
+
+  // Water goal mode: 'auto' derives it from weight + activity (the smart
+  // goal), 'manual' uses the ounce value below.
+  const modeRaw = String(formData.get("water_goal_mode") ?? "").trim();
+  if (modeRaw === "auto" || modeRaw === "manual") {
+    patch.water_goal_mode = modeRaw;
+  }
+
   for (const [name, lo, hi] of FIELDS) {
     const raw = String(formData.get(name) ?? "").trim();
     if (raw === "") continue;

@@ -91,6 +91,8 @@ type CycleRow = {
 type WaterRow = {
   logged_at: string;
   ml: number;
+  // Fraction of the volume that counts toward fluids (water 1.0, coffee ~0.9).
+  hydration_factor?: number | null;
 };
 
 // Linear regression slope on (i, value) — used to detect trend direction.
@@ -166,7 +168,8 @@ export function buildTrends(args: {
   const waterByDay = new Map<string, number>();
   for (const w of args.water) {
     const day = localDay(w.logged_at);
-    waterByDay.set(day, (waterByDay.get(day) ?? 0) + Number(w.ml));
+    const effective = Number(w.ml) * (w.hydration_factor ?? 1);
+    waterByDay.set(day, (waterByDay.get(day) ?? 0) + effective);
   }
 
   // 7-day window = last 7 calendar days INCLUDING today.

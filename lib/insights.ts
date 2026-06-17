@@ -25,6 +25,9 @@ export type InsightContext = {
   hydration: {
     todayMl: number;
     targetMl: number;
+    // Fluid logged in roughly the last 90 minutes — distinguishes a fresh
+    // glass from a daily total that's still catching up.
+    recentMl?: number;
   };
   // Optional forecast signals — set when the user tracks cycles and we
   // have enough history. The fertile-window and pre-period rules read this.
@@ -136,11 +139,22 @@ const isWeekend = (c: InsightContext) => {
 
 // Hydration predicates. Day is "young" until ~3pm; only start nudging
 // once it's late enough that being behind actually means behind.
+// A meaningful glass in the last ~90 min (≥ ~10 oz). When true we hold the
+// "behind" nudge — she just drank; don't nag while it's still settling.
+const justDrank = (c: InsightContext) => (c.hydration.recentMl ?? 0) >= 300;
 const hydrationBehind = (c: InsightContext) => {
   if (c.hydration.targetMl <= 0) return false;
+  if (justDrank(c)) return false;
   const dayProgress = Math.min(1, c.now.getHours() / 18);
   const expected = c.hydration.targetMl * dayProgress;
   return c.hydration.todayMl < expected * 0.6 && c.now.getHours() >= 13;
+};
+// Was behind, then drank: acknowledge it instead of going silent.
+const hydrationCaughtUp = (c: InsightContext) => {
+  if (c.hydration.targetMl <= 0 || !justDrank(c)) return false;
+  const dayProgress = Math.min(1, c.now.getHours() / 18);
+  const expected = c.hydration.targetMl * dayProgress;
+  return c.hydration.todayMl < expected * 0.85 && c.now.getHours() >= 13;
 };
 const hydrationWeekLow = (c: InsightContext) =>
   c.trends !== null &&
@@ -261,6 +275,16 @@ const RULES: Rule[] = [
       id: "hydration_today_behind",
       tone: "suggest",
       text: `Water's running behind today — only ${ozFromMl(c.hydration.todayMl)} oz so far. A tall glass now will lift your afternoon more than a snack will.`,
+    }),
+  },
+  {
+    id: "hydration_caught_up",
+    priority: 90,
+    when: hydrationCaughtUp,
+    build: (c) => ({
+      id: "hydration_caught_up",
+      tone: "encourage",
+      text: `Nice — that one counts. You're up to ${ozFromMl(c.hydration.todayMl)} oz. Keep a glass within reach and you'll close the gap easily.`,
     }),
   },
   {

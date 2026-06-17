@@ -33,6 +33,12 @@ import {
 } from "@/lib/phase-modifiers";
 import { pickInsight, avgDailySteps } from "@/lib/insights";
 import { buildTrends } from "@/lib/trends";
+import {
+  computeWaterGoalMl,
+  describeWaterGoal,
+  detectBeverageFluids,
+  effectiveFluidMl,
+} from "@/lib/hydration";
 import { computeTargets, weightTrendLbsPerWeek, projectGoalEta } from "@/lib/targets";
 import { mean } from "@/lib/stats";
 
@@ -96,7 +102,7 @@ export default async function TodayPage() {
       .gte("recorded_at", sevenDaysAgo),
     supabase
       .from("water_logs")
-      .select("ml,logged_at")
+      .select("ml,logged_at,kind,hydration_factor")
       .eq("user_id", user.id)
       .gte("logged_at", fourteenDaysAgo),
     // Last ~9 months of menstrual flow samples → drives forecast variance
@@ -209,14 +215,45 @@ export default async function TodayPage() {
   );
 
   // Today's hydration total, plus a 14-day water history for trend memory.
+  // Each row carries a hydration factor (water 1.0, coffee/tea ≈ 0.9, …); the
+  // effective fluid that counts toward the goal is ml * factor.
   const waterAll = (waterRows ?? []).map((r) => ({
     ml: Number(r.ml),
     logged_at: r.logged_at as string,
+    hydration_factor:
+      r.hydration_factor != null ? Number(r.hydration_factor) : 1,
   }));
-  const waterTodayMl = waterAll
-    .filter((w) => new Date(w.logged_at) >= startOfToday)
-    .reduce((sum, w) => sum + w.ml, 0);
-  const waterTargetMl = p?.daily_water_target_ml ?? 2400;
+  const waterToday = waterAll.filter(
+    (w) => new Date(w.logged_at) >= startOfToday,
+  );
+  // Logged fluid (water + beverage buttons), weighted by hydration factor.
+  const loggedFluidMl = Math.round(effectiveFluidMl(waterToday));
+  // Drinks logged as food with a meal (a latte, a protein shake) also count.
+  const autoFluidMl = detectBeverageFluids(
+    entries.map((e) => ({
+      description: (e.description as string | null) ?? null,
+      serving_size: (e.serving_size as string | null) ?? null,
+    })),
+  ).reduce((sum, d) => sum + d.effectiveMl, 0);
+  const waterTodayMl = loggedFluidMl + autoFluidMl;
+  // Fluid logged in the last 90 minutes — lets the insight tell a fresh
+  // glass from a daily total still catching up.
+  const recentCutoff = new Date(Date.now() - 90 * 60 * 1000);
+  const recentFluidMl = Math.round(
+    effectiveFluidMl(
+      waterToday.filter((w) => new Date(w.logged_at) >= recentCutoff),
+    ),
+  );
+  // Smart goal: weight + activity when in auto mode; manual target otherwise.
+  const waterAuto = (p?.water_goal_mode ?? "auto") === "auto";
+  const smartGoalInput = {
+    weightLbs: weightSnapshot?.weight_lbs ?? null,
+    avgSteps: stepsAvg7d,
+  };
+  const waterTargetMl = waterAuto
+    ? computeWaterGoalMl(smartGoalInput)
+    : (p?.daily_water_target_ml ?? 2400);
+  const waterGoalNote = waterAuto ? describeWaterGoal(smartGoalInput) : undefined;
 
   // Only render the integration cards if the credentials are configured.
   // Avoids a screaming red "not set" banner on the dashboard for things
@@ -321,7 +358,11 @@ export default async function TodayPage() {
       hrv: ouraSnapshot?.hrv_avg ?? null,
     },
     activity: { stepsAvg7d, stepsYesterday },
-    hydration: { todayMl: waterTodayMl, targetMl: waterTargetMl },
+    hydration: {
+      todayMl: waterTodayMl,
+      targetMl: waterTargetMl,
+      recentMl: recentFluidMl,
+    },
     forecast: cycleForecast
       ? {
           daysUntilPeriod: cycleForecast.daysUntil,
@@ -377,7 +418,12 @@ export default async function TodayPage() {
 
       {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}
       <WeightCard latest={weightSnapshot} projection={weightProjection} />
-      <WaterCard todayMl={waterTodayMl} targetMl={waterTargetMl} />
+      <WaterCard
+        loggedMl={loggedFluidMl}
+        autoFluidMl={autoFluidMl}
+        targetMl={waterTargetMl}
+        goalNote={waterGoalNote}
+      />
       {cycleForecast && cycleDay ? (
         <CycleForecastCard
           forecast={cycleForecast}

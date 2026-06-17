@@ -2,10 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { hydrationFactor, isBeverageKind, OZ_TO_ML } from "@/lib/hydration";
 
 export type WaterResult = { ok: boolean; error?: string };
-
-const OZ_TO_ML = 29.5735;
 
 export async function logWater(formData: FormData): Promise<WaterResult> {
   const supabase = await createClient();
@@ -16,6 +15,9 @@ export async function logWater(formData: FormData): Promise<WaterResult> {
 
   const ozRaw = String(formData.get("oz") ?? "").trim();
   const mlRaw = String(formData.get("ml") ?? "").trim();
+  const kindRaw = String(formData.get("kind") ?? "water").trim();
+  const when = String(formData.get("when") ?? "now").trim();
+  const kind = isBeverageKind(kindRaw) ? kindRaw : "water";
 
   let ml: number | null = null;
   if (ozRaw) {
@@ -33,9 +35,25 @@ export async function logWater(formData: FormData): Promise<WaterResult> {
     return { ok: false, error: "Pick an amount." };
   }
 
+  // "Earlier" backfills a glass from earlier today so it doesn't read as a
+  // just-now drink for the timing-aware insight. Anchored 3h back but never
+  // before midnight.
+  let loggedAt: string | undefined;
+  if (when === "earlier") {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    loggedAt = (
+      threeHoursAgo > startOfDay ? threeHoursAgo : startOfDay
+    ).toISOString();
+  }
+
   const { error } = await supabase.from("water_logs").insert({
     user_id: user.id,
     ml,
+    kind,
+    hydration_factor: hydrationFactor(kind),
+    ...(loggedAt ? { logged_at: loggedAt } : {}),
   });
 
   if (error) return { ok: false, error: error.message };

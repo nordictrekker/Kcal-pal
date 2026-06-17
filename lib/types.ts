@@ -53,6 +53,7 @@ export type Profile = {
   daily_fat_target_g: number;
   daily_fiber_target_g: number;
   daily_water_target_ml: number;
+  water_goal_mode: "auto" | "manual" | null;
   height_in: number | null;
   goal: string;
   phase_modifiers: unknown; // jsonb; normalized via lib/phase-modifiers
