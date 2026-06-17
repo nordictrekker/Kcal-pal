@@ -47,7 +47,16 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
 
   useEffect(() => {
     let cancelled = false;
-    const scanner = new Html5Qrcode(SCANNER_DIV_ID, { verbose: false });
+    let scanner: Html5Qrcode | null = null;
+
+    // Constructing the scanner (or its WASM/worker setup) can throw on some
+    // mobile browsers; keep it out of render so it can't white-screen the app.
+    try {
+      scanner = new Html5Qrcode(SCANNER_DIV_ID, { verbose: false });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Scanner failed to start.");
+      return;
+    }
 
     scanner
       .start(
@@ -65,7 +74,7 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
         (decoded) => {
           if (cancelled) return;
           cancelled = true;
-          scanner.stop().catch(() => {});
+          scanner?.stop().catch(() => {});
           onScanRef.current(decoded);
         },
         () => {
@@ -79,10 +88,14 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
 
     return () => {
       cancelled = true;
-      scanner
-        .stop()
-        .catch(() => {})
-        .finally(() => scanner.clear());
+      try {
+        scanner
+          ?.stop()
+          .catch(() => {})
+          .finally(() => scanner?.clear());
+      } catch {
+        // Already stopped / never started.
+      }
     };
   }, []);
 
