@@ -25,13 +25,13 @@ import {
   type CycleForecast,
 } from "@/lib/cycles";
 import { lastNDays } from "@/lib/stats";
-import {
-  applyPhaseModifiers,
-  describeAdjustments,
-  normalizeModifiers,
-} from "@/lib/phase-modifiers";
+import { normalizeModifiers } from "@/lib/phase-modifiers";
 import { pickInsight, avgDailySteps } from "@/lib/insights";
 import { buildTrends } from "@/lib/trends";
+import {
+  resolveDailyTargets,
+  recentIntakeFromRows,
+} from "@/lib/daily-targets";
 import {
   computeWaterGoalMl,
   describeWaterGoal,
@@ -45,7 +45,7 @@ import { mlToOz } from "@/lib/hydration";
 import { TimezoneSync } from "./timezone-sync";
 import { LocationSync } from "./location-sync";
 import { TravelCard } from "./travel-card";
-import { computeTargets, weightTrendLbsPerWeek, projectGoalEta } from "@/lib/targets";
+import { weightTrendLbsPerWeek, projectGoalEta } from "@/lib/targets";
 import { mean } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
@@ -364,32 +364,38 @@ export default async function TodayPage() {
     .filter((v): v is number => v != null && v > 0);
   const ouraTdee7d = ouraTdeeValues.length ? mean(ouraTdeeValues) : null;
 
-  const computedTargets = computeTargets({
-    mode: p?.target_mode ?? "manual",
-    manual: manualTargets,
-    sex: p?.sex ?? null,
-    dateOfBirth: p?.date_of_birth ?? null,
-    heightIn: p?.height_in ?? null,
-    weightLbs: weightSnapshot?.weight_lbs ?? null,
-    activityLevel: p?.activity_level ?? null,
-    goal: p?.goal ?? null,
-    proteinPerKg: p?.protein_per_kg ?? null,
-    ouraTdee7d,
-  });
-  const baseTargets = computedTargets.targets;
+  // Per-day intake for the 7 days before today drives the rolling
+  // energy-balance correction (calories don't reset at midnight).
+  const recentIntake = recentIntakeFromRows(
+    (trendFood ?? []).map((f) => ({
+      consumed_at: f.consumed_at as string,
+      calories: (f.calories as number | null) ?? null,
+      carbs_g: (f.carbs_g as number | null) ?? null,
+    })),
+    today,
+    7,
+  );
 
-  // If we have a current cycle phase, adjust targets by the per-phase
-  // modifiers stored in the profile. No-op if phase is unknown.
-  const phaseModifiers = normalizeModifiers(p?.phase_modifiers);
-  const currentPhase = cyclePhase;
-  const targets = applyPhaseModifiers(baseTargets, currentPhase, phaseModifiers);
-  const adjustmentDescription = currentPhase
-    ? describeAdjustments(phaseModifiers[currentPhase])
-    : null;
-  const phaseAdjustment =
-    currentPhase && adjustmentDescription
-      ? { phase: currentPhase, description: adjustmentDescription }
-      : null;
+  const resolved = resolveDailyTargets({
+    targetInputs: {
+      mode: p?.target_mode ?? "manual",
+      manual: manualTargets,
+      sex: p?.sex ?? null,
+      dateOfBirth: p?.date_of_birth ?? null,
+      heightIn: p?.height_in ?? null,
+      weightLbs: weightSnapshot?.weight_lbs ?? null,
+      activityLevel: p?.activity_level ?? null,
+      goal: p?.goal ?? null,
+      proteinPerKg: p?.protein_per_kg ?? null,
+      ouraTdee7d,
+    },
+    phase: cyclePhase,
+    phaseModifiers: normalizeModifiers(p?.phase_modifiers),
+    recent: recentIntake,
+  });
+  const baseTargets = resolved.base;
+  const targets = resolved.targets;
+  const phaseAdjustment = resolved.phaseAdjustment;
 
   // Greeting + phase blurb. Tiny, warm, not chatty. `localNow` reflects the
   // user's phone timezone so time-of-day logic (greeting, hydration pacing)
@@ -535,9 +541,8 @@ export default async function TodayPage() {
           totals={displayTotals}
           targets={targets}
           phaseAdjustment={phaseAdjustment}
-          targetNote={
-            computedTargets.source !== "manual" ? computedTargets.note : null
-          }
+          targetNote={resolved.calorieNote}
+          balanceNote={resolved.balanceNote}
           showLogHint
         />
       </Link>
