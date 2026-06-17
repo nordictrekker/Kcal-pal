@@ -24,6 +24,30 @@ Project → Settings → Environment Variables. Add each, then redeploy.
 > The VAPID keypair above was generated for this project. Rotate with
 > `npx web-push generate-vapid-keys` if it's ever exposed.
 
+## 1b. Auth email template — REQUIRED (code-based sign-in)
+
+Sign-in uses a **6-digit code**, not a clickable link. This is deliberate:
+mail providers (Gmail, Apple Mail, security scanners) pre-fetch any link in
+an email, which silently performs the `GET /auth/v1/verify` and burns the
+single-use token *seconds before* you can use it — the cause of the
+recurring "Email link is invalid or has expired" error. The link's token and
+the 6-digit code are the **same** one-time token, so the email must contain
+**only the code and no link**.
+
+Supabase Dashboard → **Authentication → Email Templates → Magic Link**, and
+replace the body with:
+
+```html
+<h2>Your Kcal-pal sign-in code</h2>
+<p>Enter this code to sign in:</p>
+<p style="font-size:28px;font-weight:700;letter-spacing:4px">{{ .Token }}</p>
+<p>The code expires in about an hour. If you didn't request it, ignore this email.</p>
+```
+
+Do **not** include `{{ .ConfirmationURL }}` (or any other link to the verify
+endpoint) — that reintroduces the prefetch problem. Optionally raise the OTP
+expiry under Authentication → Providers → Email if an hour is too short.
+
 ## 2. Database migrations (Supabase SQL Editor)
 
 Run in order. All are idempotent (safe to re-run).

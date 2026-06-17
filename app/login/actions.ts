@@ -1,7 +1,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 function allowedEmail(): string {
@@ -17,25 +16,29 @@ function reject(reason: string, email?: string): never {
   redirect(`/login?${params.toString()}`);
 }
 
-// Send the standard Supabase magic-link email.
+// Email a one-time sign-in CODE (not a clickable link).
+//
+// Why a code and not a link: the magic-link token is single-use, and the
+// `token=` in the email's verify URL is the *same* one-time token as the
+// 6-digit code. Mail providers (Gmail, Apple Mail, corporate scanners)
+// pre-fetch any link in the email for preview/security, which silently
+// performs the GET /verify and burns the token seconds before the user can
+// act — producing "Email link is invalid or has expired". A bare numeric
+// code can't be prefetched, so it survives until the user types it.
+//
+// IMPORTANT: this requires the Supabase "Magic Link" email template to show
+// {{ .Token }} and contain NO {{ .ConfirmationURL }} link (see SETUP.md).
 export async function sendMagicLink(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const allowed = allowedEmail();
   if (!allowed) reject("Server misconfigured: ALLOWED_EMAIL unset");
   if (email !== allowed) reject("Not authorized");
 
-  const hdrs = await headers();
-  const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host");
-  const proto = hdrs.get("x-forwarded-proto") ?? "https";
-  const origin = host ? `${proto}://${host}` : "http://localhost:3000";
-
   const supabase = await createClient();
+  // No emailRedirectTo: we verify the code in-app, never via a redirect.
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: {
-      shouldCreateUser: true,
-      emailRedirectTo: `${origin}/auth/callback`,
-    },
+    options: { shouldCreateUser: true },
   });
 
   if (error) reject(error.message);
@@ -43,56 +46,42 @@ export async function sendMagicLink(formData: FormData) {
   redirect(`/login?sent=1&email=${encodeURIComponent(email)}`);
 }
 
-// Verify by extracting the hashed token from a pasted magic-link URL.
-// This sidesteps the iOS PWA cookie-isolation issue: instead of clicking
-// the link (which opens Safari, separate cookie jar), the user
-// long-presses → Copy Link → pastes into the PWA, and we verify the
-// token_hash directly from within the PWA's own context. No PKCE
-// verifier required.
+// Finish sign-in by verifying the one-time CODE the user typed from their
+// email. We verify in-app (server action → verifyOtp), so there is no
+// redirect and no Safari/PWA cookie-jar split: the session cookie is set on
+// the same origin the user is already on.
+//
+// For resilience we also accept a pasted verify URL (?token=hash) as a
+// fallback, in case an older email with a link is used.
 export async function verifyMagicLinkUrl(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const pasted = String(formData.get("url") ?? "").trim();
+  const raw = String(formData.get("code") ?? formData.get("url") ?? "").trim();
   const allowed = allowedEmail();
 
   if (!allowed) reject("Server misconfigured: ALLOWED_EMAIL unset");
-  if (!pasted) reject("Paste the sign-in link from your email.", email);
-
-  let parsed: URL;
-  try {
-    parsed = new URL(pasted);
-  } catch {
-    reject("That doesn't look like a valid URL.", email);
-  }
-
-  // Accept both the Supabase verify URL (?token=hash) and a fallback for
-  // pre-resolved callback URLs (?code= — PKCE; would fail on free tier
-  // iOS PWA anyway, included for desktop completeness).
-  const tokenHash = parsed.searchParams.get("token");
-  const code = parsed.searchParams.get("code");
-  // The email link carries its own `type` (magiclink / signup / email /
-  // recovery / invite). verifyOtp rejects with "invalid or expired" if the
-  // type we pass doesn't match what the token was issued for — first-time
-  // sign-ups send `signup`, return logins send `magiclink`. Read it from
-  // the URL instead of hard-coding.
-  const urlType = parsed.searchParams.get("type") ?? "";
-  const validTypes = ["magiclink", "signup", "email", "recovery", "invite"] as const;
-  type VerifyType = (typeof validTypes)[number];
-  const candidateTypes: VerifyType[] = validTypes.includes(urlType as VerifyType)
-    ? [urlType as VerifyType]
-    : ["magiclink", "signup", "email"]; // fall back if type missing
+  if (email !== allowed) reject("Not authorized", email);
+  if (!raw) reject("Enter the 6-digit code from your email.", email);
 
   const supabase = await createClient();
 
-  if (tokenHash) {
+  // verifyOtp rejects with "invalid or expired" when the type doesn't match
+  // what the token was issued for (return logins → magiclink/email,
+  // first-time → signup), so try the plausible types in order.
+  const candidateTypes = ["email", "magiclink", "signup"] as const;
+
+  // Case 1: a 6-digit numeric code (the normal path).
+  const digits = raw.replace(/\D/g, "");
+  if (/^\d{6}$/.test(raw) || (digits.length === 6 && !raw.includes("://"))) {
+    const token = digits;
     let lastError: string | null = null;
     for (const type of candidateTypes) {
       const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
         type,
-        token_hash: tokenHash,
       });
       if (error || !data.user) {
         lastError = error?.message ?? "Verification failed.";
-        // "invalid or expired" can mean wrong type; keep trying candidates.
         continue;
       }
       const userEmail = (data.user.email ?? "").trim().toLowerCase();
@@ -102,23 +91,36 @@ export async function verifyMagicLinkUrl(formData: FormData) {
       }
       redirect("/today");
     }
-    reject(lastError ?? "Verification failed.", email);
+    reject(lastError ?? "That code didn't work. Request a new one.", email);
   }
 
-  if (code) {
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+  // Case 2 (fallback): a pasted verify URL with ?token=hash.
+  let tokenHash: string | null = null;
+  try {
+    tokenHash = new URL(raw).searchParams.get("token");
+  } catch {
+    reject("Enter the 6-digit code from your email.", email);
+  }
+  if (!tokenHash) reject("Enter the 6-digit code from your email.", email);
+
+  let lastError: string | null = null;
+  for (const type of candidateTypes) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      type,
+      token_hash: tokenHash,
+    });
     if (error || !data.user) {
-      reject(error?.message ?? "Verification failed.", email);
+      lastError = error?.message ?? "Verification failed.";
+      continue;
     }
-    const userEmail = (data.user!.email ?? "").trim().toLowerCase();
+    const userEmail = (data.user.email ?? "").trim().toLowerCase();
     if (userEmail !== allowed) {
       await supabase.auth.signOut();
       reject("Not authorized");
     }
     redirect("/today");
   }
-
-  reject("Couldn't find a sign-in token in that URL.", email);
+  reject(lastError ?? "Verification failed.", email);
 }
 
 export async function signOut() {

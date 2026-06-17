@@ -5,7 +5,6 @@ import { sendMagicLink, verifyMagicLinkUrl } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -46,7 +45,7 @@ export function LoginForm({
       <CardHeader>
         <CardTitle>Kcal-pal</CardTitle>
         <CardDescription>
-          {sent ? "Paste the sign-in link from your email." : "Sign in."}
+          {sent ? "Enter the code from your email." : "Sign in."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -73,24 +72,24 @@ export function LoginForm({
           <>
             <ol className="space-y-1 text-xs text-muted-foreground">
               <li>1. Open the email from Supabase.</li>
-              <li>
-                2. <span className="font-medium">Long-press</span> the
-                sign-in link → <span className="font-medium">Copy Link</span>.
-              </li>
-              <li>3. Paste it below and tap Sign in.</li>
+              <li>2. Find the 6-digit sign-in code.</li>
+              <li>3. Type it below and tap Sign in.</li>
             </ol>
             <form action={verifyMagicLinkUrl} className="space-y-4">
               <input type="hidden" name="email" value={email ?? ""} />
               <div className="space-y-2">
-                <Label htmlFor="url">Sign-in link</Label>
-                <Textarea
-                  id="url"
-                  name="url"
+                <Label htmlFor="code">6-digit code</Label>
+                <Input
+                  id="code"
+                  name="code"
                   required
                   autoFocus
-                  rows={3}
-                  placeholder="https://…supabase.co/auth/v1/verify?token=…"
-                  className="font-mono text-xs"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="123456"
+                  className="text-center font-mono text-lg tracking-[0.4em]"
                 />
               </div>
               {error ? (
@@ -99,9 +98,8 @@ export function LoginForm({
               <VerifyButton />
             </form>
             <p className="text-xs text-muted-foreground">
-              Sent to <span className="font-medium">{email}</span>. On a
-              desktop browser you can just click the link in the email
-              instead.
+              Sent to <span className="font-medium">{email}</span>. The code
+              expires in about an hour.
             </p>
             <form action={sendMagicLink}>
               <input type="hidden" name="email" value={email ?? ""} />
