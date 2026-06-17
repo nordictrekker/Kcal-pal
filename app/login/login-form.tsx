@@ -72,13 +72,13 @@ export function LoginForm({
           <>
             <ol className="space-y-1 text-xs text-muted-foreground">
               <li>1. Open the email from Supabase.</li>
-              <li>2. Find the 6-digit sign-in code.</li>
+              <li>2. Find the sign-in code.</li>
               <li>3. Type it below and tap Sign in.</li>
             </ol>
             <form action={verifyMagicLinkUrl} className="space-y-4">
               <input type="hidden" name="email" value={email ?? ""} />
               <div className="space-y-2">
-                <Label htmlFor="code">6-digit code</Label>
+                <Label htmlFor="code">Sign-in code</Label>
                 <Input
                   id="code"
                   name="code"
@@ -87,9 +87,9 @@ export function LoginForm({
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   pattern="[0-9]*"
-                  maxLength={6}
-                  placeholder="123456"
-                  className="text-center font-mono text-lg tracking-[0.4em]"
+                  maxLength={10}
+                  placeholder="12345678"
+                  className="text-center font-mono text-lg tracking-[0.3em]"
                 />
               </div>
               {error ? (

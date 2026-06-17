@@ -69,9 +69,13 @@ export async function verifyMagicLinkUrl(formData: FormData) {
   // first-time → signup), so try the plausible types in order.
   const candidateTypes = ["email", "magiclink", "signup"] as const;
 
-  // Case 1: a 6-digit numeric code (the normal path).
+  // Case 1: a numeric code (the normal path). Supabase OTP length is
+  // configurable (6–10 digits), so accept any length in that range rather
+  // than hard-coding one.
   const digits = raw.replace(/\D/g, "");
-  if (/^\d{6}$/.test(raw) || (digits.length === 6 && !raw.includes("://"))) {
+  const looksLikeCode =
+    !raw.includes("://") && digits.length >= 4 && digits.length <= 10;
+  if (/^\d{4,10}$/.test(raw) || looksLikeCode) {
     const token = digits;
     let lastError: string | null = null;
     for (const type of candidateTypes) {
