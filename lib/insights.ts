@@ -57,7 +57,26 @@ export type Insight = {
   id: string;
   text: string;
   tone: "reassure" | "encourage" | "suggest" | "rest";
+  // Evidence-confidence label for the recommendation. "established" = strong
+  // physiology (hydration, protein, energy availability, alcohol→HRV);
+  // "emerging" = cycle-phase nutrition, where evidence is softer.
+  evidence?: "established" | "emerging";
 };
+
+// Tag an insight's evidence strength from its id, so the UI can be honest
+// about confidence in a hype-prone category. Cycle/phase claims are flagged
+// "emerging"; core physiology is "established".
+export function evidenceFor(id: string): Insight["evidence"] {
+  if (/luteal|follicular|fertile|period|phase|cycle|ovulat|menstr/i.test(id))
+    return "emerging";
+  if (
+    /hydration|protein|fiber|fuel|alcohol|hrv|readiness|sleep|recovery|travel|exertion|carb/i.test(
+      id,
+    )
+  )
+    return "established";
+  return undefined;
+}
 
 type Rule = {
   id: string;
@@ -567,6 +586,7 @@ export function pickInsight(ctx: InsightContext): Insight | null {
       best = { rule, insight: rule.build(ctx) };
     }
   }
+  if (best) best.insight.evidence = evidenceFor(best.insight.id);
   return best?.insight ?? null;
 }
 

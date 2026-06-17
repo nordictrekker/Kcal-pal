@@ -52,6 +52,7 @@ export function MacroTotals({
   targets,
   phaseAdjustment,
   targetNote,
+  recoveryNote,
   balanceNote,
   showLogHint,
 }: {
@@ -60,6 +61,8 @@ export function MacroTotals({
   phaseAdjustment?: { phase: string; description: string } | null;
   // Short explanation when targets are auto-computed (e.g. from Oura burn).
   targetNote?: string | null;
+  // Recovery-based bump (low readiness / hard training) explanation.
+  recoveryNote?: string | null;
   // Rolling 7-day energy-balance correction explanation.
   balanceNote?: string | null;
   // When true, renders a "View full log" affordance (card is wrapped in a link).
@@ -102,6 +105,9 @@ export function MacroTotals({
               <span className="capitalize">{phaseAdjustment.phase}</span>:{" "}
               {phaseAdjustment.description}
             </p>
+          ) : null}
+          {recoveryNote ? (
+            <p className="pt-1 text-xs text-muted-foreground">{recoveryNote}</p>
           ) : null}
           {balanceNote ? (
             <p className="pt-1 text-xs text-muted-foreground">{balanceNote}</p>

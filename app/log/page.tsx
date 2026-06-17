@@ -8,12 +8,28 @@ import { SavedMeals, type SavedMealItem } from "./saved-meals";
 
 export const dynamic = "force-dynamic";
 
-export default async function LogPage() {
+export default async function LogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const { date } = await searchParams;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const logDate =
+    date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date < todayKey ? date : null;
+  const logDateLabel = logDate
+    ? new Date(`${logDate}T12:00:00Z`).toLocaleDateString(undefined, {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
 
   const { data: savedRaw } = await supabase
     .from("saved_meals")
@@ -33,14 +49,23 @@ export default async function LogPage() {
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Log food</h1>
+        <h1 className="text-2xl font-semibold">
+          {logDate ? "Add to a past day" : "Log food"}
+        </h1>
         <Link
-          href="/today"
+          href={logDate ? `/today/summary?date=${logDate}` : "/today"}
           className="text-sm text-muted-foreground underline-offset-4 hover:underline"
         >
-          Today →
+          {logDate ? "Back →" : "Today →"}
         </Link>
       </header>
+
+      {logDateLabel ? (
+        <p className="rounded-md border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+          Logging to <span className="font-medium text-foreground">{logDateLabel}</span>.
+          Typed entries only — scan/photo always log to today.
+        </p>
+      ) : null}
 
       <SavedMeals items={saved} />
 
@@ -76,7 +101,7 @@ export default async function LogPage() {
         <div className="h-px flex-1 bg-border" />
       </div>
 
-      <LogForm defaultMeal={defaultMeal()} />
+      <LogForm defaultMeal={defaultMeal()} logDate={logDate} />
     </main>
   );
 }

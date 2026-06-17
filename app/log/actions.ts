@@ -30,6 +30,15 @@ export async function logTextMeal(
   }
   const meal: Meal = isMeal(mealRaw) ? mealRaw : "snack";
 
+  // Optional back-date (adding to a past day from the dated log view). Anchored
+  // to local noon so it lands inside the chosen day regardless of timezone.
+  const dateRaw = String(formData.get("date") ?? "").trim();
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const consumedAt =
+    /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) && dateRaw <= todayKey && dateRaw !== todayKey
+      ? `${dateRaw}T12:00:00.000Z`
+      : null;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -69,6 +78,7 @@ export async function logTextMeal(
     description,
     source: "text" as const,
     raw_ai_response: (result.raw as object) ?? null,
+    ...(consumedAt ? { consumed_at: consumedAt } : {}),
   };
 
   if (!result.ok) {
@@ -101,5 +111,6 @@ export async function logTextMeal(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/today");
+  revalidatePath("/today/summary");
   return { ok: true };
 }

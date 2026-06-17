@@ -52,14 +52,43 @@ export type TargetInputs = {
   proteinPerKg: number | null;
   // Rolling 7-day average of Oura total_calories (measured TDEE), or null.
   ouraTdee7d: number | null;
+  // TDEE inferred from logged intake + weight trend (MacroFactor-style), the
+  // most personalized estimate when there's enough data. Preferred when set.
+  adaptiveTdee?: number | null;
 };
 
 export type ComputedTargets = {
   targets: Totals;
-  source: "manual" | "oura" | "estimate";
+  source: "manual" | "oura" | "estimate" | "adaptive";
   tdee: number | null; // the TDEE used for the auto calc
   note: string | null; // short human explanation for the UI
 };
+
+// Infer maintenance TDEE from what the user actually ate vs. how their weight
+// trended (energy balance): TDEE = average intake − stored-energy change.
+// Negative trend (losing) → burning more than eating → TDEE above intake.
+// Returns null unless there's enough signal to trust it.
+const KCAL_PER_LB = 3500;
+export function adaptiveTdeeFromIntake(args: {
+  avgDailyIntake: number | null;
+  loggedDays: number;
+  weightTrendLbsPerWeek: number | null;
+}): number | null {
+  if (
+    args.avgDailyIntake == null ||
+    args.avgDailyIntake <= 0 ||
+    args.loggedDays < 10 ||
+    args.weightTrendLbsPerWeek == null ||
+    !Number.isFinite(args.weightTrendLbsPerWeek)
+  ) {
+    return null;
+  }
+  const dailyTrendKcal = (args.weightTrendLbsPerWeek * KCAL_PER_LB) / 7;
+  const tdee = args.avgDailyIntake - dailyTrendKcal;
+  // Reject implausible results (bad weight data, extreme under-logging).
+  if (tdee < 1000 || tdee > 5000) return null;
+  return Math.round(tdee);
+}
 
 // Linear fit on (day offset, weight) to estimate weight trend in lb/week.
 // Returns null if there's fewer than 4 distinct readings — too noisy.
@@ -166,10 +195,15 @@ export function computeTargets(input: TargetInputs): ComputedTargets {
   const sex = input.sex ?? "female";
   const restingBurn = bmr(sex, kg, cm, age);
 
-  // Prefer measured TDEE from Oura when it's plausible (above resting).
+  // Expenditure source, most→least personalized: a weight-trend adaptive TDEE
+  // (when we have enough logging history), then Oura's measured burn, then a
+  // formula estimate.
   let tdee: number;
-  let source: "oura" | "estimate";
-  if (input.ouraTdee7d != null && input.ouraTdee7d > restingBurn) {
+  let source: "adaptive" | "oura" | "estimate";
+  if (input.adaptiveTdee != null && input.adaptiveTdee > restingBurn * 0.9) {
+    tdee = input.adaptiveTdee;
+    source = "adaptive";
+  } else if (input.ouraTdee7d != null && input.ouraTdee7d > restingBurn) {
     tdee = input.ouraTdee7d;
     source = "oura";
   } else {
@@ -198,9 +232,11 @@ export function computeTargets(input: TargetInputs): ComputedTargets {
 
   const tdeeRounded = Math.round(tdee);
   const note =
-    source === "oura"
-      ? `Auto from your 7-day Oura burn (~${tdeeRounded.toLocaleString()} kcal/day)`
-      : `Auto estimate from your stats (~${tdeeRounded.toLocaleString()} kcal/day)`;
+    source === "adaptive"
+      ? `Learned from your logging + weight trend (~${tdeeRounded.toLocaleString()} kcal/day)`
+      : source === "oura"
+        ? `Auto from your 7-day Oura burn (~${tdeeRounded.toLocaleString()} kcal/day)`
+        : `Auto estimate from your stats (~${tdeeRounded.toLocaleString()} kcal/day)`;
 
   return {
     targets: { calories, protein_g, carbs_g, fat_g, fiber_g },

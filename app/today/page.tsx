@@ -44,6 +44,7 @@ import { hydrationOffsetMl } from "@/lib/alcohol";
 import { mlToOz } from "@/lib/hydration";
 import { TimezoneSync } from "./timezone-sync";
 import { LocationSync } from "./location-sync";
+import { LogCheckIn } from "./log-checkin";
 import { TravelCard } from "./travel-card";
 import { weightTrendLbsPerWeek, projectGoalEta } from "@/lib/targets";
 import { mean } from "@/lib/stats";
@@ -77,6 +78,8 @@ export default async function TodayPage() {
     { data: waterRows },
     { data: alcoholRows },
     { data: flowRows },
+    { data: intakeHistoryRows },
+    { data: dayStatusRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
     supabase
@@ -126,7 +129,43 @@ export default async function TodayPage() {
       .eq("metric", "menstrual_flow")
       .gte("recorded_at", new Date(Date.now() - 270 * 86_400_000).toISOString())
       .order("recorded_at", { ascending: true }),
+    // 21-day intake history powers the rolling balance + adaptive TDEE.
+    supabase
+      .from("food_entries")
+      .select("consumed_at,calories,carbs_g")
+      .eq("user_id", user.id)
+      .gte("consumed_at", new Date(Date.now() - 21 * 86_400_000).toISOString()),
+    // Which recent days the user flagged as under-logged (excluded from adapt).
+    supabase
+      .from("day_log_status")
+      .select("day,status")
+      .eq("user_id", user.id)
+      .gte("day", new Date(Date.now() - 21 * 86_400_000).toISOString().slice(0, 10)),
   ]);
+
+  const incompleteDays = new Set(
+    (dayStatusRows ?? [])
+      .filter((d) => d.status === "partial" || d.status === "skipped")
+      .map((d) => d.day as string),
+  );
+  // Ask once whether yesterday was fully logged (only for an active user, and
+  // only if we haven't already recorded a status for that day).
+  const statusedDays = new Set(
+    (dayStatusRows ?? []).map((d) => d.day as string),
+  );
+  const yesterdayKey = new Date(Date.now() - 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const checkinDay =
+    !statusedDays.has(yesterdayKey) && (intakeHistoryRows ?? []).length > 0
+      ? yesterdayKey
+      : null;
+  const checkinLabel = checkinDay
+    ? `yesterday (${new Date(`${checkinDay}T12:00:00Z`).toLocaleDateString(
+        undefined,
+        { weekday: "short" },
+      )})`
+    : "";
 
   // Today's entries are a subset of the trend window — slice locally
   // instead of issuing a second query.
@@ -364,16 +403,17 @@ export default async function TodayPage() {
     .filter((v): v is number => v != null && v > 0);
   const ouraTdee7d = ouraTdeeValues.length ? mean(ouraTdeeValues) : null;
 
-  // Per-day intake for the 7 days before today drives the rolling
-  // energy-balance correction (calories don't reset at midnight).
+  // Per-day intake (21-day window) drives the rolling balance + adaptive TDEE.
+  // Days the user flagged as under-logged are excluded.
   const recentIntake = recentIntakeFromRows(
-    (trendFood ?? []).map((f) => ({
+    (intakeHistoryRows ?? []).map((f) => ({
       consumed_at: f.consumed_at as string,
       calories: (f.calories as number | null) ?? null,
       carbs_g: (f.carbs_g as number | null) ?? null,
     })),
     today,
-    7,
+    14,
+    incompleteDays,
   );
 
   const resolved = resolveDailyTargets({
@@ -392,6 +432,12 @@ export default async function TodayPage() {
     phase: cyclePhase,
     phaseModifiers: normalizeModifiers(p?.phase_modifiers),
     recent: recentIntake,
+    weightTrendLbsPerWeek: trend?.lbsPerWeek ?? null,
+    recovery: {
+      readiness: ouraSnapshot?.readiness_score ?? null,
+      stepsYesterday,
+      avgSteps: stepsAvg7d,
+    },
   });
   const baseTargets = resolved.base;
   const targets = resolved.targets;
@@ -527,13 +573,32 @@ export default async function TodayPage() {
           </form>
         </div>
         {insight ? (
-          <p className="relative max-w-[34ch] font-serif text-[15px] italic leading-snug text-foreground/80">
-            {insight.text}
-          </p>
+          <div className="relative space-y-1">
+            <p className="max-w-[34ch] font-serif text-[15px] italic leading-snug text-foreground/80">
+              {insight.text}
+            </p>
+            {insight.evidence ? (
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                <span
+                  className={`size-1.5 rounded-full ${
+                    insight.evidence === "established"
+                      ? "bg-[var(--macro-fiber)]"
+                      : "bg-[var(--macro-fat)]"
+                  }`}
+                />
+                {insight.evidence === "established"
+                  ? "Well-established"
+                  : "Emerging evidence"}
+              </span>
+            ) : null}
+          </div>
         ) : null}
       </header>
 
       <LocationSync />
+      {checkinDay ? (
+        <LogCheckIn day={checkinDay} label={checkinLabel} />
+      ) : null}
       {travelInfo?.active ? <TravelCard info={travelInfo} /> : null}
 
       <Link href="/today/summary" className="block" aria-label="View today's full log">

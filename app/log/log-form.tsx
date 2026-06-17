@@ -21,7 +21,13 @@ function SubmitButton() {
   );
 }
 
-export function LogForm({ defaultMeal }: { defaultMeal: Meal }) {
+export function LogForm({
+  defaultMeal,
+  logDate,
+}: {
+  defaultMeal: Meal;
+  logDate?: string | null;
+}) {
   const [state, formAction] = useActionState(logTextMeal, initial);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -31,6 +37,7 @@ export function LogForm({ defaultMeal }: { defaultMeal: Meal }) {
 
   return (
     <form ref={formRef} action={formAction} className="space-y-4">
+      {logDate ? <input type="hidden" name="date" value={logDate} /> : null}
       <div className="space-y-2">
         <Label htmlFor="description">What did you eat?</Label>
         <Textarea
