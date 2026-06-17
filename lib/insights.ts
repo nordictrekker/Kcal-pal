@@ -42,6 +42,8 @@ export type InsightContext = {
   trends: Trends | null;
   // Set when the user's phone timezone changed recently (travel).
   travel?: { fromTz: string; toTz: string; daysAgo: number } | null;
+  // Standard drinks today / yesterday, when any are logged.
+  alcohol?: { drinksToday: number; drinksYesterday: number } | null;
   now: Date;
 };
 
@@ -278,6 +280,32 @@ const RULES: Rule[] = [
       id: "travel_adjust",
       tone: "reassure",
       text: `Looks like you're in ${describeZone(c.travel!.toTz)} now — travel nudges sleep, appetite, and hydration. Be gentle for a day or two and keep water close; your numbers may read a little off.`,
+    }),
+  },
+
+  // ─── Alcohol recovery (explains a funky morning) ────────────────────────
+
+  {
+    id: "alcohol_recovery",
+    priority: 89,
+    when: (c) => (c.alcohol?.drinksYesterday ?? 0) >= 2 && c.now.getHours() < 16,
+    build: () => ({
+      id: "alcohol_recovery",
+      tone: "reassure",
+      text: "Last night's drinks can dent HRV and deep sleep — if this morning reads low, that's likely why. Extra water and protein today will help you bounce back.",
+    }),
+  },
+  {
+    id: "alcohol_hydrate_today",
+    priority: 80,
+    when: (c) =>
+      (c.alcohol?.drinksToday ?? 0) >= 2 &&
+      (c.alcohol?.drinksYesterday ?? 0) < 2 &&
+      c.now.getHours() >= 17,
+    build: () => ({
+      id: "alcohol_hydrate_today",
+      tone: "suggest",
+      text: "A few drinks in — a glass of water between rounds and one before bed will soften tomorrow's recovery hit.",
     }),
   },
 

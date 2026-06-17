@@ -39,6 +39,8 @@ import {
   effectiveFluidMl,
 } from "@/lib/hydration";
 import { zonedNow } from "@/lib/timezone";
+import { hydrationOffsetMl } from "@/lib/alcohol";
+import { mlToOz } from "@/lib/hydration";
 import { TimezoneSync } from "./timezone-sync";
 import { computeTargets, weightTrendLbsPerWeek, projectGoalEta } from "@/lib/targets";
 import { mean } from "@/lib/stats";
@@ -70,6 +72,7 @@ export default async function TodayPage() {
     { data: weightRows },
     { data: stepRows },
     { data: waterRows },
+    { data: alcoholRows },
     { data: flowRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
@@ -104,6 +107,11 @@ export default async function TodayPage() {
     supabase
       .from("water_logs")
       .select("ml,logged_at,kind,hydration_factor")
+      .eq("user_id", user.id)
+      .gte("logged_at", fourteenDaysAgo),
+    supabase
+      .from("alcohol_logs")
+      .select("standard_drinks,calories,logged_at")
       .eq("user_id", user.id)
       .gte("logged_at", fourteenDaysAgo),
     // Last ~9 months of menstrual flow samples → drives forecast variance
@@ -251,10 +259,53 @@ export default async function TodayPage() {
     weightLbs: weightSnapshot?.weight_lbs ?? null,
     avgSteps: stepsAvg7d,
   };
-  const waterTargetMl = waterAuto
+  const baseWaterTargetMl = waterAuto
     ? computeWaterGoalMl(smartGoalInput)
     : (p?.daily_water_target_ml ?? 2400);
-  const waterGoalNote = waterAuto ? describeWaterGoal(smartGoalInput) : undefined;
+
+  // Alcohol: today's drinks fold their calories into the day's total and
+  // raise the water goal (diuretic offset). Yesterday's drinks add a residual
+  // bump to today's goal.
+  const startOfYesterday = new Date(startOfToday.getTime() - 86_400_000);
+  const alcoholAll = (alcoholRows ?? []).map((r) => ({
+    standard_drinks: Number(r.standard_drinks),
+    calories: Number(r.calories),
+    logged_at: r.logged_at as string,
+  }));
+  const alcoholToday = alcoholAll.filter(
+    (a) => new Date(a.logged_at) >= startOfToday,
+  );
+  const alcoholYesterday = alcoholAll.filter((a) => {
+    const t = new Date(a.logged_at);
+    return t >= startOfYesterday && t < startOfToday;
+  });
+  const drinksToday = alcoholToday.reduce((s, a) => s + a.standard_drinks, 0);
+  const drinksYesterday = alcoholYesterday.reduce(
+    (s, a) => s + a.standard_drinks,
+    0,
+  );
+  const alcoholCaloriesToday = Math.round(
+    alcoholToday.reduce((s, a) => s + a.calories, 0),
+  );
+  const alcoholSummary = {
+    drinks: Math.round(drinksToday * 10) / 10,
+    calories: alcoholCaloriesToday,
+    count: alcoholToday.length,
+  };
+
+  const waterOffsetMl = hydrationOffsetMl(drinksToday, drinksYesterday);
+  const waterTargetMl = baseWaterTargetMl + waterOffsetMl;
+  const baseGoalNote = waterAuto ? describeWaterGoal(smartGoalInput) : undefined;
+  const waterGoalNote =
+    waterOffsetMl > 0
+      ? `${baseGoalNote ? baseGoalNote + " · " : ""}+${mlToOz(waterOffsetMl)} oz to offset alcohol`
+      : baseGoalNote;
+
+  // Calories shown on the day's card include alcohol (it's energy too).
+  const displayTotals = {
+    ...totals,
+    calories: totals.calories + alcoholCaloriesToday,
+  };
 
   // Only render the integration cards if the credentials are configured.
   // Avoids a screaming red "not set" banner on the dashboard for things
@@ -389,10 +440,11 @@ export default async function TodayPage() {
           overdue: cycleForecast.overdue,
         }
       : null,
-    todayMacros: totals,
+    todayMacros: displayTotals,
     targets,
     trends,
     travel,
+    alcohol: { drinksToday, drinksYesterday },
     now: localNow,
   });
 
@@ -439,7 +491,7 @@ export default async function TodayPage() {
 
       <Link href="/today/summary" className="block" aria-label="View today's full log">
         <MacroTotals
-          totals={totals}
+          totals={displayTotals}
           targets={targets}
           phaseAdjustment={phaseAdjustment}
           targetNote={
@@ -464,6 +516,7 @@ export default async function TodayPage() {
         autoFluidMl={autoFluidMl}
         targetMl={waterTargetMl}
         goalNote={waterGoalNote}
+        alcohol={alcoholSummary}
       />
 
       <WeightCard latest={weightSnapshot} projection={weightProjection} />

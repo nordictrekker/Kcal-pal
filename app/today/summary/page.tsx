@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { dayBounds, sumTotals } from "@/lib/food";
+import { describeDrink } from "@/lib/alcohol";
 import type { FoodEntry, Profile } from "@/lib/types";
 import { MacroTotals } from "../macro-totals";
 import { EntryList } from "../entry-list";
@@ -19,20 +20,42 @@ export default async function SummaryPage() {
 
   const { start, end } = dayBounds();
 
-  const [{ data: profile }, { data: rows }] = await Promise.all([
-    supabase.from("profiles").select("*").eq("user_id", user.id).single(),
-    supabase
-      .from("food_entries")
-      .select("*")
-      .eq("user_id", user.id)
-      .gte("consumed_at", start)
-      .lt("consumed_at", end)
-      .order("consumed_at", { ascending: true }),
-  ]);
+  const [{ data: profile }, { data: rows }, { data: drinkRows }] =
+    await Promise.all([
+      supabase.from("profiles").select("*").eq("user_id", user.id).single(),
+      supabase
+        .from("food_entries")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("consumed_at", start)
+        .lt("consumed_at", end)
+        .order("consumed_at", { ascending: true }),
+      supabase
+        .from("alcohol_logs")
+        .select("id,drink_type,volume_ml,calories,standard_drinks,logged_at")
+        .eq("user_id", user.id)
+        .gte("logged_at", start)
+        .lt("logged_at", end)
+        .order("logged_at", { ascending: true }),
+    ]);
 
   const p = profile as Profile | null;
   const entries = (rows ?? []) as FoodEntry[];
-  const totals = sumTotals(entries);
+  const drinks = (drinkRows ?? []) as Array<{
+    id: string;
+    drink_type: string;
+    volume_ml: number;
+    calories: number;
+    standard_drinks: number;
+  }>;
+  const alcoholCalories = Math.round(
+    drinks.reduce((s, d) => s + Number(d.calories), 0),
+  );
+  const foodTotals = sumTotals(entries);
+  const totals = {
+    ...foodTotals,
+    calories: foodTotals.calories + alcoholCalories,
+  };
 
   // Stored targets — same numbers the home card shows.
   const targets = {
@@ -71,6 +94,31 @@ export default async function SummaryPage() {
       </p>
 
       <EntryList entries={entries} />
+
+      {drinks.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Alcohol · {alcoholCalories} kcal
+          </h2>
+          <div className="divide-y rounded-lg border">
+            {drinks.map((d) => (
+              <div
+                key={d.id}
+                className="flex items-center justify-between gap-3 p-3"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {describeDrink(d.drink_type, Number(d.volume_ml))}
+                </span>
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {Math.round(Number(d.calories))} kcal ·{" "}
+                  {(Math.round(Number(d.standard_drinks) * 10) / 10).toFixed(1)}{" "}
+                  drinks
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <Link
         href="/log"

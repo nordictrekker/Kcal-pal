@@ -67,6 +67,7 @@ export default async function WeeklyPage({
     { data: oura },
     { data: weights },
     { data: water },
+    { data: alcohol },
     { data: flowRows },
     { data: cycleFood },
     { data: cycleOura },
@@ -92,6 +93,11 @@ export default async function WeeklyPage({
     supabase
       .from("water_logs")
       .select("ml,logged_at")
+      .eq("user_id", user.id)
+      .gte("logged_at", since),
+    supabase
+      .from("alcohol_logs")
+      .select("standard_drinks,logged_at")
       .eq("user_id", user.id)
       .gte("logged_at", since),
     supabase
@@ -282,6 +288,21 @@ export default async function WeeklyPage({
     { id: "protein_hrv", ...pearson(nextDayPairs(protCmp, hrvCmp)) },
   ];
 
+  // Weekly alcohol tally (last 7 days), independent of the range tab.
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+  const drinkRows = (alcohol ?? []) as Array<{
+    standard_drinks: number;
+    logged_at: string;
+  }>;
+  const last7Drinks = drinkRows.filter((d) => new Date(d.logged_at) >= weekAgo);
+  const weekDrinks =
+    Math.round(
+      last7Drinks.reduce((s, d) => s + Number(d.standard_drinks), 0) * 10,
+    ) / 10;
+  const drinkingDays = new Set(last7Drinks.map((d) => localDay(d.logged_at)))
+    .size;
+  const afDays = 7 - drinkingDays;
+
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
       <header className="flex items-center justify-between">
@@ -299,6 +320,29 @@ export default async function WeeklyPage({
       <DigestCard initial={digestState} />
 
       <RangeTabs active={rangeKey} />
+
+      {drinkRows.length > 0 ? (
+        <section className="space-y-1 rounded-lg border p-4">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-medium">Alcohol this week</h2>
+            <span className="font-serif text-2xl tabular-nums">
+              {weekDrinks}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {weekDrinks === 1 ? "standard drink" : "standard drinks"} over{" "}
+            {drinkingDays} {drinkingDays === 1 ? "day" : "days"}
+            {afDays > 0
+              ? ` · ${afDays} alcohol-free ${afDays === 1 ? "day" : "days"}`
+              : ""}
+            .
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            A standard drink ≈ 14 g alcohol. Many guidelines suggest keeping it
+            under ~7 a week.
+          </p>
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
