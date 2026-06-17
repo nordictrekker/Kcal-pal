@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseTextMeal } from "@/lib/anthropic";
-import { isMeal } from "@/lib/food";
+import { isMeal, selectRelevantHistory } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
 export type LogState = {
@@ -38,7 +38,28 @@ export async function logTextMeal(
     return { ok: false, error: "Not signed in." };
   }
 
-  const result = await parseTextMeal(description);
+  // Feed the AI the user's prior logs for similar items so estimates stay
+  // consistent and their corrections stick.
+  const { data: histRows } = await supabase
+    .from("food_entries")
+    .select("description,serving_size,calories,protein_g,carbs_g,fat_g,edited_by_user")
+    .eq("user_id", user.id)
+    .order("consumed_at", { ascending: false })
+    .limit(200);
+  const history = selectRelevantHistory(
+    description,
+    (histRows ?? []).map((r) => ({
+      description: r.description as string,
+      serving_size: (r.serving_size as string | null) ?? null,
+      calories: (r.calories as number | null) ?? null,
+      protein_g: (r.protein_g as number | null) ?? null,
+      carbs_g: (r.carbs_g as number | null) ?? null,
+      fat_g: (r.fat_g as number | null) ?? null,
+      edited_by_user: Boolean(r.edited_by_user),
+    })),
+  );
+
+  const result = await parseTextMeal(description, history);
 
   // Never fabricate macros: on failure, save the entry with null macros and
   // surface the error so I can fix it manually.

@@ -23,6 +23,59 @@ export function defaultMeal(date = new Date()): Meal {
   return "snack";
 }
 
+// Pick the user's past entries most relevant to a new description, so the AI
+// can stay consistent with how they log (and honour their corrections).
+// Relevance = shared significant words; user-corrected and recent entries win.
+export type HistoryEntry = {
+  description: string;
+  serving_size: string | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  edited_by_user: boolean;
+};
+
+const HISTORY_STOPWORDS = new Set([
+  "with", "and", "the", "from", "plus", "extra", "some", "half", "large",
+  "small", "medium", "very", "this", "that", "had", "for", "one", "two",
+  "three", "double", "single",
+]);
+
+function significantTokens(s: string): Set<string> {
+  return new Set(
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length >= 3 && !HISTORY_STOPWORDS.has(w)),
+  );
+}
+
+export function selectRelevantHistory(
+  description: string,
+  entries: HistoryEntry[],
+  limit = 8,
+): HistoryEntry[] {
+  const qt = significantTokens(description);
+  if (qt.size === 0) return [];
+  const scored = entries
+    .map((e) => {
+      const et = significantTokens(e.description);
+      let overlap = 0;
+      for (const t of qt) if (et.has(t)) overlap++;
+      return { e, overlap };
+    })
+    .filter((x) => x.overlap > 0);
+  // Corrections first, then strongest overlap (input order is recency).
+  scored.sort(
+    (a, b) =>
+      Number(b.e.edited_by_user) - Number(a.e.edited_by_user) ||
+      b.overlap - a.overlap,
+  );
+  return scored.slice(0, limit).map((x) => x.e);
+}
+
 // Sum a list of entries into daily totals. Null macros count as 0 so a
 // failed parse doesn't poison the totals, but it's surfaced separately.
 export function sumTotals(

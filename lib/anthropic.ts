@@ -5,7 +5,10 @@ import type { ParsedNutrition } from "./types";
 export const NUTRITION_MODEL = "claude-opus-4-8";
 
 export const TEXT_SYSTEM_PROMPT =
-  "You are a nutrition database. Given a free-text meal description, return JSON only with shape {calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, serving_size: string, items: [{name, quantity, calories, protein_g, carbs_g, fat_g}], assumptions: string[]}. Estimate using USDA averages. If quantity is ambiguous assume one typical serving. Always return valid JSON, no prose.";
+  "You are a nutrition database. Given a free-text meal description, return JSON only with shape {calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, serving_size: string, items: [{name, quantity, calories, protein_g, carbs_g, fat_g}], assumptions: string[]}. Estimate using USDA averages. " +
+  "Use widely-accepted STANDARD serving sizes for well-known items unless the user specifies a quantity (e.g. a single espresso shot is 30 ml, so a double espresso is 60 ml; a standard glass of wine is 150 ml; a pint of beer is 473 ml; a slice of sandwich bread is ~30 g). Prefer these canonical references over guessing. " +
+  "You may be given the user's PREVIOUS logs for similar foods. Stay consistent with how this user logs things; entries marked [user-corrected] are the user's own corrections and must be treated as authoritative for their portions and macros. " +
+  "If quantity is still ambiguous assume one typical serving and note it in assumptions. Always return valid JSON, no prose.";
 
 // Vision uses the same schema as text plus a confidence field (0..1)
 // because photo identification is fuzzier than text.
@@ -139,8 +142,40 @@ async function callAndParse(
 
 // Parse a free-text meal description. Never fabricates: on any failure
 // returns ok:false so the caller can save nulls and surface an error.
-export async function parseTextMeal(description: string): Promise<ParseResult> {
-  return callAndParse(description);
+//
+// `history` is a short list of the user's previous logs for similar items,
+// injected as reference so estimates stay consistent with how this user logs
+// (and so their corrections stick).
+export type MealHistoryItem = {
+  description: string;
+  serving_size: string | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  edited_by_user: boolean;
+};
+
+function formatHistory(history: MealHistoryItem[]): string {
+  const n = (v: number | null) => (v == null ? "?" : Math.round(v).toString());
+  const lines = history.map((h) => {
+    const serv = h.serving_size ? ` (${h.serving_size})` : "";
+    const tag = h.edited_by_user ? " [user-corrected]" : "";
+    return `- "${h.description}"${serv}: ${n(h.calories)} kcal, P ${n(h.protein_g)}, C ${n(h.carbs_g)}, F ${n(h.fat_g)}${tag}`;
+  });
+  return lines.join("\n");
+}
+
+export async function parseTextMeal(
+  description: string,
+  history: MealHistoryItem[] = [],
+): Promise<ParseResult> {
+  if (history.length === 0) return callAndParse(description);
+  const userContent =
+    `Meal to log: ${description}\n\n` +
+    `This user's previous logs for similar items (match their portion conventions; [user-corrected] entries are authoritative):\n` +
+    `${formatHistory(history)}`;
+  return callAndParse(userContent);
 }
 
 // Fallback when OpenFoodFacts has no record for a barcode. We tell Claude
