@@ -39,6 +39,8 @@ import {
   detectBeverageFluids,
   effectiveFluidMl,
 } from "@/lib/hydration";
+import { zonedNow } from "@/lib/timezone";
+import { TimezoneSync } from "./timezone-sync";
 import { computeTargets, weightTrendLbsPerWeek, projectGoalEta } from "@/lib/targets";
 import { mean } from "@/lib/stats";
 
@@ -304,9 +306,27 @@ export default async function TodayPage() {
       ? { phase: currentPhase, description: adjustmentDescription }
       : null;
 
-  // Greeting + phase blurb. Tiny, warm, not chatty.
+  // Greeting + phase blurb. Tiny, warm, not chatty. `localNow` reflects the
+  // user's phone timezone so time-of-day logic (greeting, hydration pacing)
+  // matches their wall clock rather than the server's UTC.
   const now = new Date();
-  const hour = now.getHours();
+  const localNow = zonedNow(p?.timezone ?? null, now);
+  const hour = localNow.getHours();
+  // Travel: a stored previous zone different from the current one, set
+  // recently, means the user crossed time zones.
+  const travel =
+    p?.previous_timezone &&
+    p?.timezone &&
+    p?.timezone_updated_at &&
+    p.previous_timezone !== p.timezone
+      ? {
+          fromTz: p.previous_timezone,
+          toTz: p.timezone,
+          daysAgo:
+            (Date.now() - new Date(p.timezone_updated_at).getTime()) /
+            86_400_000,
+        }
+      : null;
   const timeGreeting =
     hour < 5 ? "Late night"
     : hour < 12 ? "Good morning"
@@ -373,7 +393,8 @@ export default async function TodayPage() {
     todayMacros: totals,
     targets,
     trends,
-    now,
+    travel,
+    now: localNow,
   });
 
   return (
@@ -381,6 +402,7 @@ export default async function TodayPage() {
       data-phase={cyclePhase ?? undefined}
       className="mx-auto max-w-md p-4 space-y-5 pb-24"
     >
+      <TimezoneSync storedTz={p?.timezone ?? null} />
       <header className="relative space-y-2">
         {cyclePhase ? (
           <PhaseFloral

@@ -67,6 +67,10 @@ export type Profile = {
   target_mode: "manual" | "auto" | null;
   protein_per_kg: number | null;
   // Cycle automation
+  // Timezone awareness
+  timezone: string | null;
+  previous_timezone: string | null;
+  timezone_updated_at: string | null;
   track_cycle: boolean;
   last_period_start: string | null; // YYYY-MM-DD
   avg_cycle_length: number | null;

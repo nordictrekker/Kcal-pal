@@ -9,6 +9,7 @@
 import type { Phase } from "./cycle";
 import type { Totals } from "./food";
 import type { Trends } from "./trends";
+import { describeZone } from "./timezone";
 
 export type InsightContext = {
   phase: Phase | null;
@@ -39,6 +40,8 @@ export type InsightContext = {
   todayMacros: Totals;
   targets: Totals;
   trends: Trends | null;
+  // Set when the user's phone timezone changed recently (travel).
+  travel?: { fromTz: string; toTz: string; daysAgo: number } | null;
   now: Date;
 };
 
@@ -262,6 +265,19 @@ const RULES: Rule[] = [
       id: "fiber_pattern",
       tone: "suggest",
       text: "Fiber's been quiet most of the week. A handful of berries, half an avocado, or a side of greens at lunch closes the gap easily.",
+    }),
+  },
+
+  // ─── Travel (high — timely and explains "off" numbers) ──────────────────
+
+  {
+    id: "travel_adjust",
+    priority: 96,
+    when: (c) => !!c.travel && c.travel.daysAgo <= 2,
+    build: (c) => ({
+      id: "travel_adjust",
+      tone: "reassure",
+      text: `Looks like you're in ${describeZone(c.travel!.toTz)} now — travel nudges sleep, appetite, and hydration. Be gentle for a day or two and keep water close; your numbers may read a little off.`,
     }),
   },
 
