@@ -39,10 +39,11 @@ export type InsightContext = {
   todayMacros: Totals;
   targets: Totals;
   trends: Trends | null;
-  // Set while the user is adjusting to a new timezone (travel/jet lag).
+  // Set while the user is recovering from travel (jet lag or a long journey).
   travel?: {
     active: boolean;
-    direction: "east" | "west";
+    kind: "jetlag" | "longhaul" | "manual";
+    direction: "east" | "west" | null;
     hoursCrossed: number;
     daysSince: number;
     toLabel: string;
@@ -283,12 +284,11 @@ const RULES: Rule[] = [
     when: (c) => !!c.travel?.active,
     build: (c) => {
       const t = c.travel!;
-      const dir = t.direction === "east" ? "eastward" : "westward";
-      return {
-        id: "travel_adjust",
-        tone: "reassure",
-        text: `You're in ${t.toLabel} now — ${t.hoursCrossed}h ${dir}. Sleep, HRV, and appetite take a few days to catch up, so I'll ease off the recovery alarms and keep your water high while you adjust.`,
-      };
+      const text =
+        t.kind === "jetlag"
+          ? `You're in ${t.toLabel} now — ${t.hoursCrossed}h ${t.direction === "east" ? "eastward" : "westward"}. Sleep, HRV, and appetite take a few days to catch up, so I'll ease off the recovery alarms and keep your water high while you adjust.`
+          : `Settling in after a long trip to ${t.toLabel}. Travel itself dents recovery — low scores are the journey, not overtraining — so I'll hold the alarms and keep your water high while you bounce back.`;
+      return { id: "travel_adjust", tone: "reassure", text };
     },
   },
 

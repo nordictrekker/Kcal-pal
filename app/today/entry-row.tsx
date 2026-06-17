@@ -7,6 +7,7 @@ import { updateEntry, deleteEntry, type EditState } from "./actions";
 import { saveEntryAsTemplate } from "../log/saved-actions";
 import { SaveEntryButton } from "../log/saved-meals";
 import type { FoodEntry } from "@/lib/types";
+import { extractComponents } from "@/lib/food-items";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,35 +16,6 @@ const initial: EditState = { ok: false };
 
 function fmt(n: number | null) {
   return n === null ? "—" : Math.round(n).toString();
-}
-
-// Component items the AI broke the meal into, e.g. "2 eggs", "toast" — each
-// with its own macros. Pulled from the stored raw parse; absent for barcode
-// scans and some manual entries.
-type ItemBreakdown = {
-  name: string;
-  quantity: string;
-  calories: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-};
-
-function itemsFrom(raw: unknown): ItemBreakdown[] {
-  if (!raw || typeof raw !== "object") return [];
-  const arr = (raw as { items?: unknown }).items;
-  if (!Array.isArray(arr)) return [];
-  return arr
-    .filter((i): i is Record<string, unknown> => !!i && typeof i === "object")
-    .map((i) => ({
-      name: typeof i.name === "string" ? i.name : "",
-      quantity: typeof i.quantity === "string" ? i.quantity : "",
-      calories: Number(i.calories) || 0,
-      protein_g: Number(i.protein_g) || 0,
-      carbs_g: Number(i.carbs_g) || 0,
-      fat_g: Number(i.fat_g) || 0,
-    }))
-    .filter((i) => i.name !== "");
 }
 
 function SaveButton() {
@@ -87,7 +59,7 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [state, formAction] = useActionState(updateEntry, initial);
-  const items = itemsFrom(entry.raw_ai_response);
+  const items = extractComponents(entry.raw_ai_response);
   const canExpand = items.length > 0;
 
   useEffect(() => {

@@ -8,24 +8,29 @@ export function TravelCard({ info }: { info: TravelInfo }) {
   const tips = jetLagTips(info);
   const dayLabel =
     info.daysSince <= 0 ? "Day 1" : `Day ${info.daysSince + 1}`;
+  const heading =
+    info.kind === "jetlag"
+      ? `Adjusting to ${info.toLabel}`
+      : "Recovering from travel";
+  const lead =
+    info.kind === "jetlag"
+      ? `${info.hoursCrossed}h ${info.direction === "east" ? "east" : "west"} — `
+      : "Long journey — ";
   return (
     <Card>
       <CardContent className="space-y-2.5 pt-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Plane className="size-4 text-muted-foreground" />
-            <span className="text-sm font-medium">
-              Adjusting to {info.toLabel}
-            </span>
+            <span className="text-sm font-medium">{heading}</span>
           </div>
           <span className="text-xs text-muted-foreground">
             {dayLabel} of ~{info.windowDays + 1}
           </span>
         </div>
         <p className="text-xs text-muted-foreground">
-          {info.hoursCrossed}h {info.direction === "east" ? "east" : "west"} —
-          recovery alarms are paused and your water goal is raised while you
-          settle. Likely back to baseline by {adjustmentDateLabel(info)}.
+          {lead}recovery alarms are paused and your water goal is raised while
+          you settle. Likely back to baseline by {adjustmentDateLabel(info)}.
         </p>
         <ul className="space-y-1">
           {tips.map((t, i) => (

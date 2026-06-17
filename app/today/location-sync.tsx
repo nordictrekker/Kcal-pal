@@ -28,7 +28,10 @@ export function LocationSync() {
 
   if (!prompt) return null;
 
-  const dir = prompt.direction === "east" ? "east" : "west";
+  const detail =
+    prompt.kind === "jetlag"
+      ? `That's ${prompt.hours}h ${prompt.direction} of home. Traveling? I'll ease off recovery alarms and raise your water goal while you adjust to the new time zone.`
+      : `That's about ${prompt.distanceKm.toLocaleString()} km from home — a long journey. Traveling? I'll raise your water goal and ease off recovery alarms while you recover from the flight.`;
   return (
     <Card>
       <CardContent className="space-y-3 pt-6">
@@ -38,11 +41,7 @@ export function LocationSync() {
             You seem to be in {prompt.label}
           </span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          That&apos;s {prompt.hours}h {dir} of home. Traveling? I&apos;ll ease
-          off recovery alarms and raise your water goal while you adjust to the
-          new time zone.
-        </p>
+        <p className="text-xs text-muted-foreground">{detail}</p>
         <div className="flex gap-2">
           <Button
             size="sm"

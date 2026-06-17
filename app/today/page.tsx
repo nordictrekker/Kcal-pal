@@ -306,7 +306,12 @@ export default async function TodayPage() {
             home_tz: p?.home_tz ?? null,
             current_tz: p?.current_tz ?? null,
             current_label: p?.current_label ?? null,
+            home_lat: p?.home_lat ?? null,
+            home_lng: p?.home_lng ?? null,
+            current_lat: p?.current_lat ?? null,
+            current_lng: p?.current_lng ?? null,
             travel_started_at: p?.travel_started_at ?? null,
+            travel_manual: p?.travel_manual ?? false,
           },
           new Date(),
         )
@@ -395,6 +400,7 @@ export default async function TodayPage() {
   const travel = travelInfo
     ? {
         active: travelInfo.active,
+        kind: travelInfo.kind,
         direction: travelInfo.direction,
         hoursCrossed: travelInfo.hoursCrossed,
         daysSince: travelInfo.daysSince,

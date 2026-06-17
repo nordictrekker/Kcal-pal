@@ -6,23 +6,28 @@ import { createClient } from "@/lib/supabase/server";
 import {
   locationFromHeaders,
   offsetDiffHours,
+  haversineKm,
   MIN_TRAVEL_OFFSET_H,
+  MIN_TRAVEL_DISTANCE_KM,
 } from "@/lib/travel";
 
 export type TravelPrompt = {
   label: string;
+  kind: "jetlag" | "longhaul";
   hours: number;
   direction: "east" | "west";
+  distanceKm: number;
 } | null;
 
 type LocProfile = {
   home_tz: string | null;
-  home_label: string | null;
+  home_lat: number | null;
+  home_lng: number | null;
   travel_status: string | null;
 };
 
-// Detect physical location from IP geolocation, compare to home, and move the
-// travel state machine forward. Never activates travel on its own — at most it
+// Detect physical location from IP geolocation, compare to home, and advance
+// the travel state machine. Never activates travel on its own — at most it
 // moves home → pending and returns a prompt for the user to confirm.
 export async function syncLocation(): Promise<{
   ok: boolean;
@@ -40,15 +45,17 @@ export async function syncLocation(): Promise<{
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("home_tz,home_label,travel_status")
+    .select("home_tz,home_lat,home_lng,travel_status")
     .eq("user_id", user.id)
     .single();
   const p = profile as LocProfile | null;
 
   const now = new Date();
-  const patch: Record<string, string | null> = {
+  const patch: Record<string, string | number | null> = {
     current_tz: loc.tz,
     current_label: loc.label,
+    current_lat: loc.lat,
+    current_lng: loc.lng,
     location_at: now.toISOString(),
   };
 
@@ -56,24 +63,32 @@ export async function syncLocation(): Promise<{
   if (!p?.home_tz) {
     patch.home_tz = loc.tz;
     patch.home_label = loc.label;
+    patch.home_lat = loc.lat;
+    patch.home_lng = loc.lng;
     patch.travel_status = "home";
     await supabase.from("profiles").update(patch).eq("user_id", user.id);
     return { ok: true, prompt: null };
   }
 
   const diffH = offsetDiffHours(p.home_tz, loc.tz, now);
-  const meaningful = Math.abs(diffH) >= MIN_TRAVEL_OFFSET_H;
+  const distanceKm = haversineKm(
+    { lat: p.home_lat, lng: p.home_lng },
+    { lat: loc.lat, lng: loc.lng },
+  );
+  const isJetlag = Math.abs(diffH) >= MIN_TRAVEL_OFFSET_H;
+  const isLonghaul = distanceKm >= MIN_TRAVEL_DISTANCE_KM;
+  const meaningful = isJetlag || isLonghaul;
   const status = p.travel_status ?? "home";
   const promptFor = (): TravelPrompt => ({
     label: loc.label,
+    kind: isJetlag ? "jetlag" : "longhaul",
     hours: Math.round(Math.abs(diffH)),
     direction: diffH > 0 ? "east" : "west",
+    distanceKm,
   });
   let prompt: TravelPrompt = null;
 
   if (!meaningful) {
-    // Same offset as home (e.g. Madrid↔Paris) — not jet lag. If we'd drifted
-    // into pending/traveling and have returned, reset.
     if (status !== "home") patch.travel_status = "home";
   } else if (status === "home") {
     patch.travel_status = "pending";
@@ -81,8 +96,7 @@ export async function syncLocation(): Promise<{
   } else if (status === "pending") {
     prompt = promptFor();
   }
-  // status === "traveling" with a meaningful offset: leave it; Today shows the
-  // travel card.
+  // status === "traveling" → leave it; Today shows the card.
 
   await supabase.from("profiles").update(patch).eq("user_id", user.id);
   if (patch.travel_status && patch.travel_status !== status) {
@@ -91,29 +105,52 @@ export async function syncLocation(): Promise<{
   return { ok: true, prompt };
 }
 
-// User confirmed they're traveling → activate the adjustment window.
-export async function confirmTravel(): Promise<{ ok: boolean }> {
+async function setStatus(
+  patch: Record<string, string | number | boolean | null>,
+): Promise<{ ok: boolean }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false };
-
   const { error } = await supabase
     .from("profiles")
-    .update({
-      travel_status: "traveling",
-      travel_started_at: new Date().toISOString(),
-    })
+    .update(patch)
     .eq("user_id", user.id);
   if (error) return { ok: false };
-
   revalidatePath("/today");
+  revalidatePath("/settings");
   return { ok: true };
 }
 
-// User said this isn't travel (relocation, VPN, or a bad IP guess) → adopt the
-// current location as the new home and clear travel.
+// Confirm a detected trip (or start one manually from Settings).
+export async function confirmTravel(): Promise<{ ok: boolean }> {
+  return setStatus({
+    travel_status: "traveling",
+    travel_started_at: new Date().toISOString(),
+  });
+}
+
+// Start a trip manually even if IP detection didn't catch it.
+export async function startManualTravel(): Promise<{ ok: boolean }> {
+  return setStatus({
+    travel_status: "traveling",
+    travel_manual: true,
+    travel_started_at: new Date().toISOString(),
+  });
+}
+
+// "I'm back home": clear travel without changing the stored home location.
+export async function endTravel(): Promise<{ ok: boolean }> {
+  return setStatus({
+    travel_status: "home",
+    travel_manual: false,
+    travel_started_at: null,
+  });
+}
+
+// "No, this isn't travel — I live here": adopt current location as the new
+// home (relocation, VPN, or a bad IP guess) and clear travel.
 export async function dismissTravel(): Promise<{ ok: boolean }> {
   const supabase = await createClient();
   const {
@@ -123,22 +160,23 @@ export async function dismissTravel(): Promise<{ ok: boolean }> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("current_tz,current_label")
+    .select("current_tz,current_label,current_lat,current_lng")
     .eq("user_id", user.id)
     .single();
-  const c = profile as { current_tz: string | null; current_label: string | null } | null;
+  const c = profile as {
+    current_tz: string | null;
+    current_label: string | null;
+    current_lat: number | null;
+    current_lng: number | null;
+  } | null;
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      home_tz: c?.current_tz ?? null,
-      home_label: c?.current_label ?? null,
-      travel_status: "home",
-      travel_started_at: null,
-    })
-    .eq("user_id", user.id);
-  if (error) return { ok: false };
-
-  revalidatePath("/today");
-  return { ok: true };
+  return setStatus({
+    home_tz: c?.current_tz ?? null,
+    home_label: c?.current_label ?? null,
+    home_lat: c?.current_lat ?? null,
+    home_lng: c?.current_lng ?? null,
+    travel_status: "home",
+    travel_manual: false,
+    travel_started_at: null,
+  });
 }

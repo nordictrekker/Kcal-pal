@@ -7,6 +7,7 @@ import { Notifications } from "./notifications";
 import { ThemeToggle } from "./theme-toggle";
 import { ShortcutCard } from "./shortcut-card";
 import { TargetsCard, type Targets } from "./targets-card";
+import { TravelCard, type TravelState } from "./travel-card";
 import { ProfileCard, type ProfileSettings } from "./profile-card";
 import { PhaseModifiersCard } from "./phase-card";
 import { normalizeModifiers } from "@/lib/phase-modifiers";
@@ -38,6 +39,12 @@ export default async function SettingsPage() {
     fiber_g: p?.daily_fiber_target_g ?? 30,
     water_oz: Math.round((p?.daily_water_target_ml ?? 2400) / 29.5735),
     water_mode: (p?.water_goal_mode ?? "auto") as "auto" | "manual",
+  };
+  const travelState: TravelState = {
+    status: (p?.travel_status ?? "home") as TravelState["status"],
+    homeLabel: p?.home_label ?? null,
+    currentLabel: p?.current_label ?? null,
+    startedAt: p?.travel_started_at ?? null,
   };
   const phaseModifiers = normalizeModifiers(p?.phase_modifiers);
   const profileSettings: ProfileSettings = {
@@ -77,6 +84,8 @@ export default async function SettingsPage() {
       <ProfileCard initial={profileSettings} />
 
       <TargetsCard targets={targets} />
+
+      <TravelCard state={travelState} />
 
       <PhaseModifiersCard initial={phaseModifiers} />
 

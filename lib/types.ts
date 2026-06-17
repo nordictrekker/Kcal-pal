@@ -74,11 +74,16 @@ export type Profile = {
   // Location-based travel detection (IP geolocation + user confirmation)
   home_tz: string | null;
   home_label: string | null;
+  home_lat: number | null;
+  home_lng: number | null;
   current_tz: string | null;
   current_label: string | null;
+  current_lat: number | null;
+  current_lng: number | null;
   location_at: string | null;
   travel_status: "home" | "pending" | "traveling" | null;
   travel_started_at: string | null;
+  travel_manual: boolean | null;
   track_cycle: boolean;
   last_period_start: string | null; // YYYY-MM-DD
   avg_cycle_length: number | null;
