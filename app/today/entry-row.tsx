@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { updateEntry, deleteEntry, type EditState } from "./actions";
 import { saveEntryAsTemplate } from "../log/saved-actions";
 import { SaveEntryButton } from "../log/saved-meals";
@@ -15,6 +15,35 @@ const initial: EditState = { ok: false };
 
 function fmt(n: number | null) {
   return n === null ? "—" : Math.round(n).toString();
+}
+
+// Component items the AI broke the meal into, e.g. "2 eggs", "toast" — each
+// with its own macros. Pulled from the stored raw parse; absent for barcode
+// scans and some manual entries.
+type ItemBreakdown = {
+  name: string;
+  quantity: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+};
+
+function itemsFrom(raw: unknown): ItemBreakdown[] {
+  if (!raw || typeof raw !== "object") return [];
+  const arr = (raw as { items?: unknown }).items;
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .filter((i): i is Record<string, unknown> => !!i && typeof i === "object")
+    .map((i) => ({
+      name: typeof i.name === "string" ? i.name : "",
+      quantity: typeof i.quantity === "string" ? i.quantity : "",
+      calories: Number(i.calories) || 0,
+      protein_g: Number(i.protein_g) || 0,
+      carbs_g: Number(i.carbs_g) || 0,
+      fat_g: Number(i.fat_g) || 0,
+    }))
+    .filter((i) => i.name !== "");
 }
 
 function SaveButton() {
@@ -56,7 +85,10 @@ function MacroField({
 
 export function EntryRow({ entry }: { entry: FoodEntry }) {
   const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [state, formAction] = useActionState(updateEntry, initial);
+  const items = itemsFrom(entry.raw_ai_response);
+  const canExpand = items.length > 0;
 
   useEffect(() => {
     if (state.ok) setEditing(false);
@@ -95,48 +127,89 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
   const missing = entry.calories === null;
 
   return (
-    <div className="flex items-center gap-3 p-3">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">
-          {entry.description}
-          {entry.edited_by_user ? (
-            <span className="ml-1 text-xs text-muted-foreground">(edited)</span>
-          ) : null}
-        </p>
-        {missing ? (
-          <p className="text-xs text-destructive">Macros not parsed</p>
-        ) : (
-          <p className="text-xs tabular-nums text-muted-foreground">
-            {fmt(entry.calories)} kcal · P {fmt(entry.protein_g)} · C{" "}
-            {fmt(entry.carbs_g)} · F {fmt(entry.fat_g)} · Fib{" "}
-            {fmt(entry.fiber_g)}
-          </p>
-        )}
-      </div>
-      <SaveEntryButton
-        onSave={async (label) => {
-          const r = await saveEntryAsTemplate(entry.id, label);
-          if (!r.ok) throw new Error(r.error ?? "Save failed");
-        }}
-      />
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        aria-label="Edit"
-        className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
-      >
-        <Pencil className="size-4" />
-      </button>
-      <form action={deleteEntry}>
-        <input type="hidden" name="id" value={entry.id} />
+    <div>
+      <div className="flex items-center gap-3 p-3">
         <button
-          type="submit"
-          aria-label="Delete"
-          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-destructive"
+          type="button"
+          onClick={() => canExpand && setExpanded((v) => !v)}
+          disabled={!canExpand}
+          aria-expanded={canExpand ? expanded : undefined}
+          aria-label={canExpand ? "Show breakdown" : undefined}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
         >
-          <Trash2 className="size-4" />
+          {canExpand ? (
+            <ChevronDown
+              className={`size-4 shrink-0 text-muted-foreground transition-transform ${
+                expanded ? "rotate-180" : ""
+              }`}
+            />
+          ) : null}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">
+              {entry.description}
+              {entry.edited_by_user ? (
+                <span className="ml-1 text-xs text-muted-foreground">
+                  (edited)
+                </span>
+              ) : null}
+            </span>
+            {missing ? (
+              <span className="block text-xs text-destructive">
+                Macros not parsed
+              </span>
+            ) : (
+              <span className="block text-xs tabular-nums text-muted-foreground">
+                {fmt(entry.calories)} kcal · P {fmt(entry.protein_g)} · C{" "}
+                {fmt(entry.carbs_g)} · F {fmt(entry.fat_g)} · Fib{" "}
+                {fmt(entry.fiber_g)}
+              </span>
+            )}
+          </span>
         </button>
-      </form>
+        <SaveEntryButton
+          onSave={async (label) => {
+            const r = await saveEntryAsTemplate(entry.id, label);
+            if (!r.ok) throw new Error(r.error ?? "Save failed");
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          aria-label="Edit"
+          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <Pencil className="size-4" />
+        </button>
+        <form action={deleteEntry}>
+          <input type="hidden" name="id" value={entry.id} />
+          <button
+            type="submit"
+            aria-label="Delete"
+            className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-destructive"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </form>
+      </div>
+
+      {canExpand && expanded ? (
+        <ul className="space-y-1.5 border-t bg-muted/30 px-3 py-2.5 pl-9">
+          {items.map((it, idx) => (
+            <li key={idx} className="flex items-baseline justify-between gap-3">
+              <span className="min-w-0 flex-1 truncate text-xs">
+                {it.quantity ? (
+                  <span className="text-muted-foreground">{it.quantity} </span>
+                ) : null}
+                {it.name}
+              </span>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                {Math.round(it.calories)} kcal · P {Math.round(it.protein_g)} · C{" "}
+                {Math.round(it.carbs_g)} · F {Math.round(it.fat_g)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

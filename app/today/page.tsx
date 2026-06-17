@@ -6,7 +6,6 @@ import { dayBounds, sumTotals } from "@/lib/food";
 import type { FoodEntry, Profile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { MacroTotals } from "./macro-totals";
-import { EntryList } from "./entry-list";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
 import { WeightCard, type WeightSnapshot } from "./weight-card";
 import { WaterCard } from "./water-card";
@@ -438,14 +437,20 @@ export default async function TodayPage() {
         ) : null}
       </header>
 
+      <Link href="/today/summary" className="block" aria-label="View today's full log">
+        <MacroTotals
+          totals={totals}
+          targets={targets}
+          phaseAdjustment={phaseAdjustment}
+          targetNote={
+            computedTargets.source !== "manual" ? computedTargets.note : null
+          }
+          showLogHint
+        />
+      </Link>
+
       {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}
-      <WeightCard latest={weightSnapshot} projection={weightProjection} />
-      <WaterCard
-        loggedMl={loggedFluidMl}
-        autoFluidMl={autoFluidMl}
-        targetMl={waterTargetMl}
-        goalNote={waterGoalNote}
-      />
+
       {cycleForecast && cycleDay ? (
         <CycleForecastCard
           forecast={cycleForecast}
@@ -454,16 +459,14 @@ export default async function TodayPage() {
         />
       ) : null}
 
-      <MacroTotals
-        totals={totals}
-        targets={targets}
-        phaseAdjustment={phaseAdjustment}
-        targetNote={
-          computedTargets.source !== "manual" ? computedTargets.note : null
-        }
+      <WaterCard
+        loggedMl={loggedFluidMl}
+        autoFluidMl={autoFluidMl}
+        targetMl={waterTargetMl}
+        goalNote={waterGoalNote}
       />
 
-      <EntryList entries={list} />
+      <WeightCard latest={weightSnapshot} projection={weightProjection} />
 
       <nav className="flex justify-center gap-4 pt-2 text-sm text-muted-foreground">
         <Link href="/weekly" className="underline-offset-4 hover:underline">

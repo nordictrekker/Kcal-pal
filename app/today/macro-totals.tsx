@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Totals } from "@/lib/food";
 
@@ -51,12 +52,15 @@ export function MacroTotals({
   targets,
   phaseAdjustment,
   targetNote,
+  showLogHint,
 }: {
   totals: Totals;
   targets: Totals;
   phaseAdjustment?: { phase: string; description: string } | null;
   // Short explanation when targets are auto-computed (e.g. from Oura burn).
   targetNote?: string | null;
+  // When true, renders a "View full log" affordance (card is wrapped in a link).
+  showLogHint?: boolean;
 }) {
   const calPct = targets.calories > 0
     ? Math.min(100, (totals.calories / targets.calories) * 100)
@@ -71,8 +75,11 @@ export function MacroTotals({
             <span className="font-serif text-5xl font-medium leading-none tabular-nums">
               {round(totals.calories)}
             </span>
-            <span className="text-sm tabular-nums text-muted-foreground">
+            <span className="flex items-baseline gap-1 text-sm tabular-nums text-muted-foreground">
               of {targets.calories} kcal
+              {showLogHint ? (
+                <ChevronRight className="size-4 self-center text-muted-foreground/70" />
+              ) : null}
             </span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
@@ -124,6 +131,11 @@ export function MacroTotals({
             colorVar="--macro-fiber"
           />
         </div>
+        {showLogHint ? (
+          <p className="flex items-center justify-end gap-0.5 text-xs text-muted-foreground">
+            View full log <ChevronRight className="size-3.5" />
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );
