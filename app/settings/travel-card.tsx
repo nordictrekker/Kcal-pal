@@ -8,7 +8,9 @@ import {
   startManualTravel,
   endTravel,
   setHomeToCurrent,
+  setHomeBaseCity,
 } from "../today/location-actions";
+import { HomeBaseSearch } from "@/components/home-base-search";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -68,6 +70,10 @@ export function TravelCard({ state }: { state: TravelState }) {
               Set {state.currentLabel} as my home base
             </Button>
           ) : null}
+          <HomeBaseSearch
+            disabled={pending}
+            onSelect={(city) => run(() => setHomeBaseCity(city))}
+          />
         </div>
 
         {/* Status + controls */}

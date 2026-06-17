@@ -17,6 +17,8 @@ export type OnboardingPayload = {
   last_period_start: string | null; // YYYY-MM-DD
   avg_cycle_length: number;
   avg_period_length: number;
+  // Optional home base picked via city search.
+  home?: { label: string; tz: string; lat: number; lng: number } | null;
 };
 
 export type OnboardingResult = { ok: boolean; error?: string };
@@ -75,6 +77,19 @@ export async function completeOnboarding(
     goalWeight = p.goal_weight_lbs;
   }
 
+  // Optional home base from the city search. Stored as home so travel
+  // detection has a correct baseline even for someone who signs up abroad.
+  const home =
+    p.home && p.home.tz && Number.isFinite(p.home.lat) && Number.isFinite(p.home.lng)
+      ? {
+          home_tz: p.home.tz,
+          home_label: p.home.label,
+          home_lat: p.home.lat,
+          home_lng: p.home.lng,
+          travel_status: "home" as const,
+        }
+      : {};
+
   const { error: profErr } = await supabase
     .from("profiles")
     .update({
@@ -90,6 +105,7 @@ export async function completeOnboarding(
       last_period_start: lastPeriod,
       avg_cycle_length: cycleLen,
       avg_period_length: periodLen,
+      ...home,
       onboarding_completed: true,
     })
     .eq("user_id", user.id);

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { HomeBaseSearch } from "@/components/home-base-search";
+import type { CityResult } from "@/lib/geocode";
 import { completeOnboarding, type OnboardingPayload } from "./actions";
 
 export type WizardPrefill = {
@@ -104,6 +106,7 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
   );
   const [cycleLen, setCycleLen] = useState(String(prefill.avg_cycle_length));
   const [periodLen, setPeriodLen] = useState(String(prefill.avg_period_length));
+  const [home, setHome] = useState<CityResult | null>(null);
 
   const heightIn =
     (Number(feet) || 0) * 12 + (Number(inches) || 0);
@@ -273,6 +276,27 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
       ),
     },
     {
+      title: "Home base",
+      subtitle:
+        "Where are you normally based? Used only to spot travel and jet lag — set it even if you're abroad right now.",
+      valid: true,
+      body: (
+        <div className="space-y-3">
+          <HomeBaseSearch onSelect={setHome} />
+          {home ? (
+            <p className="rounded-lg border bg-primary/10 px-3 py-2 text-sm">
+              Home base: <span className="font-medium">{home.label}</span>
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Optional — you can skip this and we&apos;ll set it from your
+              location, or change it later in Settings.
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
       title: "Cycle",
       subtitle:
         "Kcal-pal can shift your targets and insights across your cycle, and auto-track it from Apple Health.",
@@ -378,6 +402,9 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
       last_period_start: trackCycle && periodStart ? periodStart : null,
       avg_cycle_length: Number(cycleLen) || 28,
       avg_period_length: Number(periodLen) || 5,
+      home: home
+        ? { label: home.label, tz: home.tz, lat: home.lat, lng: home.lng }
+        : null,
     };
     start(async () => {
       const r = await completeOnboarding(payload);

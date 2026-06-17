@@ -10,6 +10,7 @@ import {
   MIN_TRAVEL_OFFSET_H,
   MIN_TRAVEL_DISTANCE_KM,
 } from "@/lib/travel";
+import { searchCities, type CityResult } from "@/lib/geocode";
 
 export type TravelPrompt = {
   label: string;
@@ -145,6 +146,26 @@ export async function startManualTravel(): Promise<{ ok: boolean }> {
 // dismissTravel, named for the Settings control.
 export async function setHomeToCurrent(): Promise<{ ok: boolean }> {
   return dismissTravel();
+}
+
+// Typeahead for the home-base city search (onboarding + Settings).
+export async function searchHomeCities(query: string): Promise<CityResult[]> {
+  return searchCities(query);
+}
+
+// Set home base to a searched city and clear travel.
+export async function setHomeBaseCity(
+  city: CityResult,
+): Promise<{ ok: boolean }> {
+  return setStatus({
+    home_tz: city.tz,
+    home_label: city.label,
+    home_lat: city.lat,
+    home_lng: city.lng,
+    travel_status: "home",
+    travel_manual: false,
+    travel_started_at: null,
+  });
 }
 
 // "I'm back home": clear travel without changing the stored home location.
