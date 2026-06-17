@@ -39,9 +39,11 @@ import {
   effectiveFluidMl,
 } from "@/lib/hydration";
 import { zonedNow } from "@/lib/timezone";
+import { analyzeTravel, travelHydrationOffsetMl } from "@/lib/travel";
 import { hydrationOffsetMl } from "@/lib/alcohol";
 import { mlToOz } from "@/lib/hydration";
 import { TimezoneSync } from "./timezone-sync";
+import { TravelCard } from "./travel-card";
 import { computeTargets, weightTrendLbsPerWeek, projectGoalEta } from "@/lib/targets";
 import { mean } from "@/lib/stats";
 
@@ -293,12 +295,35 @@ export default async function TodayPage() {
     count: alcoholToday.length,
   };
 
-  const waterOffsetMl = hydrationOffsetMl(drinksToday, drinksYesterday);
-  const waterTargetMl = baseWaterTargetMl + waterOffsetMl;
+  // Travel / jet lag: zones crossed, direction, and an adjustment window from
+  // the stored timezone change. Drives the travel card, hydration bump, and
+  // alarm suppression below.
+  const travelInfo = analyzeTravel(
+    {
+      previous_timezone: p?.previous_timezone ?? null,
+      timezone: p?.timezone ?? null,
+      timezone_updated_at: p?.timezone_updated_at ?? null,
+    },
+    new Date(),
+  );
+
+  // When jet-lagged, exclude Oura from the change date onward from trends.
+  const travelExcludeFrom =
+    travelInfo?.active && p?.timezone_updated_at
+      ? new Date(p.timezone_updated_at).toISOString().slice(0, 10)
+      : null;
+
+  const alcoholOffsetMl = hydrationOffsetMl(drinksToday, drinksYesterday);
+  const travelOffsetMl = travelHydrationOffsetMl(travelInfo);
+  const waterTargetMl = baseWaterTargetMl + alcoholOffsetMl + travelOffsetMl;
   const baseGoalNote = waterAuto ? describeWaterGoal(smartGoalInput) : undefined;
+  const offsetNotes = [
+    alcoholOffsetMl > 0 ? `+${mlToOz(alcoholOffsetMl)} oz to offset alcohol` : null,
+    travelOffsetMl > 0 ? `+${mlToOz(travelOffsetMl)} oz for travel` : null,
+  ].filter(Boolean);
   const waterGoalNote =
-    waterOffsetMl > 0
-      ? `${baseGoalNote ? baseGoalNote + " · " : ""}+${mlToOz(waterOffsetMl)} oz to offset alcohol`
+    offsetNotes.length > 0
+      ? `${baseGoalNote ? baseGoalNote + " · " : ""}${offsetNotes.join(" · ")}`
       : baseGoalNote;
 
   // Calories shown on the day's card include alcohol (it's energy too).
@@ -362,21 +387,15 @@ export default async function TodayPage() {
   const now = new Date();
   const localNow = zonedNow(p?.timezone ?? null, now);
   const hour = localNow.getHours();
-  // Travel: a stored previous zone different from the current one, set
-  // recently, means the user crossed time zones.
-  const travel =
-    p?.previous_timezone &&
-    p?.timezone &&
-    p?.timezone_updated_at &&
-    p.previous_timezone !== p.timezone
-      ? {
-          fromTz: p.previous_timezone,
-          toTz: p.timezone,
-          daysAgo:
-            (Date.now() - new Date(p.timezone_updated_at).getTime()) /
-            86_400_000,
-        }
-      : null;
+  const travel = travelInfo
+    ? {
+        active: travelInfo.active,
+        direction: travelInfo.direction,
+        hoursCrossed: travelInfo.hoursCrossed,
+        daysSince: travelInfo.daysSince,
+        toLabel: travelInfo.toLabel,
+      }
+    : null;
   const timeGreeting =
     hour < 5 ? "Late night"
     : hour < 12 ? "Good morning"
@@ -400,12 +419,20 @@ export default async function TodayPage() {
       fat_g: (f.fat_g as number | null) ?? null,
       fiber_g: (f.fiber_g as number | null) ?? null,
     })),
-    oura: (trendOura ?? []).map((o) => ({
-      date: o.date as string,
-      sleep_score: (o.sleep_score as number | null) ?? null,
-      hrv_avg: (o.hrv_avg as number | null) ?? null,
-      readiness_score: (o.readiness_score as number | null) ?? null,
-    })),
+    // Protective baselines: while adjusting to a new timezone, drop the
+    // jet-lag days' Oura from the trend signals so they don't trigger false
+    // "readiness sliding / sleep debt" patterns.
+    oura: (trendOura ?? [])
+      .filter(
+        (o) =>
+          !travelExcludeFrom || (o.date as string) < travelExcludeFrom,
+      )
+      .map((o) => ({
+        date: o.date as string,
+        sleep_score: (o.sleep_score as number | null) ?? null,
+        hrv_avg: (o.hrv_avg as number | null) ?? null,
+        readiness_score: (o.readiness_score as number | null) ?? null,
+      })),
     cycle: derivedPhases(
       p?.track_cycle ? (p.last_period_start ?? null) : null,
       cycleSettings,
@@ -489,6 +516,8 @@ export default async function TodayPage() {
         ) : null}
       </header>
 
+      {travelInfo?.active ? <TravelCard info={travelInfo} /> : null}
+
       <Link href="/today/summary" className="block" aria-label="View today's full log">
         <MacroTotals
           totals={displayTotals}
@@ -501,7 +530,9 @@ export default async function TodayPage() {
         />
       </Link>
 
-      {ouraEnabled ? <OuraCard data={ouraSnapshot} /> : null}
+      {ouraEnabled ? (
+        <OuraCard data={ouraSnapshot} travelAffected={travelInfo?.active} />
+      ) : null}
 
       {cycleForecast && cycleDay ? (
         <CycleForecastCard

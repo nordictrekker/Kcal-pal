@@ -83,11 +83,19 @@ function Stat({
   );
 }
 
-export function OuraCard({ data }: { data: OuraSnapshot }) {
+export function OuraCard({
+  data,
+  travelAffected,
+}: {
+  data: OuraSnapshot;
+  travelAffected?: boolean;
+}) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<SyncResult | null>(null);
   const band = bandFor(data?.readiness_score ?? null);
-  const vibe = readinessVibe(band);
+  // While adjusting to a new timezone, Oura misattributes sleep across zones,
+  // so we mute the readiness coaching and flag the data instead.
+  const vibe = travelAffected ? null : readinessVibe(band);
 
   function handleSync() {
     start(async () => {
@@ -165,6 +173,12 @@ export function OuraCard({ data }: { data: OuraSnapshot }) {
             ) : null}
             {vibe ? (
               <p className="text-xs text-muted-foreground">{vibe}</p>
+            ) : null}
+            {travelAffected ? (
+              <p className="border-t pt-2 text-xs text-muted-foreground">
+                Travel-affected — Oura can misattribute sleep across time
+                zones for a few days, so today&apos;s scores may read low.
+              </p>
             ) : null}
           </>
         ) : (

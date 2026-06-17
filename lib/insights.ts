@@ -9,7 +9,6 @@
 import type { Phase } from "./cycle";
 import type { Totals } from "./food";
 import type { Trends } from "./trends";
-import { describeZone } from "./timezone";
 
 export type InsightContext = {
   phase: Phase | null;
@@ -40,8 +39,14 @@ export type InsightContext = {
   todayMacros: Totals;
   targets: Totals;
   trends: Trends | null;
-  // Set when the user's phone timezone changed recently (travel).
-  travel?: { fromTz: string; toTz: string; daysAgo: number } | null;
+  // Set while the user is adjusting to a new timezone (travel/jet lag).
+  travel?: {
+    active: boolean;
+    direction: "east" | "west";
+    hoursCrossed: number;
+    daysSince: number;
+    toLabel: string;
+  } | null;
   // Standard drinks today / yesterday, when any are logged.
   alcohol?: { drinksToday: number; drinksYesterday: number } | null;
   now: Date;
@@ -275,12 +280,16 @@ const RULES: Rule[] = [
   {
     id: "travel_adjust",
     priority: 96,
-    when: (c) => !!c.travel && c.travel.daysAgo <= 2,
-    build: (c) => ({
-      id: "travel_adjust",
-      tone: "reassure",
-      text: `Looks like you're in ${describeZone(c.travel!.toTz)} now — travel nudges sleep, appetite, and hydration. Be gentle for a day or two and keep water close; your numbers may read a little off.`,
-    }),
+    when: (c) => !!c.travel?.active,
+    build: (c) => {
+      const t = c.travel!;
+      const dir = t.direction === "east" ? "eastward" : "westward";
+      return {
+        id: "travel_adjust",
+        tone: "reassure",
+        text: `You're in ${t.toLabel} now — ${t.hoursCrossed}h ${dir}. Sleep, HRV, and appetite take a few days to catch up, so I'll ease off the recovery alarms and keep your water high while you adjust.`,
+      };
+    },
   },
 
   // ─── Alcohol recovery (explains a funky morning) ────────────────────────
@@ -537,9 +546,22 @@ const RULES: Rule[] = [
   },
 ];
 
+// Recovery/training alarms that are unreliable during jet lag — Oura
+// misreads sleep across zones and the body is genuinely dysregulated, so
+// these would be false positives. Held while the travel window is active.
+const SUPPRESS_DURING_TRAVEL = new Set([
+  "low_readiness_recovery",
+  "hrv_dip_overreach",
+  "sleep_debt_week",
+  "readiness_slide",
+  "post_exertion_easy_day",
+]);
+
 export function pickInsight(ctx: InsightContext): Insight | null {
+  const traveling = !!ctx.travel?.active;
   let best: { rule: Rule; insight: Insight } | null = null;
   for (const rule of RULES) {
+    if (traveling && SUPPRESS_DURING_TRAVEL.has(rule.id)) continue;
     if (!rule.when(ctx)) continue;
     if (best === null || rule.priority > best.rule.priority) {
       best = { rule, insight: rule.build(ctx) };
