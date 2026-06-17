@@ -39,10 +39,11 @@ import {
   effectiveFluidMl,
 } from "@/lib/hydration";
 import { zonedNow } from "@/lib/timezone";
-import { analyzeTravel, travelHydrationOffsetMl } from "@/lib/travel";
+import { travelInfoFrom, travelHydrationOffsetMl } from "@/lib/travel";
 import { hydrationOffsetMl } from "@/lib/alcohol";
 import { mlToOz } from "@/lib/hydration";
 import { TimezoneSync } from "./timezone-sync";
+import { LocationSync } from "./location-sync";
 import { TravelCard } from "./travel-card";
 import { computeTargets, weightTrendLbsPerWeek, projectGoalEta } from "@/lib/targets";
 import { mean } from "@/lib/stats";
@@ -295,22 +296,26 @@ export default async function TodayPage() {
     count: alcoholToday.length,
   };
 
-  // Travel / jet lag: zones crossed, direction, and an adjustment window from
-  // the stored timezone change. Drives the travel card, hydration bump, and
-  // alarm suppression below.
-  const travelInfo = analyzeTravel(
-    {
-      previous_timezone: p?.previous_timezone ?? null,
-      timezone: p?.timezone ?? null,
-      timezone_updated_at: p?.timezone_updated_at ?? null,
-    },
-    new Date(),
-  );
+  // Travel / jet lag: only active once the user has confirmed travel. Derived
+  // from the offset between home and current physical (IP) location. Drives the
+  // travel card, hydration bump, and alarm suppression below.
+  const travelInfo =
+    p?.travel_status === "traveling"
+      ? travelInfoFrom(
+          {
+            home_tz: p?.home_tz ?? null,
+            current_tz: p?.current_tz ?? null,
+            current_label: p?.current_label ?? null,
+            travel_started_at: p?.travel_started_at ?? null,
+          },
+          new Date(),
+        )
+      : null;
 
-  // When jet-lagged, exclude Oura from the change date onward from trends.
+  // When jet-lagged, exclude Oura from the travel start onward from trends.
   const travelExcludeFrom =
-    travelInfo?.active && p?.timezone_updated_at
-      ? new Date(p.timezone_updated_at).toISOString().slice(0, 10)
+    travelInfo?.active && p?.travel_started_at
+      ? new Date(p.travel_started_at).toISOString().slice(0, 10)
       : null;
 
   const alcoholOffsetMl = hydrationOffsetMl(drinksToday, drinksYesterday);
@@ -516,6 +521,7 @@ export default async function TodayPage() {
         ) : null}
       </header>
 
+      <LocationSync />
       {travelInfo?.active ? <TravelCard info={travelInfo} /> : null}
 
       <Link href="/today/summary" className="block" aria-label="View today's full log">

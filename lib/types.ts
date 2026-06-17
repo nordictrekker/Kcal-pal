@@ -67,10 +67,18 @@ export type Profile = {
   target_mode: "manual" | "auto" | null;
   protein_per_kg: number | null;
   // Cycle automation
-  // Timezone awareness
+  // Timezone awareness (device clock, for local time-of-day display)
   timezone: string | null;
   previous_timezone: string | null;
   timezone_updated_at: string | null;
+  // Location-based travel detection (IP geolocation + user confirmation)
+  home_tz: string | null;
+  home_label: string | null;
+  current_tz: string | null;
+  current_label: string | null;
+  location_at: string | null;
+  travel_status: "home" | "pending" | "traveling" | null;
+  travel_started_at: string | null;
   track_cycle: boolean;
   last_period_start: string | null; // YYYY-MM-DD
   avg_cycle_length: number | null;
