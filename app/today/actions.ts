@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseTextMeal } from "@/lib/anthropic";
-import { selectRelevantHistory } from "@/lib/food";
+import { selectRelevantHistory, nutrientColumns } from "@/lib/food";
 
 const MAX_DESC = 1000;
 
@@ -124,12 +124,7 @@ export async function reanalyzeEntry(
     .from("food_entries")
     .update({
       description: text,
-      calories: d.calories,
-      protein_g: d.protein_g,
-      carbs_g: d.carbs_g,
-      fat_g: d.fat_g,
-      fiber_g: d.fiber_g,
-      serving_size: d.serving_size || null,
+      ...nutrientColumns(d),
       raw_ai_response: (result.raw as object) ?? null,
       edited_by_user: true,
     })

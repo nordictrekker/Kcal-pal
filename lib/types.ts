@@ -15,6 +15,16 @@ export type ParsedNutrition = {
   carbs_g: number;
   fat_g: number;
   fiber_g: number;
+  // Extended nutrients (AI-estimated; directional). 0 when not estimable.
+  saturated_fat_g: number;
+  cholesterol_mg: number;
+  iron_mg: number;
+  calcium_mg: number;
+  magnesium_mg: number;
+  vitamin_d_mcg: number;
+  omega3_mg: number;
+  // Distinct whole-plant foods in the meal (for plant-diversity goal).
+  plants: string[];
   serving_size: string;
   items: ParsedItem[];
   assumptions: string[];
@@ -39,6 +49,14 @@ export type FoodEntry = {
   carbs_g: number | null;
   fat_g: number | null;
   fiber_g: number | null;
+  saturated_fat_g: number | null;
+  cholesterol_mg: number | null;
+  iron_mg: number | null;
+  calcium_mg: number | null;
+  magnesium_mg: number | null;
+  vitamin_d_mcg: number | null;
+  omega3_mg: number | null;
+  plants: string[] | null;
   serving_size: string | null;
   raw_ai_response: unknown;
   edited_by_user: boolean;
@@ -54,6 +72,8 @@ export type Profile = {
   daily_fiber_target_g: number;
   daily_water_target_ml: number;
   water_goal_mode: "auto" | "manual" | null;
+  // Which metric keys to show on the home calorie card (null → default set).
+  visible_metrics: string[] | null;
   height_in: number | null;
   goal: string;
   phase_modifiers: unknown; // jsonb; normalized via lib/phase-modifiers

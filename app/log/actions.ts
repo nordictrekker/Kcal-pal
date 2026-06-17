@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseTextMeal } from "@/lib/anthropic";
-import { isMeal, selectRelevantHistory } from "@/lib/food";
+import { isMeal, selectRelevantHistory, nutrientColumns } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
 export type LogState = {
@@ -101,12 +101,7 @@ export async function logTextMeal(
   const d = result.data;
   const { error } = await supabase.from("food_entries").insert({
     ...base,
-    calories: d.calories,
-    protein_g: d.protein_g,
-    carbs_g: d.carbs_g,
-    fat_g: d.fat_g,
-    fiber_g: d.fiber_g,
-    serving_size: d.serving_size || null,
+    ...nutrientColumns(d),
   });
   if (error) return { ok: false, error: error.message };
 

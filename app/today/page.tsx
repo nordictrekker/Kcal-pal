@@ -38,6 +38,7 @@ import {
   detectBeverageFluids,
   effectiveFluidMl,
 } from "@/lib/hydration";
+import { sanitizeMetricKeys } from "@/lib/nutrients";
 import { zonedNow } from "@/lib/timezone";
 import { travelInfoFrom, travelHydrationOffsetMl } from "@/lib/travel";
 import { hydrationOffsetMl } from "@/lib/alcohol";
@@ -84,7 +85,7 @@ export default async function TodayPage() {
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
     supabase
       .from("food_entries")
-      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g,id,user_id,meal,description,source,photo_url,barcode,serving_size,raw_ai_response,edited_by_user,created_at")
+      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,plants,id,user_id,meal,description,source,photo_url,barcode,serving_size,raw_ai_response,edited_by_user,created_at")
       .eq("user_id", user.id)
       .gte("consumed_at", fourteenDaysAgo)
       .order("consumed_at", { ascending: true }),
@@ -605,8 +606,10 @@ export default async function TodayPage() {
         <MacroTotals
           totals={displayTotals}
           targets={targets}
+          metrics={sanitizeMetricKeys(p?.visible_metrics)}
           phaseAdjustment={phaseAdjustment}
           targetNote={resolved.calorieNote}
+          recoveryNote={resolved.recoveryNote}
           balanceNote={resolved.balanceNote}
           showLogHint
         />

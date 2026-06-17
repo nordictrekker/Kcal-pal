@@ -7,6 +7,8 @@ import { Notifications } from "./notifications";
 import { ThemeToggle } from "./theme-toggle";
 import { ShortcutCard } from "./shortcut-card";
 import { TargetsCard, type Targets } from "./targets-card";
+import { MetricsCard } from "./metrics-card";
+import { sanitizeMetricKeys } from "@/lib/nutrients";
 import { TravelCard, type TravelState } from "./travel-card";
 import { ProfileCard, type ProfileSettings } from "./profile-card";
 import { PhaseModifiersCard } from "./phase-card";
@@ -84,6 +86,8 @@ export default async function SettingsPage() {
       <ProfileCard initial={profileSettings} />
 
       <TargetsCard targets={targets} />
+
+      <MetricsCard initial={sanitizeMetricKeys(p?.visible_metrics)} />
 
       <TravelCard state={travelState} />
 

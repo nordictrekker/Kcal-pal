@@ -1,46 +1,53 @@
 import { ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Totals } from "@/lib/food";
+import {
+  METRICS,
+  metricValueAndTarget,
+  DEFAULT_HOME_METRICS,
+  type MetricKey,
+} from "@/lib/nutrients";
 
 function round(n: number) {
   return Math.round(n);
 }
 
-function Bar({
+// A single metric bar. "goal" metrics fill toward the target and read as met
+// (never red) when reached; "limit" metrics (saturated fat, cholesterol) turn
+// red when exceeded.
+export function MetricBar({
   label,
   value,
   target,
   unit,
+  kind,
   colorVar,
 }: {
   label: string;
   value: number;
   target: number;
   unit: string;
-  // CSS variable name for the bar fill, e.g. "--macro-protein"
+  kind: "goal" | "limit";
   colorVar: string;
 }) {
   const pct = target > 0 ? Math.min(100, (value / target) * 100) : 0;
   const over = value > target;
+  const fill =
+    kind === "limit" && over ? "var(--destructive)" : `var(${colorVar})`;
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-sm">
         <span className="font-medium">{label}</span>
         <span className="tabular-nums text-muted-foreground">
           {round(value)}
-          {unit} / {target}
+          {unit} / {round(target)}
           {unit}
         </span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
         <div
           className="h-full rounded-full transition-all duration-500"
-          style={{
-            width: `${pct}%`,
-            background: over
-              ? "var(--destructive)"
-              : `var(${colorVar})`,
-          }}
+          style={{ width: `${pct}%`, background: fill }}
         />
       </div>
     </div>
@@ -50,6 +57,7 @@ function Bar({
 export function MacroTotals({
   totals,
   targets,
+  metrics = DEFAULT_HOME_METRICS,
   phaseAdjustment,
   targetNote,
   recoveryNote,
@@ -58,6 +66,8 @@ export function MacroTotals({
 }: {
   totals: Totals;
   targets: Totals;
+  // Which metric bars to render under the calorie headline.
+  metrics?: MetricKey[];
   phaseAdjustment?: { phase: string; description: string } | null;
   // Short explanation when targets are auto-computed (e.g. from Oura burn).
   targetNote?: string | null;
@@ -68,9 +78,10 @@ export function MacroTotals({
   // When true, renders a "View full log" affordance (card is wrapped in a link).
   showLogHint?: boolean;
 }) {
-  const calPct = targets.calories > 0
-    ? Math.min(100, (totals.calories / targets.calories) * 100)
-    : 0;
+  const calPct =
+    targets.calories > 0
+      ? Math.min(100, (totals.calories / targets.calories) * 100)
+      : 0;
   const calOver = totals.calories > targets.calories;
 
   return (
@@ -114,34 +125,22 @@ export function MacroTotals({
           ) : null}
         </div>
         <div className="space-y-3">
-          <Bar
-            label="Protein"
-            value={totals.protein_g}
-            target={targets.protein_g}
-            unit="g"
-            colorVar="--macro-protein"
-          />
-          <Bar
-            label="Carbs"
-            value={totals.carbs_g}
-            target={targets.carbs_g}
-            unit="g"
-            colorVar="--macro-carbs"
-          />
-          <Bar
-            label="Fat"
-            value={totals.fat_g}
-            target={targets.fat_g}
-            unit="g"
-            colorVar="--macro-fat"
-          />
-          <Bar
-            label="Fiber"
-            value={totals.fiber_g}
-            target={targets.fiber_g}
-            unit="g"
-            colorVar="--macro-fiber"
-          />
+          {metrics.map((key) => {
+            const def = METRICS[key];
+            if (!def) return null;
+            const { value, target } = metricValueAndTarget(def, totals, targets);
+            return (
+              <MetricBar
+                key={key}
+                label={def.label}
+                value={value}
+                target={target}
+                unit={def.unit}
+                kind={def.kind}
+                colorVar={def.colorVar}
+              />
+            );
+          })}
         </div>
         {showLogHint ? (
           <p className="flex items-center justify-end gap-0.5 text-xs text-muted-foreground">

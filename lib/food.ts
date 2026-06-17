@@ -1,4 +1,25 @@
-import type { Meal } from "./types";
+import type { Meal, ParsedNutrition } from "./types";
+
+// Map an AI parse to the food_entries nutrient columns (one place, so every
+// log path — text, photo, re-analyze — stores the same fields).
+export function nutrientColumns(d: ParsedNutrition) {
+  return {
+    calories: d.calories,
+    protein_g: d.protein_g,
+    carbs_g: d.carbs_g,
+    fat_g: d.fat_g,
+    fiber_g: d.fiber_g,
+    saturated_fat_g: d.saturated_fat_g,
+    cholesterol_mg: d.cholesterol_mg,
+    iron_mg: d.iron_mg,
+    calcium_mg: d.calcium_mg,
+    magnesium_mg: d.magnesium_mg,
+    vitamin_d_mcg: d.vitamin_d_mcg,
+    omega3_mg: d.omega3_mg,
+    plants: d.plants,
+    serving_size: d.serving_size || null,
+  };
+}
 
 export const MEALS: Meal[] = ["breakfast", "lunch", "dinner", "snack"];
 
@@ -12,6 +33,31 @@ export type Totals = {
   carbs_g: number;
   fat_g: number;
   fiber_g: number;
+  // Extended nutrients — present on consumed totals (summed from entries),
+  // absent on target objects (those only carry the personalized macros).
+  saturated_fat_g?: number;
+  cholesterol_mg?: number;
+  iron_mg?: number;
+  calcium_mg?: number;
+  magnesium_mg?: number;
+  vitamin_d_mcg?: number;
+  omega3_mg?: number;
+};
+
+// One entry's nutrient values, all nullable (AI may not estimate everything).
+export type NutrientRow = {
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+  saturated_fat_g?: number | null;
+  cholesterol_mg?: number | null;
+  iron_mg?: number | null;
+  calcium_mg?: number | null;
+  magnesium_mg?: number | null;
+  vitamin_d_mcg?: number | null;
+  omega3_mg?: number | null;
 };
 
 // Suggest a meal slot from the local hour (used to pre-select the picker).
@@ -78,15 +124,7 @@ export function selectRelevantHistory(
 
 // Sum a list of entries into daily totals. Null macros count as 0 so a
 // failed parse doesn't poison the totals, but it's surfaced separately.
-export function sumTotals(
-  entries: Array<{
-    calories: number | null;
-    protein_g: number | null;
-    carbs_g: number | null;
-    fat_g: number | null;
-    fiber_g: number | null;
-  }>,
-): Totals {
+export function sumTotals(entries: NutrientRow[]): Totals {
   return entries.reduce<Totals>(
     (acc, e) => ({
       calories: acc.calories + (e.calories ?? 0),
@@ -94,8 +132,28 @@ export function sumTotals(
       carbs_g: acc.carbs_g + (e.carbs_g ?? 0),
       fat_g: acc.fat_g + (e.fat_g ?? 0),
       fiber_g: acc.fiber_g + (e.fiber_g ?? 0),
+      saturated_fat_g: (acc.saturated_fat_g ?? 0) + (e.saturated_fat_g ?? 0),
+      cholesterol_mg: (acc.cholesterol_mg ?? 0) + (e.cholesterol_mg ?? 0),
+      iron_mg: (acc.iron_mg ?? 0) + (e.iron_mg ?? 0),
+      calcium_mg: (acc.calcium_mg ?? 0) + (e.calcium_mg ?? 0),
+      magnesium_mg: (acc.magnesium_mg ?? 0) + (e.magnesium_mg ?? 0),
+      vitamin_d_mcg: (acc.vitamin_d_mcg ?? 0) + (e.vitamin_d_mcg ?? 0),
+      omega3_mg: (acc.omega3_mg ?? 0) + (e.omega3_mg ?? 0),
     }),
-    { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 },
+    {
+      calories: 0,
+      protein_g: 0,
+      carbs_g: 0,
+      fat_g: 0,
+      fiber_g: 0,
+      saturated_fat_g: 0,
+      cholesterol_mg: 0,
+      iron_mg: 0,
+      calcium_mg: 0,
+      magnesium_mg: 0,
+      vitamin_d_mcg: 0,
+      omega3_mg: 0,
+    },
   );
 }
 

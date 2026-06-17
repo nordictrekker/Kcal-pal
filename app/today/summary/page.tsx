@@ -17,8 +17,15 @@ import {
   resolveDailyTargets,
   recentIntakeFromRows,
 } from "@/lib/daily-targets";
+import {
+  METRICS,
+  metricValueAndTarget,
+  MACRO_METRIC_KEYS,
+  MICRO_METRIC_KEYS,
+  PLANT_DIVERSITY_GOAL,
+} from "@/lib/nutrients";
 import type { FoodEntry, Profile } from "@/lib/types";
-import { MacroTotals } from "../macro-totals";
+import { MacroTotals, MetricBar } from "../macro-totals";
 import { EntryList } from "../entry-list";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +62,7 @@ export default async function SummaryPage({
     { data: stepRows },
     { data: recentFood },
     { data: dayStatusRows },
+    { data: plantRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
     supabase
@@ -99,6 +107,12 @@ export default async function SummaryPage({
       .select("day,status")
       .eq("user_id", user.id)
       .gte("day", new Date(Date.now() - 21 * 86_400_000).toISOString().slice(0, 10)),
+    // Distinct plants over the last 7 days for the plant-diversity goal.
+    supabase
+      .from("food_entries")
+      .select("plants")
+      .eq("user_id", user.id)
+      .gte("consumed_at", sevenDaysAgo),
   ]);
 
   const p = profile as Profile | null;
@@ -198,6 +212,17 @@ export default async function SummaryPage({
   });
   const targets = resolved.targets;
 
+  // Distinct plants this week (positive, additive diversity goal).
+  const weeklyPlants = Array.from(
+    new Set(
+      (plantRows ?? []).flatMap((r) =>
+        Array.isArray(r.plants)
+          ? (r.plants as string[]).map((p) => p.trim().toLowerCase()).filter(Boolean)
+          : [],
+      ),
+    ),
+  ).sort();
+
   const dateLabel = new Date(`${targetDay}T12:00:00Z`).toLocaleDateString(
     undefined,
     { weekday: "long", month: "long", day: "numeric" },
@@ -221,11 +246,66 @@ export default async function SummaryPage({
       <MacroTotals
         totals={totals}
         targets={targets}
+        metrics={MACRO_METRIC_KEYS}
         phaseAdjustment={resolved.phaseAdjustment}
         targetNote={resolved.calorieNote}
         recoveryNote={resolved.recoveryNote}
         balanceNote={resolved.balanceNote}
       />
+
+      {/* Cycle-relevant micronutrients (AI-estimated, directional). */}
+      <section className="space-y-3 rounded-lg border p-4">
+        <h2 className="text-sm font-medium">Micronutrients</h2>
+        {MICRO_METRIC_KEYS.map((key) => {
+          const def = METRICS[key];
+          const { value, target } = metricValueAndTarget(def, totals, targets);
+          return (
+            <MetricBar
+              key={key}
+              label={def.label}
+              value={value}
+              target={target}
+              unit={def.unit}
+              kind={def.kind}
+              colorVar={def.colorVar}
+            />
+          );
+        })}
+        <p className="text-[11px] text-muted-foreground">
+          Estimated from your logs against general daily references for women.
+        </p>
+      </section>
+
+      {/* Plant diversity — a positive, additive weekly goal. */}
+      <section className="space-y-2 rounded-lg border p-4">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-sm font-medium">Plants this week</h2>
+          <span className="font-serif text-2xl tabular-nums">
+            {weeklyPlants.length}
+            <span className="text-sm text-muted-foreground">
+              {" "}/ {PLANT_DIVERSITY_GOAL}
+            </span>
+          </span>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+          <div
+            className="h-full rounded-full bg-[var(--macro-fiber)] transition-all duration-500"
+            style={{
+              width: `${Math.min(100, (weeklyPlants.length / PLANT_DIVERSITY_GOAL) * 100)}%`,
+            }}
+          />
+        </div>
+        {weeklyPlants.length > 0 ? (
+          <p className="text-[11px] capitalize text-muted-foreground">
+            {weeklyPlants.join(" · ")}
+          </p>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">
+            Different fruits, veg, legumes, nuts, seeds, whole grains, herbs &
+            spices each count once. Variety feeds a healthier gut.
+          </p>
+        )}
+      </section>
 
       <p className="text-xs text-muted-foreground">
         Tap an entry to see what each part contributed.

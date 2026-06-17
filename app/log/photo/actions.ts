@@ -140,6 +140,14 @@ export async function savePhotoEntry(
 
   const serving = String(formData.get("serving_size") ?? "").trim() || null;
 
+  let plants: string[] = [];
+  try {
+    const raw = JSON.parse(String(formData.get("plants") ?? "[]"));
+    if (Array.isArray(raw)) plants = raw.filter((p): p is string => typeof p === "string");
+  } catch {
+    plants = [];
+  }
+
   const { error } = await supabase.from("food_entries").insert({
     user_id: user.id,
     meal,
@@ -152,6 +160,14 @@ export async function savePhotoEntry(
     carbs_g: readNumberOrNull(formData.get("carbs_g")),
     fat_g: readNumberOrNull(formData.get("fat_g")),
     fiber_g: readNumberOrNull(formData.get("fiber_g")),
+    saturated_fat_g: readNumberOrNull(formData.get("saturated_fat_g")),
+    cholesterol_mg: readNumberOrNull(formData.get("cholesterol_mg")),
+    iron_mg: readNumberOrNull(formData.get("iron_mg")),
+    calcium_mg: readNumberOrNull(formData.get("calcium_mg")),
+    magnesium_mg: readNumberOrNull(formData.get("magnesium_mg")),
+    vitamin_d_mcg: readNumberOrNull(formData.get("vitamin_d_mcg")),
+    omega3_mg: readNumberOrNull(formData.get("omega3_mg")),
+    plants,
     edited_by_user: false,
   });
 

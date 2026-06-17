@@ -202,6 +202,32 @@ function ConfirmForm({
         <MacroField name="fiber_g" label="Fiber" value={parsed?.fiber_g ?? null} />
       </div>
 
+      {/* Extended nutrients + plant list carried through from the parse so they
+          aren't lost; not surfaced as editable fields to keep the form light. */}
+      {parsed
+        ? (
+            [
+              ["saturated_fat_g", parsed.saturated_fat_g],
+              ["cholesterol_mg", parsed.cholesterol_mg],
+              ["iron_mg", parsed.iron_mg],
+              ["calcium_mg", parsed.calcium_mg],
+              ["magnesium_mg", parsed.magnesium_mg],
+              ["vitamin_d_mcg", parsed.vitamin_d_mcg],
+              ["omega3_mg", parsed.omega3_mg],
+            ] as const
+          ).map(([name, value]) => (
+            <input
+              key={name}
+              type="hidden"
+              name={name}
+              value={value ?? 0}
+            />
+          ))
+        : null}
+      {parsed ? (
+        <input type="hidden" name="plants" value={JSON.stringify(parsed.plants ?? [])} />
+      ) : null}
+
       <MealPicker defaultMeal={defaultMeal()} />
 
       {state.error ? (

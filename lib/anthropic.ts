@@ -4,8 +4,15 @@ import type { ParsedNutrition } from "./types";
 // Pinned by the project spec.
 export const NUTRITION_MODEL = "claude-opus-4-8";
 
+const NUTRIENT_FIELDS =
+  "calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, saturated_fat_g: number, cholesterol_mg: number, iron_mg: number, calcium_mg: number, magnesium_mg: number, vitamin_d_mcg: number, omega3_mg: number, plants: string[]";
+
+const NUTRIENT_GUIDANCE =
+  "Also estimate saturated_fat_g, cholesterol_mg (milligrams), and the micronutrients iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg (micrograms), omega3_mg (milligrams) from USDA averages; use 0 when a nutrient is genuinely absent. `plants` is the list of DISTINCT whole-plant foods in the meal (each fruit, vegetable, legume, nut, seed, whole grain, herb or spice once; lowercase singular, e.g. [\"spinach\",\"chickpea\",\"walnut\"]); empty array if none. ";
+
 export const TEXT_SYSTEM_PROMPT =
-  "You are a nutrition database. Given a free-text meal description, return JSON only with shape {calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, serving_size: string, items: [{name, quantity, calories, protein_g, carbs_g, fat_g}], assumptions: string[]}. Estimate using USDA averages. " +
+  `You are a nutrition database. Given a free-text meal description, return JSON only with shape {${NUTRIENT_FIELDS}, serving_size: string, items: [{name, quantity, calories, protein_g, carbs_g, fat_g}], assumptions: string[]}. Estimate using USDA averages. ` +
+  NUTRIENT_GUIDANCE +
   "Use widely-accepted STANDARD serving sizes for well-known items unless the user specifies a quantity (e.g. a single espresso shot is 30 ml, so a double espresso is 60 ml; a standard glass of wine is 150 ml; a pint of beer is 473 ml; a slice of sandwich bread is ~30 g). Prefer these canonical references over guessing. " +
   "You may be given the user's PREVIOUS logs for similar foods. Stay consistent with how this user logs things; entries marked [user-corrected] are the user's own corrections and must be treated as authoritative for their portions and macros. " +
   "If quantity is still ambiguous assume one typical serving and note it in assumptions. Always return valid JSON, no prose.";
@@ -13,7 +20,9 @@ export const TEXT_SYSTEM_PROMPT =
 // Vision uses the same schema as text plus a confidence field (0..1)
 // because photo identification is fuzzier than text.
 export const VISION_SYSTEM_PROMPT =
-  "You are a nutrition database. Given a meal photo, return JSON only with shape {calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, serving_size: string, items: [{name, quantity, calories, protein_g, carbs_g, fat_g}], assumptions: string[], confidence: number}. Estimate using USDA averages. confidence is between 0 and 1 reflecting how clearly you can identify the meal and portion sizes from the image. If portion is ambiguous assume one typical serving and note it in assumptions. Always return valid JSON, no prose.";
+  `You are a nutrition database. Given a meal photo, return JSON only with shape {${NUTRIENT_FIELDS}, serving_size: string, items: [{name, quantity, calories, protein_g, carbs_g, fat_g}], assumptions: string[], confidence: number}. Estimate using USDA averages. ` +
+  NUTRIENT_GUIDANCE +
+  "confidence is between 0 and 1 reflecting how clearly you can identify the meal and portion sizes from the image. If portion is ambiguous assume one typical serving and note it in assumptions. Always return valid JSON, no prose.";
 
 export type SupportedImageMediaType =
   | "image/jpeg"
@@ -71,12 +80,31 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
     };
   });
 
+  const plants = Array.isArray(obj.plants)
+    ? Array.from(
+        new Set(
+          obj.plants
+            .filter((p): p is string => typeof p === "string")
+            .map((p) => p.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      )
+    : [];
+
   return {
     calories: coerceNumberOrNull(obj.calories) ?? 0,
     protein_g: coerceNumberOrNull(obj.protein_g) ?? 0,
     carbs_g: coerceNumberOrNull(obj.carbs_g) ?? 0,
     fat_g: coerceNumberOrNull(obj.fat_g) ?? 0,
     fiber_g: coerceNumberOrNull(obj.fiber_g) ?? 0,
+    saturated_fat_g: coerceNumberOrNull(obj.saturated_fat_g) ?? 0,
+    cholesterol_mg: coerceNumberOrNull(obj.cholesterol_mg) ?? 0,
+    iron_mg: coerceNumberOrNull(obj.iron_mg) ?? 0,
+    calcium_mg: coerceNumberOrNull(obj.calcium_mg) ?? 0,
+    magnesium_mg: coerceNumberOrNull(obj.magnesium_mg) ?? 0,
+    vitamin_d_mcg: coerceNumberOrNull(obj.vitamin_d_mcg) ?? 0,
+    omega3_mg: coerceNumberOrNull(obj.omega3_mg) ?? 0,
+    plants,
     serving_size:
       typeof obj.serving_size === "string" ? obj.serving_size : "",
     items,
