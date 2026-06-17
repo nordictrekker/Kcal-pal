@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
-import { ChevronDown, Pencil, Trash2 } from "lucide-react";
-import { updateEntry, deleteEntry, type EditState } from "./actions";
+import { ChevronDown, Pencil, Sparkles, Trash2 } from "lucide-react";
+import { updateEntry, deleteEntry, reanalyzeEntry, type EditState } from "./actions";
 import { saveEntryAsTemplate } from "../log/saved-actions";
 import { SaveEntryButton } from "../log/saved-meals";
 import type { FoodEntry } from "@/lib/types";
@@ -11,6 +11,7 @@ import { extractComponents } from "@/lib/food-items";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 const initial: EditState = { ok: false };
 
@@ -58,6 +59,9 @@ function MacroField({
 export function EntryRow({ entry }: { entry: FoodEntry }) {
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [desc, setDesc] = useState(entry.description);
+  const [reanalyzing, startReanalyze] = useTransition();
+  const [reError, setReError] = useState<string | null>(null);
   const [state, formAction] = useActionState(updateEntry, initial);
   const items = extractComponents(entry.raw_ai_response);
   const canExpand = items.length > 0;
@@ -66,11 +70,36 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
     if (state.ok) setEditing(false);
   }, [state.ok]);
 
+  function reanalyze() {
+    setReError(null);
+    startReanalyze(async () => {
+      const r = await reanalyzeEntry(entry.id, desc);
+      if (r.ok) setEditing(false);
+      else setReError(r.error ?? "Couldn't re-analyze.");
+    });
+  }
+
   if (editing) {
     return (
       <form action={formAction} className="space-y-3 p-3">
         <input type="hidden" name="id" value={entry.id} />
-        <p className="text-sm font-medium">{entry.description}</p>
+        <div className="space-y-1">
+          <Label htmlFor="description" className="text-xs text-muted-foreground">
+            Description
+          </Label>
+          <Textarea
+            id="description"
+            name="description"
+            rows={2}
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            className="text-sm"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Edit the wording, then Re-analyze to recalculate macros from the
+            text — or adjust the numbers below by hand.
+          </p>
+        </div>
         <div className="grid grid-cols-3 gap-2">
           <MacroField name="calories" label="kcal" value={entry.calories} />
           <MacroField name="protein_g" label="Protein" value={entry.protein_g} />
@@ -78,16 +107,30 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
           <MacroField name="fat_g" label="Fat" value={entry.fat_g} />
           <MacroField name="fiber_g" label="Fiber" value={entry.fiber_g} />
         </div>
-        {state.error ? (
-          <p className="text-xs text-destructive">{state.error}</p>
+        {state.error || reError ? (
+          <p className="text-xs text-destructive">{state.error ?? reError}</p>
         ) : null}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <SaveButton />
           <Button
             type="button"
             size="sm"
+            variant="outline"
+            disabled={reanalyzing}
+            onClick={reanalyze}
+          >
+            <Sparkles className="mr-1 size-3.5" />
+            {reanalyzing ? "Analyzing…" : "Re-analyze"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
             variant="ghost"
-            onClick={() => setEditing(false)}
+            onClick={() => {
+              setDesc(entry.description);
+              setReError(null);
+              setEditing(false);
+            }}
           >
             Cancel
           </Button>

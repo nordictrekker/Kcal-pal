@@ -140,6 +140,13 @@ export async function startManualTravel(): Promise<{ ok: boolean }> {
   });
 }
 
+// Set the current detected location as the home base (signed up abroad, or
+// settling somewhere new) and clear any travel state. Same effect as
+// dismissTravel, named for the Settings control.
+export async function setHomeToCurrent(): Promise<{ ok: boolean }> {
+  return dismissTravel();
+}
+
 // "I'm back home": clear travel without changing the stored home location.
 export async function endTravel(): Promise<{ ok: boolean }> {
   return setStatus({
