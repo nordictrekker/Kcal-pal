@@ -8,7 +8,8 @@ import { OuraCard, type OuraSnapshot } from "./oura-card";
 import { WeightCard, type WeightSnapshot } from "./weight-card";
 import { WaterCard } from "./water-card";
 import { CycleForecastCard } from "./cycle-forecast-card";
-import { BroccoliMotif } from "./broccoli-motif";
+import { ProduceMotif } from "./produce-motif";
+import { pickProduceKind } from "@/lib/produce";
 import {
   phaseForCycleDay,
   cycleDayFromPeriodStart,
@@ -88,7 +89,7 @@ export default async function TodayPage() {
       // Home only needs nutrient totals + description/serving (beverage
       // detection). The heavy raw_ai_response and per-entry chrome live on the
       // food-log page, not here.
-      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,description,serving_size")
+      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,description,serving_size,plants")
       .eq("user_id", user.id)
       .gte("consumed_at", fourteenDaysAgo)
       .order("consumed_at", { ascending: true }),
@@ -165,6 +166,16 @@ export default async function TodayPage() {
   const statusedDays = new Set(
     (dayStatusRows ?? []).map((d) => d.day as string),
   );
+  // "This week's produce" for the header motif: the whole food the user logged
+  // most over the past 7 days that we have a motif for (most-recent-first so
+  // ties favour what they ate latest). Falls back to the steaming bowl.
+  const weekProduceKind = pickProduceKind(
+    (trendFood ?? [])
+      .filter((r) => (r.consumed_at as string) >= sevenDaysAgo)
+      .reverse()
+      .flatMap((r) => ((r.plants as string[] | null) ?? [])),
+  );
+
   const yesterdayKey = addDaysToKey(today, -1);
   const checkinDay =
     !statusedDays.has(yesterdayKey) && (intakeHistoryRows ?? []).length > 0
@@ -568,7 +579,8 @@ export default async function TodayPage() {
     >
       <TimezoneSync storedTz={p?.timezone ?? null} />
       <header className="relative space-y-2">
-        <BroccoliMotif
+        <ProduceMotif
+          kind={weekProduceKind}
           progress={
             targets.calories > 0
               ? displayTotals.calories / targets.calories
