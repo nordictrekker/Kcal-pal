@@ -13,6 +13,8 @@ import { TravelCard, type TravelState } from "./travel-card";
 import { ProfileCard, type ProfileSettings } from "./profile-card";
 import { PhaseModifiersCard } from "./phase-card";
 import { normalizeModifiers } from "@/lib/phase-modifiers";
+import { signOut } from "../login/actions";
+import { Button } from "@/components/ui/button";
 import type { Profile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -110,9 +112,16 @@ export default async function SettingsPage() {
         <ShortcutCard ingestUrl={ingestUrl} token={ingestToken} />
       ) : null}
 
-      <p className="px-1 text-xs text-muted-foreground">
-        Signed in as {user.email}.
-      </p>
+      <div className="flex items-center justify-between px-1 pt-2">
+        <p className="text-xs text-muted-foreground">
+          Signed in as {user.email}.
+        </p>
+        <form action={signOut}>
+          <Button variant="ghost" size="sm" type="submit">
+            Sign out
+          </Button>
+        </form>
+      </div>
     </main>
   );
 }

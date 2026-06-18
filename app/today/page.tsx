@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { signOut } from "../login/actions";
 import { dayBounds, sumTotals } from "@/lib/food";
 import type { FoodEntry, Profile } from "@/lib/types";
-import { Button } from "@/components/ui/button";
 import { MacroTotals } from "./macro-totals";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
 import { WeightCard, type WeightSnapshot } from "./weight-card";
@@ -549,29 +547,27 @@ export default async function TodayPage() {
         {cyclePhase ? (
           <PhaseFloral
             phase={cyclePhase}
-            className="pointer-events-none absolute -right-2 -top-2 h-20 w-32 text-primary opacity-[0.12]"
+            progress={
+              targets.calories > 0
+                ? displayTotals.calories / targets.calories
+                : 0
+            }
+            className="pointer-events-none absolute -right-3 -top-4 h-28 w-40 text-primary"
           />
         ) : null}
-        <div className="relative flex items-start justify-between">
-          <div className="space-y-0.5">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {greeting}
+        <div className="relative space-y-0.5">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {greeting}
+          </p>
+          <h1 className="font-serif text-3xl font-medium leading-tight">
+            Today
+          </h1>
+          {cyclePhase && cycleDay ? (
+            <p className="text-xs text-muted-foreground">
+              <span className="capitalize">{cyclePhase}</span>
+              <span className="text-foreground/50"> · day {cycleDay}</span>
             </p>
-            <h1 className="font-serif text-3xl font-medium leading-tight">
-              Today
-            </h1>
-            {cyclePhase && cycleDay ? (
-              <p className="text-xs text-muted-foreground">
-                <span className="capitalize">{cyclePhase}</span>
-                <span className="text-foreground/50"> · day {cycleDay}</span>
-              </p>
-            ) : null}
-          </div>
-          <form action={signOut}>
-            <Button variant="ghost" size="sm" type="submit">
-              Sign out
-            </Button>
-          </form>
+          ) : null}
         </div>
         {insight ? (
           <div className="relative space-y-1">

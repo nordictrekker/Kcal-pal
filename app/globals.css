@@ -169,3 +169,16 @@
   .print\:border-none { border: none !important; }
   .print\:shadow-none { box-shadow: none !important; }
 }
+
+/* Respect reduced-motion: neutralize transitions/animations app-wide.
+   Count-up and the floral bloom additionally snap to final state in JS/CSS. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

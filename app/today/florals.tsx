@@ -7,6 +7,10 @@ import type { Phase } from "@/lib/cycle";
 type FloralProps = {
   phase: Phase;
   className?: string;
+  // 0..1 of the day's calorie target logged. The motif gently blooms — fading
+  // in and growing — as the day fills, turning the ornament into a quiet,
+  // on-brand progress signal. Defaults to fully bloomed.
+  progress?: number;
 };
 
 // Menstrual / autumn — pomegranate-and-leaf branch.
@@ -152,15 +156,31 @@ function LutealSprig({ className }: { className?: string }) {
   );
 }
 
-export function PhaseFloral({ phase, className }: FloralProps) {
+function Sprig({ phase }: { phase: Phase }) {
   switch (phase) {
     case "menstrual":
-      return <MenstrualSprig className={className} />;
+      return <MenstrualSprig className="h-full w-full" />;
     case "follicular":
-      return <FollicularSprig className={className} />;
+      return <FollicularSprig className="h-full w-full" />;
     case "ovulatory":
-      return <OvulatorySprig className={className} />;
+      return <OvulatorySprig className="h-full w-full" />;
     case "luteal":
-      return <LutealSprig className={className} />;
+      return <LutealSprig className="h-full w-full" />;
   }
+}
+
+export function PhaseFloral({ phase, className, progress = 1 }: FloralProps) {
+  const p = Math.max(0, Math.min(1, progress));
+  // Bare bud at 0% → fuller, more present bloom near goal.
+  const style: React.CSSProperties = {
+    opacity: 0.1 + 0.16 * p,
+    transform: `scale(${0.9 + 0.12 * p})`,
+    transformOrigin: "bottom right",
+    transition: "opacity 0.8s ease, transform 0.8s ease",
+  };
+  return (
+    <span className={className} style={style} aria-hidden>
+      <Sprig phase={phase} />
+    </span>
+  );
 }

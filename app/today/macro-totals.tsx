@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { CountUp } from "./count-up";
 import type { Totals } from "@/lib/food";
 import {
   METRICS,
@@ -90,7 +91,7 @@ export function MacroTotals({
         <div className="space-y-1">
           <div className="flex items-baseline justify-between">
             <span className="font-serif text-5xl font-medium leading-none tabular-nums">
-              {round(totals.calories)}
+              <CountUp value={round(totals.calories)} />
             </span>
             <span className="flex items-baseline gap-1 text-sm tabular-nums text-muted-foreground">
               of {targets.calories} kcal
