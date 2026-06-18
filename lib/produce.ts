@@ -13,7 +13,11 @@ export type ProduceKind =
   | "strawberry"
   | "tomato"
   | "grapes"
-  | "citrus";
+  | "citrus"
+  | "rice"
+  | "wheat"
+  | "corn"
+  | "cake";
 
 // Plant name (lowercase singular, as stored) → motif. Synonyms welcome.
 const PLANT_TO_KIND: Record<string, ProduceKind> = {
@@ -30,6 +34,12 @@ const PLANT_TO_KIND: Record<string, ProduceKind> = {
   clementine: "citrus",
   mandarin: "citrus",
   tangerine: "citrus",
+  rice: "rice",
+  wheat: "wheat",
+  oat: "wheat",
+  barley: "wheat",
+  corn: "corn",
+  maize: "corn",
 };
 
 function kindForPlant(plant: string): ProduceKind | null {
@@ -65,4 +75,14 @@ export function pickProduceKind(plants: string[]): ProduceKind {
     }
   }
   return best;
+}
+
+// True when today falls in the user's birth month (so the header celebrates
+// with a cake all month). Both dates are YYYY-MM-DD, so we just compare months.
+export function isBirthdayMonth(
+  dateOfBirth: string | null,
+  todayKey: string,
+): boolean {
+  if (!dateOfBirth || dateOfBirth.length < 7 || todayKey.length < 7) return false;
+  return dateOfBirth.slice(5, 7) === todayKey.slice(5, 7);
 }

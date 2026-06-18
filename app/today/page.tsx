@@ -9,7 +9,7 @@ import { WeightCard, type WeightSnapshot } from "./weight-card";
 import { WaterCard } from "./water-card";
 import { CycleForecastCard } from "./cycle-forecast-card";
 import { ProduceMotif } from "./produce-motif";
-import { pickProduceKind } from "@/lib/produce";
+import { pickProduceKind, isBirthdayMonth } from "@/lib/produce";
 import {
   phaseForCycleDay,
   cycleDayFromPeriodStart,
@@ -169,12 +169,15 @@ export default async function TodayPage() {
   // "This week's produce" for the header motif: the whole food the user logged
   // most over the past 7 days that we have a motif for (most-recent-first so
   // ties favour what they ate latest). Falls back to the steaming bowl.
-  const weekProduceKind = pickProduceKind(
-    (trendFood ?? [])
-      .filter((r) => (r.consumed_at as string) >= sevenDaysAgo)
-      .reverse()
-      .flatMap((r) => ((r.plants as string[] | null) ?? [])),
-  );
+  // The user's birth month always wins — the header celebrates with a cake.
+  const weekProduceKind = isBirthdayMonth(p?.date_of_birth ?? null, today)
+    ? "cake"
+    : pickProduceKind(
+        (trendFood ?? [])
+          .filter((r) => (r.consumed_at as string) >= sevenDaysAgo)
+          .reverse()
+          .flatMap((r) => ((r.plants as string[] | null) ?? [])),
+      );
 
   const yesterdayKey = addDaysToKey(today, -1);
   const checkinDay =
