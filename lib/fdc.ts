@@ -154,6 +154,46 @@ async function lookupCached(
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
 
+function scaleMicros(per100g: MicroSet, grams: number): MicroSet {
+  const f = grams / 100;
+  return {
+    saturated_fat_g: round1(per100g.saturated_fat_g * f),
+    cholesterol_mg: round1(per100g.cholesterol_mg * f),
+    iron_mg: round1(per100g.iron_mg * f),
+    calcium_mg: round1(per100g.calcium_mg * f),
+    magnesium_mg: round1(per100g.magnesium_mg * f),
+    vitamin_d_mcg: round1(per100g.vitamin_d_mcg * f),
+    omega3_mg: Math.round(per100g.omega3_mg * f),
+  };
+}
+
+// Pull a gram weight out of a free-text serving size ("45 g", "1 bar (45g)").
+// Returns null for non-gram units (e.g. "150 ml") since we can't scale those.
+export function parseGrams(serving: string | null | undefined): number | null {
+  if (!serving) return null;
+  const m = serving.match(/([\d.]+)\s*g(?:ram)?s?\b/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// USDA micronutrients for a single named food at a given gram weight, or null
+// when there's no API key, no usable weight, or FDC can't resolve the name.
+// Used by the barcode flow, where there's one product and no AI micro estimate
+// to fall back to.
+export async function usdaMicrosForItem(
+  supabase: SupabaseClient,
+  name: string,
+  grams: number | null,
+): Promise<MicroSet | null> {
+  if (!process.env.USDA_FDC_API_KEY) return null;
+  if (!grams || grams <= 0) return null;
+  const { matched, per100g } = await lookupCached(supabase, name);
+  if (!matched || !per100g) return null;
+  return scaleMicros(per100g, grams);
+}
+
+
 // Enrich a parsed meal's micronutrients with USDA FoodData Central data.
 // Returns the input unchanged when there's no API key, no items, or nothing
 // resolves — so it's always safe to call.

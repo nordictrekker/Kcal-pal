@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { enrichMicrosWithUsda } from "@/lib/fdc";
+import { enrichMicrosWithUsda, parseGrams, usdaMicrosForItem } from "@/lib/fdc";
 import type { ParsedNutrition } from "@/lib/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -139,5 +139,61 @@ describe("enrichMicrosWithUsda", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     // 100 + 100 g = 200 g total → same as the single 200 g case.
     expect(out.iron_mg).toBeCloseTo(1.6, 5);
+  });
+});
+
+describe("parseGrams", () => {
+  it("pulls grams out of serving text", () => {
+    expect(parseGrams("45 g")).toBe(45);
+    expect(parseGrams("1 bar (45g)")).toBe(45);
+    expect(parseGrams("100g")).toBe(100);
+    expect(parseGrams("30 grams")).toBe(30);
+  });
+  it("returns null for non-gram or missing units", () => {
+    expect(parseGrams("150 ml")).toBeNull();
+    expect(parseGrams("1 cup")).toBeNull();
+    expect(parseGrams(null)).toBeNull();
+    expect(parseGrams("")).toBeNull();
+  });
+});
+
+describe("usdaMicrosForItem (barcode path)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.USDA_FDC_API_KEY;
+  });
+
+  it("returns null without an API key", async () => {
+    delete process.env.USDA_FDC_API_KEY;
+    const { client } = fakeSupabase();
+    expect(await usdaMicrosForItem(client, "salmon", 200)).toBeNull();
+  });
+
+  it("returns null when grams are unknown", async () => {
+    process.env.USDA_FDC_API_KEY = "test-key";
+    const { client } = fakeSupabase();
+    expect(await usdaMicrosForItem(client, "salmon", null)).toBeNull();
+  });
+
+  it("scales FDC micros by grams on a match", async () => {
+    process.env.USDA_FDC_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ foods: [SALMON_FOOD] }) })),
+    );
+    const { client } = fakeSupabase();
+    const m = await usdaMicrosForItem(client, "salmon", 200);
+    expect(m?.iron_mg).toBeCloseTo(1.6, 5);
+    expect(m?.omega3_mg).toBe(3000);
+  });
+
+  it("returns null when FDC has no match", async () => {
+    process.env.USDA_FDC_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ foods: [] }) })),
+    );
+    const { client } = fakeSupabase();
+    expect(await usdaMicrosForItem(client, "mystery bar", 45)).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { lookupOpenFoodFacts, type OffNutrition } from "@/lib/openfoodfacts";
 import { parseBarcodeFallback } from "@/lib/anthropic";
+import { usdaMicrosForItem, parseGrams } from "@/lib/fdc";
 import { isMeal } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
@@ -114,6 +115,12 @@ export async function saveBarcodeEntry(
 
   const serving = String(formData.get("serving_size") ?? "").trim() || null;
 
+  // Barcode lookups carry no micronutrients (OpenFoodFacts omits them, and the
+  // Claude fallback is reshaped to macros only). Enrich from USDA FoodData
+  // Central using the product name + serving grams. Misses leave micros null,
+  // exactly as before. No-op without USDA_FDC_API_KEY.
+  const micros = await usdaMicrosForItem(supabase, description, parseGrams(serving));
+
   const { error } = await supabase.from("food_entries").insert({
     user_id: user.id,
     meal,
@@ -126,6 +133,7 @@ export async function saveBarcodeEntry(
     carbs_g: readNumberOrNull(formData.get("carbs_g")),
     fat_g: readNumberOrNull(formData.get("fat_g")),
     fiber_g: readNumberOrNull(formData.get("fiber_g")),
+    ...(micros ?? {}),
     // The form values may have been edited from the original lookup, so
     // we don't try to round-trip the raw response here.
     edited_by_user: false,
