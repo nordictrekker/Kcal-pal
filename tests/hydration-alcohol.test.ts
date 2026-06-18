@@ -6,6 +6,7 @@ import {
   hydrationFactor,
   detectBeverageFluids,
   effectiveFluidMl,
+  hydrationPace,
 } from "@/lib/hydration";
 import {
   computeDrink,
@@ -29,6 +30,25 @@ describe("hydration units & goal", () => {
   });
   it("falls back when weight is unknown", () => {
     expect(computeWaterGoalMl({ weightLbs: null, avgSteps: null })).toBeGreaterThan(1500);
+  });
+});
+
+describe("hydrationPace (time-of-day)", () => {
+  const target = 2400;
+  it("8 oz (~237ml) at 10am is fine, not behind", () => {
+    expect(hydrationPace(10, 237, target).status).not.toBe("behind");
+  });
+  it("the same 8 oz at 2pm is behind", () => {
+    expect(hydrationPace(14, 237, target).status).toBe("behind");
+  });
+  it("early morning is never 'behind'", () => {
+    expect(hydrationPace(8, 0, target).status).toBe("early");
+  });
+  it("reaching the goal reads as met", () => {
+    expect(hydrationPace(15, 2400, target).status).toBe("met");
+  });
+  it("well ahead of pace is flagged ahead", () => {
+    expect(hydrationPace(12, 1800, target).status).toBe("ahead");
   });
 });
 

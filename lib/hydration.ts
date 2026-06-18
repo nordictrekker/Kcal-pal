@@ -157,3 +157,37 @@ export function effectiveFluidMl(
     0,
   );
 }
+
+// ── Time-of-day pacing ──────────────────────────────────────────────────────
+// Hydration should track the WAKING day, not the calendar day: little expected
+// early, ramping to the full goal by night. So 8 oz at 10am is fine, but the
+// same 8 oz at 2pm is behind.
+export const HYDRATION_START_HOUR = 7;
+export const HYDRATION_END_HOUR = 21; // 14-hour window
+
+// Fraction of the goal you'd expect by a given local hour.
+export function expectedHydrationFraction(hour: number): number {
+  const span = HYDRATION_END_HOUR - HYDRATION_START_HOUR;
+  return Math.max(0, Math.min(1, (hour - HYDRATION_START_HOUR) / span));
+}
+
+export type HydrationPace = "early" | "ahead" | "ontrack" | "behind" | "met";
+
+// Where the user is vs. the expected pace at this hour. `deficit` is
+// (expected − actual) as a fraction of the goal (positive = behind).
+export function hydrationPace(
+  hour: number,
+  todayMl: number,
+  targetMl: number,
+): { status: HydrationPace; deficit: number } {
+  if (targetMl <= 0) return { status: "ontrack", deficit: 0 };
+  const actual = todayMl / targetMl;
+  if (actual >= 1) return { status: "met", deficit: 0 };
+  const expected = expectedHydrationFraction(hour);
+  const deficit = expected - actual;
+  // Mornings get a pass — too early for "behind" to mean anything.
+  if (hour < HYDRATION_START_HOUR + 3) return { status: "early", deficit };
+  if (deficit >= 0.18) return { status: "behind", deficit };
+  if (deficit <= -0.1) return { status: "ahead", deficit };
+  return { status: "ontrack", deficit };
+}

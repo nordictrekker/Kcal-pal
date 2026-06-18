@@ -9,6 +9,7 @@
 import type { Phase } from "./cycle";
 import type { Totals } from "./food";
 import type { Trends } from "./trends";
+import { hydrationPace } from "./hydration";
 
 export type InsightContext = {
   phase: Phase | null;
@@ -167,24 +168,26 @@ const isWeekend = (c: InsightContext) => {
   return day === 0 || day === 6;
 };
 
-// Hydration predicates. Day is "young" until ~3pm; only start nudging
-// once it's late enough that being behind actually means behind.
-// A meaningful glass in the last ~90 min (≥ ~10 oz). When true we hold the
-// "behind" nudge — she just drank; don't nag while it's still settling.
+// Hydration pacing follows the waking day (see lib/hydration.hydrationPace):
+// behind only when the gap to the expected-by-now fraction is real, and never
+// in the early morning. A meaningful recent glass (≥ ~10 oz) holds the nudge.
 const justDrank = (c: InsightContext) => (c.hydration.recentMl ?? 0) >= 300;
 const hydrationBehind = (c: InsightContext) => {
-  if (c.hydration.targetMl <= 0) return false;
-  if (justDrank(c)) return false;
-  const dayProgress = Math.min(1, c.now.getHours() / 18);
-  const expected = c.hydration.targetMl * dayProgress;
-  return c.hydration.todayMl < expected * 0.6 && c.now.getHours() >= 13;
+  if (c.hydration.targetMl <= 0 || justDrank(c)) return false;
+  return (
+    hydrationPace(c.now.getHours(), c.hydration.todayMl, c.hydration.targetMl)
+      .status === "behind"
+  );
 };
 // Was behind, then drank: acknowledge it instead of going silent.
 const hydrationCaughtUp = (c: InsightContext) => {
   if (c.hydration.targetMl <= 0 || !justDrank(c)) return false;
-  const dayProgress = Math.min(1, c.now.getHours() / 18);
-  const expected = c.hydration.targetMl * dayProgress;
-  return c.hydration.todayMl < expected * 0.85 && c.now.getHours() >= 13;
+  const status = hydrationPace(
+    c.now.getHours(),
+    c.hydration.todayMl,
+    c.hydration.targetMl,
+  ).status;
+  return status === "behind" || status === "ontrack";
 };
 const hydrationWeekLow = (c: InsightContext) =>
   c.trends !== null &&

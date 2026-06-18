@@ -29,17 +29,27 @@ import { cn } from "@/lib/utils";
 const PRESETS_OZ = [8, 16, 20];
 const BEVERAGE_BUTTONS: BeverageKind[] = ["coffee", "tea", "shake"];
 
+const PACE_LABEL: Record<string, { text: string; cls: string }> = {
+  behind: { text: "A bit behind", cls: "text-[var(--macro-fat)]" },
+  ontrack: { text: "On track", cls: "text-[var(--macro-fiber)]" },
+  ahead: { text: "Ahead of pace", cls: "text-[var(--macro-fiber)]" },
+  met: { text: "Goal met", cls: "text-[var(--macro-fiber)]" },
+};
+
 export function WaterCard({
   loggedMl,
   autoFluidMl,
   targetMl,
   goalNote,
+  pace,
   alcohol,
 }: {
   loggedMl: number;
   autoFluidMl: number;
   targetMl: number;
   goalNote?: string;
+  // Time-of-day pace status (null in the early morning / when not meaningful).
+  pace?: string | null;
   alcohol: { drinks: number; calories: number; count: number };
 }) {
   const [pending, start] = useTransition();
@@ -66,6 +76,11 @@ export function WaterCard({
                 / {targetOz} oz · {mlToL(totalMl).toFixed(1)}/
                 {mlToL(targetMl).toFixed(1)} L
               </span>
+              {pace && PACE_LABEL[pace] ? (
+                <span className={`text-[11px] font-medium ${PACE_LABEL[pace].cls}`}>
+                  · {PACE_LABEL[pace].text}
+                </span>
+              ) : null}
             </div>
           ) : (
             <div className="flex items-baseline gap-2">

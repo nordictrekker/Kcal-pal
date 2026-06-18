@@ -35,6 +35,7 @@ import {
   describeWaterGoal,
   detectBeverageFluids,
   effectiveFluidMl,
+  hydrationPace,
 } from "@/lib/hydration";
 import { sanitizeMetricKeys } from "@/lib/nutrients";
 import {
@@ -638,6 +639,9 @@ export default async function TodayPage() {
         autoFluidMl={autoFluidMl}
         targetMl={waterTargetMl}
         goalNote={waterGoalNote}
+        pace={
+          hydrationPace(localNow.getHours(), waterTodayMl, waterTargetMl).status
+        }
         alcohol={alcoholSummary}
       />
 
