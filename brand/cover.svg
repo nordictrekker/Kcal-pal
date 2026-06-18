@@ -1,13 +1,14 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
-  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#faf6ef"/><stop offset="1" stop-color="#f2ebde"/>
-  </linearGradient></defs>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#faf6ef"/><stop offset="1" stop-color="#f2ebde"/></linearGradient></defs>
   <rect width="1200" height="630" fill="url(#bg)"/>
-  <g transform="translate(600,222) scale(1.5)" fill="none" stroke="#8a5238" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M 0,0 C -17,-30 -17,-62 0,-80 C 17,-62 17,-30 0,0 Z"/><path d="M 0,0 C -17,-30 -17,-62 0,-80 C 17,-62 17,-30 0,0 Z" transform="rotate(72)"/><path d="M 0,0 C -17,-30 -17,-62 0,-80 C 17,-62 17,-30 0,0 Z" transform="rotate(144)"/>
-    <path d="M 0,0 C -17,-30 -17,-62 0,-80 C 17,-62 17,-30 0,0 Z" transform="rotate(216)"/><path d="M 0,0 C -17,-30 -17,-62 0,-80 C 17,-62 17,-30 0,0 Z" transform="rotate(288)"/>
-    <circle cx="0" cy="0" r="7" fill="#8a5238" stroke="none"/>
-  </g>
-  <text x="600" y="470" font-family="Georgia,'Times New Roman',serif" font-size="106" font-weight="500" fill="#3a2c24" text-anchor="middle">Kcal-pal</text>
-  <text x="600" y="524" font-family="Georgia,'Times New Roman',serif" font-size="27" fill="#9a8a78" text-anchor="middle" letter-spacing="4">NOURISHMENT, IN TUNE WITH YOU</text>
+  <g transform="translate(344,30) scale(0.83)"><g fill="none" stroke="#8a5238" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M 256,170 C 176,170 124,228 124,302 C 124,382 182,440 256,440 C 330,440 388,382 388,302 C 388,228 336,170 256,170 Z"/>
+  <path d="M 256,170 L 256,112"/><path d="M 256,176 L 222,126"/><path d="M 256,176 L 290,126"/>
+  <path d="M 250,180 L 200,150"/><path d="M 262,180 L 312,150"/>
+  <circle cx="214" cy="288" r="11" fill="#8a5238" stroke="none"/><circle cx="292" cy="270" r="11" fill="#8a5238" stroke="none"/>
+  <circle cx="256" cy="330" r="11" fill="#8a5238" stroke="none"/><circle cx="224" cy="356" r="10" fill="#8a5238" stroke="none"/>
+  <circle cx="300" cy="350" r="10" fill="#8a5238" stroke="none"/>
+</g></g>
+  <text x="600" y="500" font-family="Georgia,'Times New Roman',serif" font-size="120" font-weight="500" fill="#3a2c24" text-anchor="middle">kcal pal</text>
+  <text x="600" y="556" font-family="Georgia,'Times New Roman',serif" font-size="27" fill="#9a8a78" text-anchor="middle" letter-spacing="4">NOURISHMENT, IN TUNE WITH YOU</text>
 </svg>

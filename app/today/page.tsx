@@ -8,7 +8,7 @@ import { OuraCard, type OuraSnapshot } from "./oura-card";
 import { WeightCard, type WeightSnapshot } from "./weight-card";
 import { WaterCard } from "./water-card";
 import { CycleForecastCard } from "./cycle-forecast-card";
-import { PhaseFloral } from "./florals";
+import { PomegranateMotif } from "./pomegranate-motif";
 import {
   phaseForCycleDay,
   cycleDayFromPeriodStart,
@@ -553,18 +553,28 @@ export default async function TodayPage() {
   return (
     <main
       data-phase={cyclePhase ?? undefined}
+      data-daypart={
+        hour < 6
+          ? "night"
+          : hour < 11
+            ? "morning"
+            : hour < 17
+              ? "day"
+              : hour < 21
+                ? "evening"
+                : "night"
+      }
       className="mx-auto max-w-md p-4 space-y-5 pb-24"
     >
       <TimezoneSync storedTz={p?.timezone ?? null} />
       <header className="relative space-y-2">
-        <PhaseFloral
-          phase={cyclePhase ?? "follicular"}
+        <PomegranateMotif
           progress={
             targets.calories > 0
               ? displayTotals.calories / targets.calories
               : 0
           }
-          className="pointer-events-none absolute -right-3 -top-4 h-28 w-40 text-primary"
+          className="pointer-events-none absolute -right-1 -top-2 h-28 w-24 text-primary"
         />
         <div className="relative space-y-0.5">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
