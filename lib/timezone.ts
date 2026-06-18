@@ -40,3 +40,48 @@ export function describeZone(tz: string): string {
   const city = tz.split("/").pop() ?? tz;
   return city.replace(/_/g, " ");
 }
+
+// The calendar date (YYYY-MM-DD) in the given zone at instant `at`. This is the
+// user's real "today" — so day rollover happens at THEIR local midnight, not
+// the server's UTC midnight. Falls back to UTC when tz is unknown.
+export function localDayKey(
+  tz: string | null | undefined,
+  at: Date = new Date(),
+): string {
+  if (!isValidTimeZone(tz)) return at.toISOString().slice(0, 10);
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(at);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    return `${get("year")}-${get("month")}-${get("day")}`;
+  } catch {
+    return at.toISOString().slice(0, 10);
+  }
+}
+
+// The UTC instant range [start, end) covering a local calendar day in `tz`,
+// for timestamptz range queries. Uses the zone offset at local noon (DST-safe
+// for the vast majority of days).
+export function localDayBoundsUTC(
+  tz: string | null | undefined,
+  dayKey: string,
+): { start: string; end: string } {
+  const noon = new Date(`${dayKey}T12:00:00.000Z`);
+  const offMin = isValidTimeZone(tz) ? zoneOffsetMinutes(tz, noon) : 0;
+  const startMs = Date.parse(`${dayKey}T00:00:00.000Z`) - offMin * 60_000;
+  return {
+    start: new Date(startMs).toISOString(),
+    end: new Date(startMs + 86_400_000).toISOString(),
+  };
+}
+
+// Shift a YYYY-MM-DD key by whole days.
+export function addDaysToKey(dayKey: string, n: number): string {
+  return new Date(Date.parse(`${dayKey}T00:00:00.000Z`) + n * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}

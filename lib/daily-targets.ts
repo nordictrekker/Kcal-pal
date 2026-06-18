@@ -25,6 +25,7 @@ import {
 } from "./phase-modifiers";
 import type { Totals } from "./food";
 import type { Phase } from "./cycle";
+import { localDayKey } from "./timezone";
 
 const clamp = (v: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, v));
@@ -234,10 +235,13 @@ export function recentIntakeFromRows(
   todayKey: string,
   days = 14,
   incompleteDays: Set<string> = new Set(),
+  tz: string | null = null,
 ): RecentDay[] {
   const byDay = new Map<string, { calories: number; carbs_g: number }>();
   for (const r of rows) {
-    const day = r.consumed_at.slice(0, 10);
+    // Bucket by the user's local calendar day so a late-night meal counts on
+    // the right day.
+    const day = tz ? localDayKey(tz, new Date(r.consumed_at)) : r.consumed_at.slice(0, 10);
     if (day >= todayKey) continue;
     const e = byDay.get(day) ?? { calories: 0, carbs_g: 0 };
     e.calories += Number(r.calories ?? 0);

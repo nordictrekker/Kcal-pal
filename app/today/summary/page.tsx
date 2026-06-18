@@ -17,6 +17,7 @@ import {
   resolveDailyTargets,
   recentIntakeFromRows,
 } from "@/lib/daily-targets";
+import { localDayKey, localDayBoundsUTC } from "@/lib/timezone";
 import {
   METRICS,
   metricValueAndTarget,
@@ -43,18 +44,26 @@ export default async function SummaryPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Profile first — it carries the timezone that defines "today" and the day
+  // query bounds.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("user_id", user.id)
+    .single();
+  const p = profile as Profile | null;
+  const tz = p?.timezone ?? null;
+
   const { date } = await searchParams;
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = localDayKey(tz);
   const valid = date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= todayKey;
   const targetDay = valid ? date! : todayKey;
   const isToday = targetDay === todayKey;
-  const dayStart = `${targetDay}T00:00:00.000Z`;
-  const dayEnd = `${targetDay}T23:59:59.999Z`;
+  const { start: dayStart, end: dayEnd } = localDayBoundsUTC(tz, targetDay);
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const sevenDaysAgoDate = sevenDaysAgo.slice(0, 10);
 
   const [
-    { data: profile },
     { data: rows },
     { data: drinkRows },
     { data: weightRows },
@@ -64,20 +73,19 @@ export default async function SummaryPage({
     { data: dayStatusRows },
     { data: plantRows },
   ] = await Promise.all([
-    supabase.from("profiles").select("*").eq("user_id", user.id).single(),
     supabase
       .from("food_entries")
       .select("*")
       .eq("user_id", user.id)
       .gte("consumed_at", dayStart)
-      .lte("consumed_at", dayEnd)
+      .lt("consumed_at", dayEnd)
       .order("consumed_at", { ascending: true }),
     supabase
       .from("alcohol_logs")
       .select("id,drink_type,volume_ml,calories,standard_drinks,logged_at")
       .eq("user_id", user.id)
       .gte("logged_at", dayStart)
-      .lte("logged_at", dayEnd)
+      .lt("logged_at", dayEnd)
       .order("logged_at", { ascending: true }),
     supabase
       .from("body_weights")
@@ -115,7 +123,6 @@ export default async function SummaryPage({
       .gte("consumed_at", sevenDaysAgo),
   ]);
 
-  const p = profile as Profile | null;
   const entries = (rows ?? []) as FoodEntry[];
   const drinks = (drinkRows ?? []) as Array<{
     id: string;
@@ -199,6 +206,7 @@ export default async function SummaryPage({
           todayKey,
           14,
           incompleteDays,
+          tz,
         )
       : [],
     weightTrendLbsPerWeek: isToday ? (trend?.lbsPerWeek ?? null) : null,

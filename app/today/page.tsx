@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { dayBounds, sumTotals } from "@/lib/food";
+import { sumTotals } from "@/lib/food";
 import type { FoodEntry, Profile } from "@/lib/types";
 import { MacroTotals } from "./macro-totals";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
@@ -37,7 +37,12 @@ import {
   effectiveFluidMl,
 } from "@/lib/hydration";
 import { sanitizeMetricKeys } from "@/lib/nutrients";
-import { zonedNow } from "@/lib/timezone";
+import {
+  zonedNow,
+  localDayKey,
+  localDayBoundsUTC,
+  addDaysToKey,
+} from "@/lib/timezone";
 import { travelInfoFrom, travelHydrationOffsetMl } from "@/lib/travel";
 import { hydrationOffsetMl } from "@/lib/alcohol";
 import { mlToOz } from "@/lib/hydration";
@@ -57,16 +62,12 @@ export default async function TodayPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { start, end } = dayBounds();
-  const today = new Date().toISOString().slice(0, 10);
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   // 14-day window powers the trend memory below; one query, used twice.
   const fourteenDaysAgo = new Date(
     Date.now() - 14 * 86_400_000,
   ).toISOString();
   const fourteenDaysAgoDate = fourteenDaysAgo.slice(0, 10);
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
 
   const [
     { data: profile },
@@ -145,6 +146,14 @@ export default async function TodayPage() {
       .gte("day", new Date(Date.now() - 21 * 86_400_000).toISOString().slice(0, 10)),
   ]);
 
+  const p = profile as Profile | null;
+  // Day boundaries follow the user's OWN timezone, so "today" rolls over at
+  // their local midnight, not the server's UTC midnight.
+  const tz = p?.timezone ?? null;
+  const today = localDayKey(tz);
+  const { start: dayStartIso, end: dayEndIso } = localDayBoundsUTC(tz, today);
+  const startOfTodayDate = new Date(dayStartIso);
+
   const incompleteDays = new Set(
     (dayStatusRows ?? [])
       .filter((d) => d.status === "partial" || d.status === "skipped")
@@ -155,9 +164,7 @@ export default async function TodayPage() {
   const statusedDays = new Set(
     (dayStatusRows ?? []).map((d) => d.day as string),
   );
-  const yesterdayKey = new Date(Date.now() - 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const yesterdayKey = addDaysToKey(today, -1);
   const checkinDay =
     !statusedDays.has(yesterdayKey) && (intakeHistoryRows ?? []).length > 0
       ? yesterdayKey
@@ -172,10 +179,11 @@ export default async function TodayPage() {
   // Today's entries are a subset of the trend window — slice locally
   // instead of issuing a second query.
   const entries = (trendFood ?? []).filter(
-    (e) => (e.consumed_at as string) >= start && (e.consumed_at as string) < end,
+    (e) =>
+      (e.consumed_at as string) >= dayStartIso &&
+      (e.consumed_at as string) < dayEndIso,
   );
   const ouraRows = trendOura;
-  const p = profile as Profile | null;
 
   // First run → onboarding wizard. Everything below assumes we know who
   // the user is (age, weight, goal) for the smarter targets.
@@ -277,7 +285,7 @@ export default async function TodayPage() {
       r.hydration_factor != null ? Number(r.hydration_factor) : 1,
   }));
   const waterToday = waterAll.filter(
-    (w) => new Date(w.logged_at) >= startOfToday,
+    (w) => new Date(w.logged_at) >= startOfTodayDate,
   );
   // Logged fluid (water + beverage buttons), weighted by hydration factor.
   const loggedFluidMl = Math.round(effectiveFluidMl(waterToday));
@@ -310,18 +318,18 @@ export default async function TodayPage() {
   // Alcohol: today's drinks fold their calories into the day's total and
   // raise the water goal (diuretic offset). Yesterday's drinks add a residual
   // bump to today's goal.
-  const startOfYesterday = new Date(startOfToday.getTime() - 86_400_000);
+  const startOfYesterday = new Date(startOfTodayDate.getTime() - 86_400_000);
   const alcoholAll = (alcoholRows ?? []).map((r) => ({
     standard_drinks: Number(r.standard_drinks),
     calories: Number(r.calories),
     logged_at: r.logged_at as string,
   }));
   const alcoholToday = alcoholAll.filter(
-    (a) => new Date(a.logged_at) >= startOfToday,
+    (a) => new Date(a.logged_at) >= startOfTodayDate,
   );
   const alcoholYesterday = alcoholAll.filter((a) => {
     const t = new Date(a.logged_at);
-    return t >= startOfYesterday && t < startOfToday;
+    return t >= startOfYesterday && t < startOfTodayDate;
   });
   const drinksToday = alcoholToday.reduce((s, a) => s + a.standard_drinks, 0);
   const drinksYesterday = alcoholYesterday.reduce(
@@ -416,6 +424,7 @@ export default async function TodayPage() {
     today,
     14,
     incompleteDays,
+    tz,
   );
 
   const resolved = resolveDailyTargets({
