@@ -12,13 +12,13 @@
   --popover: oklch(0.995 0.003 60);
   --popover-foreground: oklch(0.20 0.012 50);
   /* Default primary — fresh sage. Overridden per-phase by [data-phase]. */
-  --primary: oklch(0.55 0.08 150);
+  --primary: oklch(0.58 0.082 150);
   --primary-foreground: oklch(0.98 0 0);
   --secondary: oklch(0.945 0.013 75);
   --secondary-foreground: oklch(0.25 0.012 50);
   --muted: oklch(0.95 0.010 72);
   --muted-foreground: oklch(0.50 0.013 65);
-  --accent: oklch(0.94 0.018 150);
+  --accent: oklch(0.945 0.022 150);
   --accent-foreground: oklch(0.25 0.012 50);
   --destructive: oklch(0.55 0.20 27);
   --destructive-foreground: oklch(0.985 0 0);
