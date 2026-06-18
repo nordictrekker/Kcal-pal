@@ -556,17 +556,15 @@ export default async function TodayPage() {
     >
       <TimezoneSync storedTz={p?.timezone ?? null} />
       <header className="relative space-y-2">
-        {cyclePhase ? (
-          <PhaseFloral
-            phase={cyclePhase}
-            progress={
-              targets.calories > 0
-                ? displayTotals.calories / targets.calories
-                : 0
-            }
-            className="pointer-events-none absolute -right-3 -top-4 h-28 w-40 text-primary"
-          />
-        ) : null}
+        <PhaseFloral
+          phase={cyclePhase ?? "follicular"}
+          progress={
+            targets.calories > 0
+              ? displayTotals.calories / targets.calories
+              : 0
+          }
+          className="pointer-events-none absolute -right-3 -top-4 h-28 w-40 text-primary"
+        />
         <div className="relative space-y-0.5">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {greeting}

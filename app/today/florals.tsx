@@ -20,7 +20,7 @@ function MenstrualSprig({ className }: { className?: string }) {
       viewBox="0 0 120 80"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1"
+      strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
@@ -49,7 +49,7 @@ function FollicularSprig({ className }: { className?: string }) {
       viewBox="0 0 120 80"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1"
+      strokeWidth="1.5"
       strokeLinecap="round"
       className={className}
       aria-hidden
@@ -104,7 +104,7 @@ function OvulatorySprig({ className }: { className?: string }) {
       viewBox="0 0 120 80"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1"
+      strokeWidth="1.5"
       strokeLinecap="round"
       className={className}
       aria-hidden
@@ -128,7 +128,7 @@ function LutealSprig({ className }: { className?: string }) {
       viewBox="0 0 120 80"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1"
+      strokeWidth="1.5"
       strokeLinecap="round"
       className={className}
       aria-hidden
@@ -171,10 +171,10 @@ function Sprig({ phase }: { phase: Phase }) {
 
 export function PhaseFloral({ phase, className, progress = 1 }: FloralProps) {
   const p = Math.max(0, Math.min(1, progress));
-  // Bare bud at 0% → fuller, more present bloom near goal.
+  // Visible-but-soft at 0% → fuller, more present bloom near goal.
   const style: React.CSSProperties = {
-    opacity: 0.1 + 0.16 * p,
-    transform: `scale(${0.9 + 0.12 * p})`,
+    opacity: 0.28 + 0.17 * p,
+    transform: `scale(${0.92 + 0.1 * p})`,
     transformOrigin: "bottom right",
     transition: "opacity 0.8s ease, transform 0.8s ease",
   };

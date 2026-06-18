@@ -29,9 +29,8 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Kcal-pal",
   },
-  icons: {
-    apple: "/icons/apple-touch-icon.png",
-  },
+  // Favicon (app/icon.svg) and apple-touch (app/apple-icon.png) are picked up
+  // via Next's file conventions.
 };
 
 export const viewport: Viewport = {
