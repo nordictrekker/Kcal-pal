@@ -7,6 +7,7 @@ import {
   parsePhotoMeal,
   type SupportedImageMediaType,
 } from "@/lib/anthropic";
+import { enrichMicrosWithUsda } from "@/lib/fdc";
 import { isMeal } from "@/lib/food";
 import type { Meal, ParsedNutrition } from "@/lib/types";
 
@@ -106,7 +107,11 @@ export async function analyzePhoto(formData: FormData): Promise<AnalyzeResult> {
     };
   }
 
-  return { ok: true, photo_path: path, parsed: result.data };
+  // Enrich micronutrients from USDA FoodData Central before handing the parsed
+  // result to the review form, so the user sees (and can edit) the better
+  // numbers (no-op without an API key).
+  const parsed = await enrichMicrosWithUsda(supabase, result.data);
+  return { ok: true, photo_path: path, parsed };
 }
 
 function readNumberOrNull(v: FormDataEntryValue | null): number | null {

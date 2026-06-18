@@ -3,6 +3,10 @@
 export type ParsedItem = {
   name: string;
   quantity: string;
+  // Estimated edible weight of this item, in grams. Used to scale USDA
+  // FoodData Central per-100 g micronutrients. Optional (older entries / the
+  // model may omit it).
+  grams?: number;
   calories: number;
   protein_g: number;
   carbs_g: number;

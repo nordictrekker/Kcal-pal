@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseTextMeal } from "@/lib/anthropic";
+import { enrichMicrosWithUsda } from "@/lib/fdc";
 import { isMeal, selectRelevantHistory, nutrientColumns } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
@@ -98,7 +99,9 @@ export async function logTextMeal(
     };
   }
 
-  const d = result.data;
+  // Replace the AI's micronutrient estimates with USDA FoodData Central data
+  // where we can resolve the items (no-op without an API key).
+  const d = await enrichMicrosWithUsda(supabase, result.data);
   const { error } = await supabase.from("food_entries").insert({
     ...base,
     ...nutrientColumns(d),
