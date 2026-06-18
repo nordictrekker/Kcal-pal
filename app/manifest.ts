@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Kcal-pal",
-    short_name: "Kcal-pal",
+    name: "kcal pal",
+    short_name: "kcal pal",
     description: "Personal nutrition tracker",
     start_url: "/today",
     display: "standalone",

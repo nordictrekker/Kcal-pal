@@ -115,7 +115,7 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
   const steps: Array<{ title: string; subtitle: string; valid: boolean; body: React.ReactNode }> = [
     {
       title: "Welcome",
-      subtitle: "Let's personalize Kcal-pal. First — what should we call you?",
+      subtitle: "Let's personalize kcal pal. First — what should we call you?",
       valid: firstName.trim().length > 0,
       body: (
         <div className="space-y-2">
@@ -299,7 +299,7 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
     {
       title: "Cycle",
       subtitle:
-        "Kcal-pal can shift your targets and insights across your cycle, and auto-track it from Apple Health.",
+        "kcal pal can shift your targets and insights across your cycle, and auto-track it from Apple Health.",
       valid: true,
       body: (
         <div className="space-y-4">

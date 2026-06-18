@@ -131,7 +131,7 @@ export function Notifications({ vapidPublicKey }: { vapidPublicKey: string }) {
         {state === "denied" ? (
           <p className="text-sm text-destructive">
             Notifications are blocked. Enable them in iOS Settings →
-            Notifications → Kcal-pal.
+            Notifications → kcal pal.
           </p>
         ) : null}
 

@@ -69,7 +69,7 @@ export function PhaseBaselinesCard({ baselines }: { baselines: PhaseBaselines })
           </h2>
           <p className="text-sm text-muted-foreground">
             Once there&apos;s a couple of cycles of logged food and recovery
-            data, this is where Kcal-pal learns what your own phases look
+            data, this is where kcal pal learns what your own phases look
             like — appetite, sleep, and recovery, in your numbers.
           </p>
         </CardContent>

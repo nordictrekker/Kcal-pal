@@ -43,7 +43,7 @@ export function LoginForm({
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
-        <CardTitle>Kcal-pal</CardTitle>
+        <CardTitle>kcal pal</CardTitle>
         <CardDescription>
           {sent ? "Enter the code from your email." : "Sign in."}
         </CardDescription>

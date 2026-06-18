@@ -22,13 +22,13 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Kcal-pal",
+  title: "kcal pal",
   description: "Personal nutrition tracker",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Kcal-pal",
+    title: "kcal pal",
   },
   // Favicon (app/icon.svg) and apple-touch (app/apple-icon.png) are picked up
   // via Next's file conventions.

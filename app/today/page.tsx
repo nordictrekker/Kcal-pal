@@ -8,7 +8,7 @@ import { OuraCard, type OuraSnapshot } from "./oura-card";
 import { WeightCard, type WeightSnapshot } from "./weight-card";
 import { WaterCard } from "./water-card";
 import { CycleForecastCard } from "./cycle-forecast-card";
-import { PomegranateMotif } from "./pomegranate-motif";
+import { BroccoliMotif } from "./broccoli-motif";
 import {
   phaseForCycleDay,
   cycleDayFromPeriodStart,
@@ -568,13 +568,13 @@ export default async function TodayPage() {
     >
       <TimezoneSync storedTz={p?.timezone ?? null} />
       <header className="relative space-y-2">
-        <PomegranateMotif
+        <BroccoliMotif
           progress={
             targets.calories > 0
               ? displayTotals.calories / targets.calories
               : 0
           }
-          className="pointer-events-none absolute -right-1 -top-2 h-28 w-24 text-primary"
+          className="pointer-events-none absolute -right-2 -top-2 h-28 w-28 text-primary"
         />
         <div className="relative space-y-0.5">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">

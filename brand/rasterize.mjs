@@ -7,9 +7,9 @@ const cover = readFileSync("brand/cover.svg");
 const jobs = [
   [icon, 512, "public/icons/icon-512.png"],
   [icon, 192, "public/icons/icon-192.png"],
-  [icon, 180, "public/icons/apple-touch-icon.png"],
+  [maskable, 180, "public/icons/apple-touch-icon.png"],
   [maskable, 512, "public/icons/maskable-512.png"],
-  [icon, 180, "app/apple-icon.png"],
+  [maskable, 180, "app/apple-icon.png"],
 ];
 for (const [buf, size, out] of jobs) {
   await sharp(buf).resize(size, size).png().toFile(out);

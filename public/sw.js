@@ -1,4 +1,4 @@
-// Kcal-pal service worker. Handles web-push notifications and clicks.
+// kcal pal service worker. Handles web-push notifications and clicks.
 // Kept intentionally minimal — no offline caching (the app needs the
 // network for everything anyway).
 
@@ -12,7 +12,7 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("push", (event) => {
   let payload = {
-    title: "Kcal-pal",
+    title: "kcal pal",
     body: "You have a new notification.",
     url: "/today",
   };

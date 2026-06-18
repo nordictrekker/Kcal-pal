@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
     }
 
     const payload = JSON.stringify({
-      title: "Kcal-pal",
+      title: "kcal pal",
       body: "Time to re-export Apple Health",
       url: "/import",
     });

@@ -81,7 +81,7 @@ export async function sendTestPush(): Promise<ActionResult> {
   }
 
   const payload = JSON.stringify({
-    title: "Kcal-pal",
+    title: "kcal pal",
     body: "Test notification — push is working.",
     url: "/today",
   });

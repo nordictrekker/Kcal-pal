@@ -51,7 +51,7 @@ export function CorrelationsCard({ corrs }: { corrs: Corr[] }) {
             What moves your numbers
           </h2>
           <p className="text-sm text-muted-foreground">
-            As more days stack up, Kcal-pal looks for the relationships that
+            As more days stack up, kcal pal looks for the relationships that
             are specific to you — like whether short sleep pulls your next-day
             cravings up. Nothing clear enough to report yet.
           </p>
