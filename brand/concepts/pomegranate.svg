@@ -1,10 +1,14 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#9c6c54"/><stop offset="1" stop-color="#79462f"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#g)"/>
-<g transform="translate(256,272)" fill="none" stroke="#f3ebdd" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M 0,-150 C -78,-150 -126,-92 -126,-26 C -126,52 -64,128 0,150 C 64,128 126,52 126,-26 C 126,-92 78,-150 0,-150 Z"/>
-  <path d="M -30,-150 L -42,-188 M 0,-156 L 0,-198 M 30,-150 L 42,-188 M -56,-138 L -74,-170 M 56,-138 L 74,-170"/>
-  <circle cx="-36" cy="-8" r="10" fill="#f3ebdd" stroke="none"/>
-  <circle cx="34" cy="-22" r="10" fill="#f3ebdd" stroke="none"/>
-  <circle cx="6" cy="42" r="10" fill="#f3ebdd" stroke="none"/>
-  <circle cx="-22" cy="62" r="9" fill="#f3ebdd" stroke="none"/>
-  <circle cx="44" cy="46" r="9" fill="#f3ebdd" stroke="none"/>
+<g fill="none" stroke="#f3ebdd" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M 256,170 C 176,170 124,228 124,302 C 124,382 182,440 256,440 C 330,440 388,382 388,302 C 388,228 336,170 256,170 Z"/>
+  <path d="M 256,170 L 256,112"/>
+  <path d="M 256,176 L 222,126"/>
+  <path d="M 256,176 L 290,126"/>
+  <path d="M 250,180 L 200,150"/>
+  <path d="M 262,180 L 312,150"/>
+  <circle cx="214" cy="288" r="11" fill="#f3ebdd" stroke="none"/>
+  <circle cx="292" cy="270" r="11" fill="#f3ebdd" stroke="none"/>
+  <circle cx="256" cy="330" r="11" fill="#f3ebdd" stroke="none"/>
+  <circle cx="224" cy="356" r="10" fill="#f3ebdd" stroke="none"/>
+  <circle cx="300" cy="350" r="10" fill="#f3ebdd" stroke="none"/>
 </g></svg>
