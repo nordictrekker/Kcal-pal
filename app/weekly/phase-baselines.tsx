@@ -17,10 +17,10 @@ const PHASE_ORDER: Phase[] = [
 // amber / lavender) without depending on the [data-phase] CSS vars,
 // since this card lives outside that scope.
 const PHASE_DOT: Record<Phase, string> = {
-  menstrual: "bg-rose-400",
-  follicular: "bg-emerald-400",
-  ovulatory: "bg-amber-400",
-  luteal: "bg-violet-400",
+  menstrual: "bg-rose-300",
+  follicular: "bg-emerald-300",
+  ovulatory: "bg-amber-300",
+  luteal: "bg-violet-300",
 };
 
 function fmt(n: number | null, digits = 0, unit = ""): string | null {
