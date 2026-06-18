@@ -33,6 +33,7 @@
   --macro-carbs:   oklch(0.63 0.078 235);  /* dusty blue */
   --macro-fat:     oklch(0.67 0.082 82);   /* muted ochre */
   --macro-fiber:   oklch(0.63 0.072 150);  /* muted sage */
+  --micro-magnesium: oklch(0.60 0.082 330); /* muted plum — keeps magnesium distinct from the sage/iron green */
 }
 
 .dark {
@@ -60,6 +61,7 @@
   --macro-carbs:   oklch(0.71 0.078 235);
   --macro-fat:     oklch(0.76 0.082 82);
   --macro-fiber:   oklch(0.71 0.072 150);
+  --micro-magnesium: oklch(0.70 0.082 330);
 }
 
 /* Cycle-phase accents.
@@ -133,6 +135,7 @@
   --color-macro-carbs:   var(--macro-carbs);
   --color-macro-fat:     var(--macro-fat);
   --color-macro-fiber:   var(--macro-fiber);
+  --color-micro-magnesium: var(--micro-magnesium);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

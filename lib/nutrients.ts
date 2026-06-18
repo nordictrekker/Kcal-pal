@@ -40,7 +40,7 @@ export const METRICS: Record<MetricKey, MetricDef> = {
   fiber: { key: "fiber", label: "Fiber", unit: "g", field: "fiber_g", kind: "goal", colorVar: "--macro-fiber", targetField: "fiber_g", category: "macro" },
   iron: { key: "iron", label: "Iron", unit: "mg", field: "iron_mg", kind: "goal", colorVar: "--primary", reference: 18, category: "micro", cycleRelevant: true },
   calcium: { key: "calcium", label: "Calcium", unit: "mg", field: "calcium_mg", kind: "goal", colorVar: "--macro-carbs", reference: 1000, category: "micro" },
-  magnesium: { key: "magnesium", label: "Magnesium", unit: "mg", field: "magnesium_mg", kind: "goal", colorVar: "--macro-fiber", reference: 320, category: "micro", cycleRelevant: true },
+  magnesium: { key: "magnesium", label: "Magnesium", unit: "mg", field: "magnesium_mg", kind: "goal", colorVar: "--micro-magnesium", reference: 320, category: "micro", cycleRelevant: true },
   vitamin_d: { key: "vitamin_d", label: "Vitamin D", unit: "mcg", field: "vitamin_d_mcg", kind: "goal", colorVar: "--macro-fat", reference: 15, category: "micro" },
   omega3: { key: "omega3", label: "Omega-3", unit: "mg", field: "omega3_mg", kind: "goal", colorVar: "--macro-protein", reference: 1100, category: "micro", cycleRelevant: true },
 };
