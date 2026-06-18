@@ -83,7 +83,10 @@ export default async function TodayPage() {
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),
     supabase
       .from("food_entries")
-      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,plants,id,user_id,meal,description,source,photo_url,barcode,serving_size,raw_ai_response,edited_by_user,created_at")
+      // Home only needs nutrient totals + description/serving (beverage
+      // detection). The heavy raw_ai_response and per-entry chrome live on the
+      // food-log page, not here.
+      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,description,serving_size")
       .eq("user_id", user.id)
       .gte("consumed_at", fourteenDaysAgo)
       .order("consumed_at", { ascending: true }),
