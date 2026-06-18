@@ -12,19 +12,19 @@
   --popover: oklch(0.995 0.003 60);
   --popover-foreground: oklch(0.20 0.012 50);
   /* Default primary — warm clay. Overridden per-phase by [data-phase]. */
-  --primary: oklch(0.46 0.085 30);
+  --primary: oklch(0.55 0.105 45);
   --primary-foreground: oklch(0.98 0 0);
   --secondary: oklch(0.945 0.012 50);
   --secondary-foreground: oklch(0.25 0.012 50);
   --muted: oklch(0.95 0.008 50);
   --muted-foreground: oklch(0.50 0.012 50);
-  --accent: oklch(0.93 0.018 35);
+  --accent: oklch(0.93 0.024 40);
   --accent-foreground: oklch(0.25 0.012 50);
   --destructive: oklch(0.55 0.20 27);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.91 0.012 50);
   --input: oklch(0.91 0.012 50);
-  --ring: oklch(0.65 0.05 40);
+  --ring: oklch(0.66 0.09 40);
   --radius: 0.75rem;
 
   /* Semantic macro colors — used by the totals bars so each macro is
@@ -42,7 +42,7 @@
   --card-foreground: oklch(0.96 0.005 60);
   --popover: oklch(0.22 0.012 50);
   --popover-foreground: oklch(0.96 0.005 60);
-  --primary: oklch(0.72 0.10 35);
+  --primary: oklch(0.74 0.125 40);
   --primary-foreground: oklch(0.18 0.012 50);
   --secondary: oklch(0.28 0.012 50);
   --secondary-foreground: oklch(0.96 0.005 60);
@@ -68,10 +68,10 @@
    separately because dark mode needs lifted lightness for the same impact.
 */
 [data-phase="menstrual"] {
-  --primary: oklch(0.50 0.13 25);    /* rust */
+  --primary: oklch(0.55 0.115 40);   /* terracotta */
   --primary-foreground: oklch(0.98 0 0);
-  --ring: oklch(0.65 0.10 25);
-  --accent: oklch(0.94 0.030 30);
+  --ring: oklch(0.66 0.11 32);
+  --accent: oklch(0.94 0.032 34);
 }
 [data-phase="follicular"] {
   --primary: oklch(0.52 0.13 160);   /* mossy sage */
