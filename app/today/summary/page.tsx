@@ -311,7 +311,10 @@ export default async function SummaryPage({
           );
         })}
         <p className="text-[11px] text-muted-foreground">
-          Estimated from your logs against general daily references for women.
+          Estimated from your logs against general daily references for women.{" "}
+          <Link href="/reanalyze" className="underline underline-offset-2">
+            Re-analyze logs
+          </Link>
         </p>
       </section>
 
