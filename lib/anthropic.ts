@@ -5,16 +5,16 @@ import type { ParsedNutrition } from "./types";
 export const NUTRITION_MODEL = "claude-opus-4-8";
 
 const NUTRIENT_FIELDS =
-  "calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, saturated_fat_g: number, cholesterol_mg: number, iron_mg: number, calcium_mg: number, magnesium_mg: number, vitamin_d_mcg: number, omega3_mg: number, plants: string[]";
+  "calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, saturated_fat_g: number, trans_fat_g: number, cholesterol_mg: number, iron_mg: number, calcium_mg: number, magnesium_mg: number, vitamin_d_mcg: number, omega3_mg: number, plants: string[]";
 
 const NUTRIENT_GUIDANCE =
-  "Also estimate saturated_fat_g, cholesterol_mg (milligrams), and the micronutrients iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg (micrograms), omega3_mg (milligrams) from USDA averages; use 0 when a nutrient is genuinely absent. `plants` is the list of DISTINCT whole-plant foods in the meal (each fruit, vegetable, legume, nut, seed, whole grain, herb or spice once; lowercase singular, e.g. [\"spinach\",\"chickpea\",\"walnut\"]); empty array if none. ";
+  "Also estimate saturated_fat_g, trans_fat_g (industrial/partially-hydrogenated trans fat in grams; ~0 for whole/unprocessed foods, higher for fried fast food, baked goods, margarine), cholesterol_mg (milligrams), and the micronutrients iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg (micrograms), omega3_mg (milligrams) from USDA averages; use 0 when a nutrient is genuinely absent. `plants` is the list of DISTINCT whole-plant foods in the meal (each fruit, vegetable, legume, nut, seed, whole grain, herb or spice once; lowercase singular, e.g. [\"spinach\",\"chickpea\",\"walnut\"]); empty array if none. ";
 
 // Every component carries its OWN full nutrient breakdown so the app can show
 // which specific food in a multi-item log contributed each nutrient. The
 // top-level totals must equal the sum of the items.
 const ITEM_FIELDS =
-  "name, quantity, grams, calories, protein_g, carbs_g, fat_g, fiber_g, saturated_fat_g, cholesterol_mg, iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg, omega3_mg";
+  "name, quantity, grams, calories, protein_g, carbs_g, fat_g, fiber_g, saturated_fat_g, trans_fat_g, cholesterol_mg, iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg, omega3_mg";
 
 export const TEXT_SYSTEM_PROMPT =
   `You are a nutrition database. Given a free-text meal description, return JSON only with shape {${NUTRIENT_FIELDS}, serving_size: string, items: [{${ITEM_FIELDS}}], assumptions: string[]}. Break the meal into its individual component foods — one entry in \`items\` per distinct food — and give EACH component its own full nutrient estimate (the same fields as the totals). The top-level totals must equal the sum of the items. Estimate using USDA averages. \`grams\` is the estimated total edible weight of that item in grams. ` +
@@ -106,6 +106,7 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
       fat_g: coerceNumberOrNull(i.fat_g) ?? 0,
       fiber_g: optNum(i.fiber_g),
       saturated_fat_g: optNum(i.saturated_fat_g),
+      trans_fat_g: optNum(i.trans_fat_g),
       cholesterol_mg: optNum(i.cholesterol_mg),
       iron_mg: optNum(i.iron_mg),
       calcium_mg: optNum(i.calcium_mg),
@@ -133,6 +134,7 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
     fat_g: coerceNumberOrNull(obj.fat_g) ?? 0,
     fiber_g: coerceNumberOrNull(obj.fiber_g) ?? 0,
     saturated_fat_g: coerceNumberOrNull(obj.saturated_fat_g) ?? 0,
+    trans_fat_g: coerceNumberOrNull(obj.trans_fat_g) ?? 0,
     cholesterol_mg: coerceNumberOrNull(obj.cholesterol_mg) ?? 0,
     iron_mg: coerceNumberOrNull(obj.iron_mg) ?? 0,
     calcium_mg: coerceNumberOrNull(obj.calcium_mg) ?? 0,

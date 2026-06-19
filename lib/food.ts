@@ -10,6 +10,7 @@ export function nutrientColumns(d: ParsedNutrition) {
     fat_g: d.fat_g,
     fiber_g: d.fiber_g,
     saturated_fat_g: d.saturated_fat_g,
+    trans_fat_g: d.trans_fat_g,
     cholesterol_mg: d.cholesterol_mg,
     iron_mg: d.iron_mg,
     calcium_mg: d.calcium_mg,
@@ -36,6 +37,7 @@ export type Totals = {
   // Extended nutrients — present on consumed totals (summed from entries),
   // absent on target objects (those only carry the personalized macros).
   saturated_fat_g?: number;
+  trans_fat_g?: number;
   cholesterol_mg?: number;
   iron_mg?: number;
   calcium_mg?: number;
@@ -52,6 +54,7 @@ export type NutrientRow = {
   fat_g: number | null;
   fiber_g: number | null;
   saturated_fat_g?: number | null;
+  trans_fat_g?: number | null;
   cholesterol_mg?: number | null;
   iron_mg?: number | null;
   calcium_mg?: number | null;
@@ -133,6 +136,7 @@ export function sumTotals(entries: NutrientRow[]): Totals {
       fat_g: acc.fat_g + (e.fat_g ?? 0),
       fiber_g: acc.fiber_g + (e.fiber_g ?? 0),
       saturated_fat_g: (acc.saturated_fat_g ?? 0) + (e.saturated_fat_g ?? 0),
+      trans_fat_g: (acc.trans_fat_g ?? 0) + (e.trans_fat_g ?? 0),
       cholesterol_mg: (acc.cholesterol_mg ?? 0) + (e.cholesterol_mg ?? 0),
       iron_mg: (acc.iron_mg ?? 0) + (e.iron_mg ?? 0),
       calcium_mg: (acc.calcium_mg ?? 0) + (e.calcium_mg ?? 0),
@@ -147,6 +151,7 @@ export function sumTotals(entries: NutrientRow[]): Totals {
       fat_g: 0,
       fiber_g: 0,
       saturated_fat_g: 0,
+      trans_fat_g: 0,
       cholesterol_mg: 0,
       iron_mg: 0,
       calcium_mg: 0,

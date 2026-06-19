@@ -55,6 +55,7 @@ function toContribInput(e: FoodEntry): EntryForContrib {
       fat_g: e.fat_g,
       fiber_g: e.fiber_g,
       saturated_fat_g: e.saturated_fat_g,
+      trans_fat_g: e.trans_fat_g,
       cholesterol_mg: e.cholesterol_mg,
       iron_mg: e.iron_mg,
       calcium_mg: e.calcium_mg,
