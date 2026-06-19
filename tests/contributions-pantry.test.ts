@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   contributionsForField,
   topWithOther,
+  buildComponentContributors,
   type ContribEntry,
 } from "@/lib/contributions";
 import { detectFrequentItems, type PantryRow } from "@/lib/pantry";
@@ -49,6 +50,61 @@ describe("topWithOther", () => {
     expect(other.label).toBe("Other");
     const total = make(10).reduce((s, c) => s + c.amount, 0);
     expect(grouped.reduce((s, c) => s + c.amount, 0)).toBe(total);
+  });
+});
+
+describe("buildComponentContributors", () => {
+  // Mirrors the user's real log: skyr + golden kiwi + nespresso w/ skim milk.
+  const entry = {
+    id: "e1",
+    description: "Skyr, kiwi, coffee",
+    meal: "breakfast" as const,
+    raw_ai_response: {
+      items: [
+        { name: "Yoplait skyr", calories: 60, protein_g: 11, carbs_g: 4, fat_g: 0, fiber_g: 0 },
+        { name: "golden kiwi", calories: 25, protein_g: 0.5, carbs_g: 6, fat_g: 0.2, fiber_g: 1.5 },
+        { name: "nespresso w/ skim milk", calories: 15, protein_g: 1, carbs_g: 2, fat_g: 0, fiber_g: 0 },
+      ],
+    },
+    totals: { protein_g: 12.5, carbs_g: 12, fiber_g: 1.5, iron_mg: 0.6 },
+  };
+
+  it("splits a log into one contributor per component", () => {
+    const c = buildComponentContributors([entry]);
+    expect(c.map((x) => x.label)).toEqual([
+      "Yoplait skyr",
+      "golden kiwi",
+      "nespresso w/ skim milk",
+    ]);
+  });
+
+  it("attributes each nutrient to the right component", () => {
+    const c = buildComponentContributors([entry]);
+    expect(contributionsForField("protein_g", c)[0].label).toBe("Yoplait skyr");
+    // fiber comes almost entirely from the kiwi, not the protein-heavy skyr
+    expect(contributionsForField("fiber_g", c)[0].label).toBe("golden kiwi");
+  });
+
+  it("reconciles component shares to the entry's stored total", () => {
+    const c = buildComponentContributors([entry]);
+    const sum = contributionsForField("protein_g", c).reduce((s, x) => s + x.amount, 0);
+    expect(sum).toBeCloseTo(12.5, 5);
+  });
+
+  it("allocates a non-itemized nutrient by calorie share (still per-component)", () => {
+    const c = buildComponentContributors([entry]);
+    const iron = contributionsForField("iron_mg", c);
+    expect(iron[0].label).toBe("Yoplait skyr"); // highest calories
+    expect(iron.reduce((s, x) => s + x.amount, 0)).toBeCloseTo(0.6, 5);
+  });
+
+  it("falls back to a single whole-entry contributor when there are no items", () => {
+    const c = buildComponentContributors([
+      { id: "e2", description: "Mystery snack", meal: null, raw_ai_response: null, totals: { protein_g: 5 } },
+    ]);
+    expect(c).toHaveLength(1);
+    expect(c[0].label).toBe("Mystery snack");
+    expect(c[0].values.protein_g).toBe(5);
   });
 });
 

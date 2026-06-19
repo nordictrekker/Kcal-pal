@@ -10,8 +10,14 @@ const NUTRIENT_FIELDS =
 const NUTRIENT_GUIDANCE =
   "Also estimate saturated_fat_g, cholesterol_mg (milligrams), and the micronutrients iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg (micrograms), omega3_mg (milligrams) from USDA averages; use 0 when a nutrient is genuinely absent. `plants` is the list of DISTINCT whole-plant foods in the meal (each fruit, vegetable, legume, nut, seed, whole grain, herb or spice once; lowercase singular, e.g. [\"spinach\",\"chickpea\",\"walnut\"]); empty array if none. ";
 
+// Every component carries its OWN full nutrient breakdown so the app can show
+// which specific food in a multi-item log contributed each nutrient. The
+// top-level totals must equal the sum of the items.
+const ITEM_FIELDS =
+  "name, quantity, grams, calories, protein_g, carbs_g, fat_g, fiber_g, saturated_fat_g, cholesterol_mg, iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg, omega3_mg";
+
 export const TEXT_SYSTEM_PROMPT =
-  `You are a nutrition database. Given a free-text meal description, return JSON only with shape {${NUTRIENT_FIELDS}, serving_size: string, items: [{name, quantity, grams, calories, protein_g, carbs_g, fat_g}], assumptions: string[]}. Estimate using USDA averages. \`grams\` is the estimated total edible weight of that item in grams. ` +
+  `You are a nutrition database. Given a free-text meal description, return JSON only with shape {${NUTRIENT_FIELDS}, serving_size: string, items: [{${ITEM_FIELDS}}], assumptions: string[]}. Break the meal into its individual component foods — one entry in \`items\` per distinct food — and give EACH component its own full nutrient estimate (the same fields as the totals). The top-level totals must equal the sum of the items. Estimate using USDA averages. \`grams\` is the estimated total edible weight of that item in grams. ` +
   NUTRIENT_GUIDANCE +
   "Use widely-accepted STANDARD serving sizes for well-known items unless the user specifies a quantity (e.g. a single espresso shot is 30 ml, so a double espresso is 60 ml; a standard glass of wine is 150 ml; a pint of beer is 473 ml; a slice of sandwich bread is ~30 g). Prefer these canonical references over guessing. " +
   "You may be given the user's PREVIOUS logs for similar foods. Stay consistent with how this user logs things; entries marked [user-corrected] are the user's own corrections and must be treated as authoritative for their portions and macros. " +
@@ -20,7 +26,7 @@ export const TEXT_SYSTEM_PROMPT =
 // Vision uses the same schema as text plus a confidence field (0..1)
 // because photo identification is fuzzier than text.
 export const VISION_SYSTEM_PROMPT =
-  `You are a nutrition database. Given a meal photo, return JSON only with shape {${NUTRIENT_FIELDS}, serving_size: string, items: [{name, quantity, grams, calories, protein_g, carbs_g, fat_g}], assumptions: string[], confidence: number}. Estimate using USDA averages. \`grams\` is the estimated total edible weight of that item in grams. ` +
+  `You are a nutrition database. Given a meal photo, return JSON only with shape {${NUTRIENT_FIELDS}, serving_size: string, items: [{${ITEM_FIELDS}}], assumptions: string[], confidence: number}. Break the meal into its individual component foods — one entry in \`items\` per distinct food — and give EACH component its own full nutrient estimate (the same fields as the totals). The top-level totals must equal the sum of the items. Estimate using USDA averages. \`grams\` is the estimated total edible weight of that item in grams. ` +
   NUTRIENT_GUIDANCE +
   "confidence is between 0 and 1 reflecting how clearly you can identify the meal and portion sizes from the image. If portion is ambiguous assume one typical serving and note it in assumptions. Always return valid JSON, no prose.";
 
@@ -70,14 +76,23 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
   const itemsRaw = Array.isArray(obj.items) ? obj.items : [];
   const items = itemsRaw.map((it) => {
     const i = (it ?? {}) as Record<string, unknown>;
+    const optNum = (v: unknown) => coerceNumberOrNull(v) ?? undefined;
     return {
       name: typeof i.name === "string" ? i.name : "",
       quantity: typeof i.quantity === "string" ? i.quantity : "",
-      grams: coerceNumberOrNull(i.grams) ?? undefined,
+      grams: optNum(i.grams),
       calories: coerceNumberOrNull(i.calories) ?? 0,
       protein_g: coerceNumberOrNull(i.protein_g) ?? 0,
       carbs_g: coerceNumberOrNull(i.carbs_g) ?? 0,
       fat_g: coerceNumberOrNull(i.fat_g) ?? 0,
+      fiber_g: optNum(i.fiber_g),
+      saturated_fat_g: optNum(i.saturated_fat_g),
+      cholesterol_mg: optNum(i.cholesterol_mg),
+      iron_mg: optNum(i.iron_mg),
+      calcium_mg: optNum(i.calcium_mg),
+      magnesium_mg: optNum(i.magnesium_mg),
+      vitamin_d_mcg: optNum(i.vitamin_d_mcg),
+      omega3_mg: optNum(i.omega3_mg),
     };
   });
 

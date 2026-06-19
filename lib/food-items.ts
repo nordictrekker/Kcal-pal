@@ -11,12 +11,27 @@ export type ComponentItem = {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  // Per-component extended nutrients. Optional: older logs only itemized
+  // macros, so these are absent there.
+  fiber_g?: number;
+  saturated_fat_g?: number;
+  cholesterol_mg?: number;
+  iron_mg?: number;
+  calcium_mg?: number;
+  magnesium_mg?: number;
+  vitamin_d_mcg?: number;
+  omega3_mg?: number;
 };
 
 function stripFences(text: string): string {
   const t = text.trim();
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   return fence ? fence[1].trim() : t;
+}
+
+function optNum(v: unknown): number | undefined {
+  const n = Number(v);
+  return Number.isFinite(n) && v != null && v !== "" ? n : undefined;
 }
 
 function normalizeItems(arr: unknown): ComponentItem[] {
@@ -30,6 +45,14 @@ function normalizeItems(arr: unknown): ComponentItem[] {
       protein_g: Number(i.protein_g) || 0,
       carbs_g: Number(i.carbs_g) || 0,
       fat_g: Number(i.fat_g) || 0,
+      fiber_g: optNum(i.fiber_g),
+      saturated_fat_g: optNum(i.saturated_fat_g),
+      cholesterol_mg: optNum(i.cholesterol_mg),
+      iron_mg: optNum(i.iron_mg),
+      calcium_mg: optNum(i.calcium_mg),
+      magnesium_mg: optNum(i.magnesium_mg),
+      vitamin_d_mcg: optNum(i.vitamin_d_mcg),
+      omega3_mg: optNum(i.omega3_mg),
     }))
     .filter((i) => i.name !== "");
 }

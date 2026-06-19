@@ -11,6 +11,16 @@ export type ParsedItem = {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  // Per-component extended nutrients (AI-estimated). Optional because older
+  // logged entries only itemized macros; absent → derived by allocation.
+  fiber_g?: number;
+  saturated_fat_g?: number;
+  cholesterol_mg?: number;
+  iron_mg?: number;
+  calcium_mg?: number;
+  magnesium_mg?: number;
+  vitamin_d_mcg?: number;
+  omega3_mg?: number;
 };
 
 export type ParsedNutrition = {
