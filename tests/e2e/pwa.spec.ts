@@ -39,8 +39,13 @@ test("every manifest icon is actually served as an image", async ({ request }) =
 test("iOS add-to-home-screen head tags are present", async ({ page }) => {
   await page.goto("/login");
   await expect(page.locator('link[rel="manifest"]')).toHaveCount(1);
-  // installed iOS app runs standalone + uses the apple-touch-icon
-  await expect(page.locator('meta[name="apple-mobile-web-app-capable"][content="yes"]')).toHaveCount(1);
+  // installed app runs standalone — Next emits the modern standard
+  // `mobile-web-app-capable` (current iOS honors it); accept the legacy
+  // `apple-mobile-web-app-capable` too for older engines.
+  const capable = page.locator(
+    'meta[name="mobile-web-app-capable"][content="yes"], meta[name="apple-mobile-web-app-capable"][content="yes"]',
+  );
+  expect(await capable.count(), "a web-app-capable meta must be present").toBeGreaterThan(0);
   const appleIcons = page.locator('link[rel="apple-touch-icon"]');
   expect(await appleIcons.count(), "an apple-touch-icon link must be present").toBeGreaterThan(0);
 
