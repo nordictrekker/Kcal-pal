@@ -44,6 +44,14 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// Run functions next to Supabase (us-west-2 / Oregon) so the per-request auth
+// and data round trips are same-region (~1–2 ms) instead of a cross-region hop
+// to iad1 (~60–70 ms). This is the lever that brings authenticated server
+// render under 50 ms; the framework floor is already <15 ms. Inherited by all
+// routes from the root layout. (Honored on plans that support region pinning;
+// gracefully ignored otherwise.)
+export const preferredRegion = "pdx1";
+
 export default function RootLayout({
   children,
 }: Readonly<{
