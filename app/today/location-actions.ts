@@ -25,6 +25,7 @@ type LocProfile = {
   home_lat: number | null;
   home_lng: number | null;
   travel_status: string | null;
+  location_dismissed_label: string | null;
 };
 
 // Detect physical location from IP geolocation, compare to home, and advance
@@ -46,7 +47,7 @@ export async function syncLocation(): Promise<{
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("home_tz,home_lat,home_lng,travel_status")
+    .select("home_tz,home_lat,home_lng,travel_status,location_dismissed_label")
     .eq("user_id", user.id)
     .single();
   const p = profile as LocProfile | null;
@@ -78,7 +79,13 @@ export async function syncLocation(): Promise<{
   );
   const isJetlag = Math.abs(diffH) >= MIN_TRAVEL_OFFSET_H;
   const isLonghaul = distanceKm >= MIN_TRAVEL_DISTANCE_KM;
-  const meaningful = isJetlag || isLonghaul;
+  // A reading the user explicitly rejected as wrong (bad IP/VPN) is suppressed
+  // until a genuinely different location shows up (which clears the marker).
+  if (p.location_dismissed_label && loc.label !== p.location_dismissed_label) {
+    patch.location_dismissed_label = null;
+  }
+  const dismissed = loc.label === p.location_dismissed_label;
+  const meaningful = (isJetlag || isLonghaul) && !dismissed;
   const status = p.travel_status ?? "home";
   const promptFor = (): TravelPrompt => ({
     label: loc.label,
@@ -174,6 +181,31 @@ export async function endTravel(): Promise<{ ok: boolean }> {
     travel_status: "home",
     travel_manual: false,
     travel_started_at: null,
+  });
+}
+
+// "That's wrong" — the detected location is a bad IP/VPN reading. Keep the
+// existing home untouched, clear the pending travel state, and remember the
+// rejected label so the same wrong reading doesn't immediately re-prompt.
+export async function rejectLocation(): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("current_label")
+    .eq("user_id", user.id)
+    .single();
+  const label = (profile as { current_label: string | null } | null)?.current_label ?? null;
+
+  return setStatus({
+    travel_status: "home",
+    travel_manual: false,
+    travel_started_at: null,
+    location_dismissed_label: label,
   });
 }
 
