@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import { useActionState } from "react";
 import Link from "next/link";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { Camera, Loader2 } from "lucide-react";
 import {
   lookupBarcode,
@@ -37,78 +36,144 @@ type Stage =
 
 const SCANNER_DIV_ID = "kcal-pal-scanner";
 
+// The 1D retail symbologies found on packaging — both scan paths use these.
+const BARCODE_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39"];
+
+// Minimal shape of the native BarcodeDetector API (not in the TS DOM lib yet).
+type NativeDetector = {
+  detect: (source: CanvasImageSource) => Promise<{ rawValue?: string }[]>;
+};
+type DetectorCtor = new (opts?: { formats?: string[] }) => NativeDetector;
+
 function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
   const onScanRef = useRef(onScan);
   useEffect(() => {
     onScanRef.current = onScan;
   }, [onScan]);
 
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
+  // null until we know which path; "native" uses the phone's built-in detector
+  // (instant, no WASM), "fallback" lazy-loads html5-qrcode only when needed.
+  const [mode, setMode] = useState<"native" | "fallback" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    let scanner: Html5Qrcode | null = null;
+    let stream: MediaStream | null = null;
+    let rafId = 0;
+    let fallbackScanner: { stop: () => Promise<unknown>; clear: () => void } | null =
+      null;
 
-    // Constructing the scanner (or its WASM/worker setup) can throw on some
-    // mobile browsers; keep it out of render so it can't white-screen the app.
-    try {
-      scanner = new Html5Qrcode(SCANNER_DIV_ID, {
-        verbose: false,
-        // Only the 1D retail barcodes found on packaging — skipping QR and the
-        // dozens of other symbologies makes each decode pass much faster.
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-        ],
-        // Use the browser's native, hardware-accelerated BarcodeDetector when
-        // present (Chrome/Android, recent Safari) — dramatically faster than the
-        // WASM/zxing fallback.
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-      });
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Scanner failed to start.");
-      return;
+    const stopNative = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+
+    async function startNative(Ctor: DetectorCtor) {
+      const detector = new Ctor({ formats: BARCODE_FORMATS });
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Camera failed to start.");
+        return;
+      }
+      if (cancelled) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      const video = videoRef.current;
+      if (!video) return;
+      video.srcObject = stream;
+      await video.play().catch(() => {});
+
+      const tick = async () => {
+        if (cancelled) return;
+        try {
+          const codes = await detector.detect(video);
+          const value = codes?.[0]?.rawValue;
+          if (value) {
+            cancelled = true;
+            stopNative();
+            onScanRef.current(value);
+            return;
+          }
+        } catch {
+          // Transient decode errors between frames — keep going.
+        }
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
     }
 
-    scanner
-      .start(
-        { facingMode: "environment" },
-        {
-          fps: 15,
-          // Wide & short box matches 1D barcodes on packaging.
-          qrbox: (vw, vh) => {
-            const w = Math.min(320, Math.floor(vw * 0.85));
-            const h = Math.max(80, Math.floor(vh * 0.25));
-            return { width: w, height: h };
+    async function startFallback() {
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import(
+        "html5-qrcode"
+      );
+      if (cancelled) return;
+      let scanner: InstanceType<typeof Html5Qrcode>;
+      try {
+        scanner = new Html5Qrcode(SCANNER_DIV_ID, {
+          verbose: false,
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+          ],
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        });
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Scanner failed to start.");
+        return;
+      }
+      fallbackScanner = scanner;
+      scanner
+        .start(
+          { facingMode: "environment" },
+          {
+            fps: 15,
+            qrbox: (vw, vh) => {
+              const w = Math.min(320, Math.floor(vw * 0.85));
+              const h = Math.max(80, Math.floor(vh * 0.25));
+              return { width: w, height: h };
+            },
+            aspectRatio: 1.333,
           },
-          aspectRatio: 1.333,
-        },
-        (decoded) => {
-          if (cancelled) return;
-          cancelled = true;
-          scanner?.stop().catch(() => {});
-          onScanRef.current(decoded);
-        },
-        () => {
-          // Per-frame "no code found" — silent.
-        },
-      )
-      .catch((e: unknown) => {
-        const msg = e instanceof Error ? e.message : "Camera failed to start.";
-        setError(msg);
-      });
+          (decoded) => {
+            if (cancelled) return;
+            cancelled = true;
+            scanner.stop().catch(() => {});
+            onScanRef.current(decoded);
+          },
+          () => {},
+        )
+        .catch((e: unknown) => {
+          setError(e instanceof Error ? e.message : "Camera failed to start.");
+        });
+    }
+
+    const Ctor = (window as unknown as { BarcodeDetector?: DetectorCtor })
+      .BarcodeDetector;
+    if (Ctor) {
+      setMode("native");
+      startNative(Ctor);
+    } else {
+      setMode("fallback");
+      startFallback();
+    }
 
     return () => {
       cancelled = true;
+      stopNative();
       try {
-        scanner
+        fallbackScanner
           ?.stop()
           .catch(() => {})
-          .finally(() => scanner?.clear());
+          .finally(() => fallbackScanner?.clear());
       } catch {
         // Already stopped / never started.
       }
@@ -131,12 +196,24 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
 
   return (
     <div className="space-y-3">
-      <div
-        id={SCANNER_DIV_ID}
-        className="overflow-hidden rounded-lg border bg-black"
-      />
+      {mode === "native" ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="aspect-[4/3] w-full rounded-lg border bg-black object-cover"
+        />
+      ) : (
+        <div
+          id={SCANNER_DIV_ID}
+          className="overflow-hidden rounded-lg border bg-black"
+        />
+      )}
       <p className="text-center text-xs text-muted-foreground">
-        Point at the barcode. Holds steady, good light.
+        {mode === null
+          ? "Starting camera…"
+          : "Point at the barcode. Hold steady, good light."}
       </p>
     </div>
   );
