@@ -140,7 +140,7 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
         width: { ideal: 1280 },
         height: { ideal: 720 },
         advanced: [{ focusMode: "continuous" }],
-      } as MediaTrackConstraints;
+      } as unknown as MediaTrackConstraints;
       scanner
         .start(
           videoConstraints,
