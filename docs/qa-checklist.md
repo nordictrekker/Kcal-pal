@@ -51,3 +51,10 @@ Surfaces:
 ## Responsiveness
 Every page is `max-w-md` (recap is `max-w-2xl`). Check no horizontal scroll,
 tap targets ≥ ~40px, and that long entry text wraps rather than overflows.
+
+## Automated route smoke test
+`npm run smoke` (against a running `next start`, with a Supabase-pointed
+`.env.local`) verifies every route's status without a browser or session:
+public pages 200, gated pages 307 → `/login`, ingest API 401. Latest run:
+**17/17 routes pass.** This covers routing/auth-gating; the interactive
+feature checks above still need a real browser/device.
