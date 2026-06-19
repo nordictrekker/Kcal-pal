@@ -8,7 +8,8 @@ warm guidance.
 > Architecture, conventions, and the working backlog live in
 > [`HANDOFF.md`](./HANDOFF.md). Backend wiring (env vars, migrations, edge
 > functions, cron) lives in [`SETUP.md`](./SETUP.md). Deferred ideas are in
-> [`TODO.md`](./TODO.md).
+> [`TODO.md`](./TODO.md). A cross-browser/PWA test pass is in
+> [`docs/qa-checklist.md`](./docs/qa-checklist.md).
 
 ## Stack
 
