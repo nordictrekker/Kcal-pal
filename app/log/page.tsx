@@ -34,13 +34,29 @@ export default async function LogPage({
       })
     : null;
 
-  const { data: savedRaw } = await supabase
-    .from("saved_meals")
-    .select("id,label,description,calories,protein_g,last_used_at,use_count")
-    .eq("user_id", user.id)
-    .order("last_used_at", { ascending: false, nullsFirst: false })
-    .order("use_count", { ascending: false })
-    .limit(20);
+  // Saved meals and the pantry source (recent logs) are independent — fetch in
+  // parallel rather than one after the other.
+  const since = new Date(Date.now() - 45 * 86_400_000).toISOString();
+  const [{ data: savedRaw }, { data: recentRaw }] = await Promise.all([
+    supabase
+      .from("saved_meals")
+      .select("id,label,description,calories,protein_g,last_used_at,use_count")
+      .eq("user_id", user.id)
+      .order("last_used_at", { ascending: false, nullsFirst: false })
+      .order("use_count", { ascending: false })
+      .limit(20),
+    // Auto-detected pantry: the user's most-eaten component foods over the last
+    // ~45 days, surfaced as quick-fill chips (no manual saving required). Logs
+    // are broken into their AI component breakdown, then clustered by food token
+    // so a daily yogurt or latte surfaces even when worded differently each time.
+    supabase
+      .from("food_entries")
+      .select("meal,consumed_at,raw_ai_response")
+      .eq("user_id", user.id)
+      .gte("consumed_at", since)
+      .order("consumed_at", { ascending: false })
+      .limit(200),
+  ]);
   const saved: SavedMealItem[] = (savedRaw ?? []).map((s) => ({
     id: s.id as string,
     label: s.label as string,
@@ -48,20 +64,6 @@ export default async function LogPage({
     calories: s.calories as number | null,
     protein_g: s.protein_g as number | null,
   }));
-
-  // Auto-detected pantry: the user's most-eaten component foods over the last
-  // ~45 days, surfaced as quick-fill chips (no manual saving required). Logs are
-  // broken into their AI component breakdown, then clustered by food token so a
-  // daily yogurt or regular latte surfaces even though it's worded differently
-  // each time and buried inside larger meals.
-  const since = new Date(Date.now() - 45 * 86_400_000).toISOString();
-  const { data: recentRaw } = await supabase
-    .from("food_entries")
-    .select("meal,consumed_at,raw_ai_response")
-    .eq("user_id", user.id)
-    .gte("consumed_at", since)
-    .order("consumed_at", { ascending: false })
-    .limit(200);
   const components: PantryComponent[] = (recentRaw ?? []).flatMap((r) =>
     extractComponents(r.raw_ai_response).map((c) => ({
       name: c.name,
