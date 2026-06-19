@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://nrfvsfmhzrkrokzzupen.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_aeyM9IC69bPpHOu9F797HA_QOHfNJ_w
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Public client values (publishable anon key — safe to expose; it ships in
+      # the client bundle and is RLS-protected). Override with repo secrets if
+      # rotated. Set E2E_STORAGE_STATE (a saved session) to also run the
+      # authenticated specs.
+      NEXT_PUBLIC_SUPABASE_URL: https://nrfvsfmhzrkrokzzupen.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_aeyM9IC69bPpHOu9F797HA_QOHfNJ_w
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Chromium = Chrome engine, WebKit = Safari engine.
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
