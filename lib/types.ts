@@ -15,6 +15,7 @@ export type ParsedItem = {
   // logged entries only itemized macros; absent → derived by allocation.
   fiber_g?: number;
   saturated_fat_g?: number;
+  trans_fat_g?: number;
   cholesterol_mg?: number;
   iron_mg?: number;
   calcium_mg?: number;
@@ -31,6 +32,7 @@ export type ParsedNutrition = {
   fiber_g: number;
   // Extended nutrients (AI-estimated; directional). 0 when not estimable.
   saturated_fat_g: number;
+  trans_fat_g: number;
   cholesterol_mg: number;
   iron_mg: number;
   calcium_mg: number;
@@ -64,6 +66,7 @@ export type FoodEntry = {
   fat_g: number | null;
   fiber_g: number | null;
   saturated_fat_g: number | null;
+  trans_fat_g: number | null;
   cholesterol_mg: number | null;
   iron_mg: number | null;
   calcium_mg: number | null;

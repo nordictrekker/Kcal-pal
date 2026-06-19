@@ -8,6 +8,7 @@ const FIELDS = [
   "fat_g",
   "fiber_g",
   "saturated_fat_g",
+  "trans_fat_g",
   "cholesterol_mg",
   "iron_mg",
   "calcium_mg",

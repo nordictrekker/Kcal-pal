@@ -1,6 +1,8 @@
 # Kcal-pal — session handoff
 
-Last updated end of session on 2026-06-15. Branch: `claude/follow-instructions-g107z`.
+Last updated 2026-06-19. Branch: `claude/pensive-newton-yax657` (preview
+deploys; Vercel production tracks `claude/follow-instructions-g107z`, which
+this branch is mirrored to on each push).
 
 A fresh Claude Code conversation should read this top-to-bottom to pick
 up where we left off. Everything below is what the previous session
@@ -47,6 +49,17 @@ Current branch: `claude/follow-instructions-g107z`. PR has NOT been
 opened; the user has not asked for one. Recent commit order, most
 recent first:
 
+**Shipped 2026-06-19 (this session):** per-component micronutrients via
+USDA FoodData Central enrichment (`lib/fdc.ts` + `fdc_cache`); `/reanalyze`
+to reprocess old logs through the current pipeline; barcode portion editor +
+iOS PWA tap-to-start camera fix; `/today/summary` **Today ⇄ 7-day average**
+toggle with per-macro/micro top-contributor breakdowns; generate-on-demand
+**food insights** (`lib/food-insights.ts` + `food_insights`); log-page
+reorder + auto-growing description box + pantry threshold raise; a perf pass
+(RLS init-plan fix for new tables, parallelized query waterfalls on `/log`
+and `/today/summary`, root `loading.tsx` for instant nav, removed an unused
+framer-motion provider). Supplements tracker scoped into `TODO.md`.
+
 All on branch `claude/pensive-newton-yax657` (preview deploys; Vercel
 production still tracks `follow-instructions-g107z` — merge/redirect
 when ready):
@@ -80,24 +93,30 @@ when ready):
 
 The session ran ahead of deploy plumbing several times. As of now:
 
-### 4a. Supabase migrations not yet applied
+### 4a. Supabase migrations — applied via MCP
 
-The user runs migrations manually in the SQL Editor — there's NO
-Supabase MCP available in this environment despite multiple connection
-attempts. Migrations 9–14 are committed but the user may not have
-applied all of them yet. Order matters; idempotent so safe to re-run.
+The Supabase MCP is available in-session (see §8), so migrations are now
+applied directly to the project (`nrfvsfmhzrkrokzzupen`) with
+`apply_migration` and verified with `get_advisors`. Files live in
+`supabase/migrations/` and are idempotent (safe to re-run). Current set
+through this session:
 
 ```
-0009_water_logs.sql        — hydration table + daily_water_target_ml
-0010_weekly_digests.sql    — cached LLM weekly digest
-0011_oura_expanded.sql     — total_calories + sleep architecture columns
-0012_profile_onboarding.sql— onboarding/target/cycle profile fields
-0013_recipes.sql           — recipe library
-0014_goal_weight.sql       — goal_weight_lbs on profiles
+0009_water_logs · 0010_weekly_digests · 0011_oura_expanded
+0012_profile_onboarding · 0013_recipes · 0013_location_travel
+0014_goal_weight · 0014_travel_distance · 0015_day_log_status
+0016_nutrients_and_metrics   — micro/macro nutrient columns + metric registry
+0017_perf_rls_and_indexes    — wrap auth.uid() in a subselect; FK indexes
+0018_revoke_handle_new_user
+0019_fdc_cache               — USDA FoodData Central per-100 g cache (shared)
+0020_food_insights           — cached LLM food-insights note (per ISO week)
+0021_perf_rls_followup       — same RLS perf fix for fdc_cache + food_insights
 ```
 
-If the user hits "column does not exist" runtime errors after pulling
-the branch, that's a missing migration.
+If the user hits "column does not exist" after pulling, that's a missing
+migration (apply it via MCP). The Supabase performance + security advisors
+should be clean except two INFO-level "unused index" notes on intentional
+FK-covering indexes.
 
 ### 4b. Edge function redeploy — DONE (2026-06-15)
 
@@ -135,9 +154,34 @@ engine output). Cards in order:
 - Footer nav: Trends / Recap / Settings
 - Floating "+ Log food" FAB
 
+### `/today/summary`
+The food log for a day. **Today ⇄ 7-day average** toggle (today only):
+average mode shows daily-average calorie/macro/micro vs goals. Every
+macro and micro bar expands to its top contributing foods (pie/table in
+today mode; top-5 weekly merged table in average mode), attributed
+per-component via `lib/contributions.ts`. The 7-day view ends in a
+generate-on-demand **food insights** card (`FoodInsightCard`).
+
+### `/reanalyze`
+Reprocesses the user's text logs through the current parse + USDA
+enrichment pipeline (client loops one entry per request) and shows a
+before/after of micros gained.
+
 ### `/log`, `/log/photo`, `/log/scan`
-Text, vision (Anthropic), barcode (OpenFoodFacts → Anthropic
-fallback). Quick-action tiles: Scan / Photo / Recipes.
+Text, vision (Anthropic), barcode (OpenFoodFacts → Anthropic fallback).
+`/log` order: meal → auto-growing description box → saved meals →
+auto-detected pantry (`lib/pantry.ts`, foods logged 3+ times in ~45 days).
+`/log/scan` uses the native `BarcodeDetector` where available and lazy-loads
+html5-qrcode otherwise; in an iOS home-screen PWA it requires a "Start
+camera" tap (standalone mode blocks auto-start). After a scan, a portion
+editor (grams/servings) recalculates macros before saving.
+
+### Micronutrients (USDA FoodData Central)
+The parse pipeline enriches AI-identified foods with real per-100 g micros
+(iron, calcium, magnesium, vitamin D, omega-3, saturated fat, cholesterol)
+looked up in USDA FDC, cached in `fdc_cache` by normalized food name
+(`lib/fdc.ts`). The metric registry (`lib/nutrients.ts`) drives the
+configurable home card and the summary breakdowns.
 
 ### `/recipes`
 Paste URL → server fetches page → Claude parses ingredients +
@@ -218,6 +262,14 @@ lib/
   apple-health.ts     manual JSON/CSV import parser
   phase-modifiers.ts  per-phase target multipliers
   stats.ts            mean, rolling avg, Pearson r, lastNDays, localDay
+  daily-targets.ts    resolveDailyTargets — base→phase→recovery→balance
+  nutrients.ts        metric registry (macros + micros), value/target helpers
+  contributions.ts    split entries into component foods, attribute per-nutrient
+  food-items.ts       extractComponents from a stored AI response
+  fdc.ts              USDA FoodData Central lookup + micro enrichment (fdc_cache)
+  food-insights.ts    LLM food-insights prompt (standouts + lift lagging)
+  pantry.ts           cluster recent logs into frequent-food chips
+  timezone.ts         local day keys + UTC day bounds for the user's tz
 
 app/today/
   page.tsx                       the big one — wires everything together
@@ -230,6 +282,14 @@ app/today/
   entry-list.tsx, entry-row.tsx  today's meals
   sync-actions.ts                manual Oura sync trigger
   weight-actions.ts, water-actions.ts, actions.ts
+
+app/today/summary/
+  page.tsx                       day log; Today/7-day-average toggle
+  summary-panels.tsx             client toggle wrapper
+  nutrient-breakdown.tsx         expandable per-nutrient contributor view
+  insight-card.tsx, insight-actions.ts   generate-on-demand food insights
+
+app/reanalyze/    reprocess old logs (page + actions + client panel)
 
 app/weekly/
   page.tsx        Trends with range tabs
@@ -279,8 +339,12 @@ it, minus anything that depends on Health Auto Export / web Apple
 Health ingestion (→ Phase B, see §4d). Tags: ⚡ = uses data we already
 have; 🔌 = needs new plumbing.
 
-**Shipped this session:** expanded insight rules; per-phase baselines
-card; plain-language correlations card; Oura resilience/stress surfaced.
+**Shipped since this roadmap was written:** USDA FoodData Central micro
+enrichment (item #10, micros side); per-component nutrient breakdowns;
+`/today/summary` 7-day average + food insights; `/reanalyze`; barcode
+portion editor; root `loading.tsx` skeleton (part of item #11). Earlier:
+expanded insight rules; per-phase baselines card; correlations card; Oura
+resilience/stress surfaced.
 
 **Next up (recommended order), all non-HAE:**
 1. **Personalized baselines → daily insight** ⚡ — feed the new

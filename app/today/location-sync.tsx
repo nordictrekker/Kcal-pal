@@ -6,6 +6,7 @@ import {
   syncLocation,
   confirmTravel,
   dismissTravel,
+  rejectLocation,
   type TravelPrompt,
 } from "./location-actions";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,7 +43,7 @@ export function LocationSync() {
           </span>
         </div>
         <p className="text-xs text-muted-foreground">{detail}</p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
             disabled={pending}
@@ -68,7 +69,24 @@ export function LocationSync() {
           >
             No, this is home
           </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                await rejectLocation();
+                setPrompt(null);
+              })
+            }
+          >
+            That&apos;s wrong
+          </Button>
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          “That’s wrong” keeps your saved home and ignores this reading. You can
+          set your home city anytime in Settings.
+        </p>
       </CardContent>
     </Card>
   );

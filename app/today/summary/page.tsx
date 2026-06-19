@@ -37,7 +37,8 @@ import type { FoodEntry, Profile } from "@/lib/types";
 import { EntryList } from "../entry-list";
 import { SummaryPanels } from "./summary-panels";
 import { FoodInsightCard } from "./insight-card";
-import { getCachedFoodInsight } from "./insight-actions";
+import type { InsightState } from "./insight-actions";
+import { isoYearWeek } from "@/lib/digest";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ function toContribInput(e: FoodEntry): EntryForContrib {
       fat_g: e.fat_g,
       fiber_g: e.fiber_g,
       saturated_fat_g: e.saturated_fat_g,
+      trans_fat_g: e.trans_fat_g,
       cholesterol_mg: e.cholesterol_mg,
       iron_mg: e.iron_mg,
       calcium_mg: e.calcium_mg,
@@ -125,6 +127,7 @@ export default async function SummaryPage({
     { data: plantRows },
     { data: weekRows },
     { data: weekDrinkRows },
+    { data: insightRow },
   ] = await Promise.all([
     supabase
       .from("food_entries")
@@ -193,6 +196,16 @@ export default async function SummaryPage({
           .gte("logged_at", weekWindowStart)
           .lt("logged_at", weekWindowEnd)
       : Promise.resolve({ data: [] }),
+    // Cached food-insights note for the current week (today only) — fetched in
+    // parallel here instead of a follow-up round trip after this Promise.all.
+    isToday
+      ? supabase
+          .from("food_insights")
+          .select("summary,generated_at")
+          .eq("user_id", user.id)
+          .eq("year_week", isoYearWeek())
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const entries = (rows ?? []) as FoodEntry[];
@@ -385,9 +398,13 @@ export default async function SummaryPage({
 
   // Cached food-insights note for the current week (today view only); the card
   // can (re)generate it on demand.
-  const weekInsightInitial = isToday
-    ? await getCachedFoodInsight()
-    : ({ status: "empty" } as const);
+  const weekInsightInitial: InsightState = insightRow
+    ? {
+        status: "ready",
+        summary: insightRow.summary as string,
+        generatedAt: insightRow.generated_at as string,
+      }
+    : { status: "empty" };
 
   // Distinct plants this week (positive, additive diversity goal).
   const weeklyPlants = Array.from(

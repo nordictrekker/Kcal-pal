@@ -10,6 +10,7 @@ export type MetricKey =
   | "carbs"
   | "fat"
   | "saturated_fat"
+  | "trans_fat"
   | "cholesterol"
   | "fiber"
   | "iron"
@@ -36,6 +37,7 @@ export const METRICS: Record<MetricKey, MetricDef> = {
   carbs: { key: "carbs", label: "Carbs", unit: "g", field: "carbs_g", kind: "goal", colorVar: "--macro-carbs", targetField: "carbs_g", category: "macro" },
   fat: { key: "fat", label: "Fat", unit: "g", field: "fat_g", kind: "goal", colorVar: "--macro-fat", targetField: "fat_g", category: "macro" },
   saturated_fat: { key: "saturated_fat", label: "Saturated fat", unit: "g", field: "saturated_fat_g", kind: "limit", colorVar: "--macro-fat", reference: 20, category: "macro" },
+  trans_fat: { key: "trans_fat", label: "Trans fat", unit: "g", field: "trans_fat_g", kind: "limit", colorVar: "--macro-fat", reference: 2, category: "macro" },
   cholesterol: { key: "cholesterol", label: "Cholesterol", unit: "mg", field: "cholesterol_mg", kind: "limit", colorVar: "--macro-carbs", reference: 300, category: "macro" },
   fiber: { key: "fiber", label: "Fiber", unit: "g", field: "fiber_g", kind: "goal", colorVar: "--macro-fiber", targetField: "fiber_g", category: "macro" },
   iron: { key: "iron", label: "Iron", unit: "mg", field: "iron_mg", kind: "goal", colorVar: "--primary", reference: 18, category: "micro", cycleRelevant: true },
@@ -46,12 +48,20 @@ export const METRICS: Record<MetricKey, MetricDef> = {
 };
 
 export const ALL_METRIC_KEYS: MetricKey[] = [
-  "protein", "carbs", "fat", "saturated_fat", "cholesterol", "fiber",
+  "protein", "carbs", "fat", "saturated_fat", "trans_fat", "cholesterol", "fiber",
   "iron", "calcium", "magnesium", "vitamin_d", "omega3",
 ];
 export const DEFAULT_HOME_METRICS: MetricKey[] = ["protein", "carbs", "fat", "fiber"];
 export const MACRO_METRIC_KEYS: MetricKey[] = [
-  "protein", "carbs", "fat", "saturated_fat", "cholesterol", "fiber",
+  "protein", "carbs", "fat", "saturated_fat", "trans_fat", "cholesterol", "fiber",
+];
+
+// The dietary drivers of blood LDL ("bad cholesterol"), surfaced together as a
+// one-tap "LDL impact" group on the home-metric picker. Food has no LDL value;
+// these are what raise it (saturated fat is the biggest lever, then trans fat,
+// then dietary cholesterol).
+export const LDL_IMPACT_METRICS: MetricKey[] = [
+  "saturated_fat", "trans_fat", "cholesterol",
 ];
 export const MICRO_METRIC_KEYS: MetricKey[] = [
   "iron", "calcium", "magnesium", "vitamin_d", "omega3",

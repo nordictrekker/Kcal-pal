@@ -14,6 +14,7 @@ Project → Settings → Environment Variables. Add each, then redeploy.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your `sb_publishable_…` key |
 | `SUPABASE_SERVICE_ROLE_KEY` | your `sb_secret_…` key |
 | `ANTHROPIC_API_KEY` | `sk-ant-…` |
+| `USDA_FDC_API_KEY` | (optional) FoodData Central key for real micronutrients. [Free signup](https://fdc.nal.usda.gov/api-key-signup.html); leave blank for AI-only micros. |
 | `ALLOWED_EMAIL` | `juliefloodreiff@gmail.com` |
 | `VAPID_PUBLIC_KEY` | `BB8GZeGSLaoTL7spt_Cw0_ie4BJMpgZrYYv2R68fhmKI2MDRjLuc2wTBQLxnUBJ6defWAYXI13uPSVeGxK3o81o` |
 | `VAPID_PRIVATE_KEY` | `jywx9WEBu7vtbGu-c_FSey-7dlvNbc8mK_soKCFqq6Q` |
@@ -55,6 +56,10 @@ Run in order. All are idempotent (safe to re-run).
 - `0001_init.sql` — already applied.
 - The cron migrations (`0002`–`0005`) each need Vault secrets created first
   and an edge function deployed. See sections below.
+- Feature migrations (`0006`–`0021`) add tables/columns and RLS for hydration,
+  digests, onboarding, recipes, nutrients, the USDA `fdc_cache`, and
+  `food_insights`. With the Supabase MCP connected, apply them directly with
+  `apply_migration` (then `get_advisors` to verify) instead of the SQL Editor.
 
 ## 3. Edge Functions
 

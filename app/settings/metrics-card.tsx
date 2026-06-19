@@ -3,7 +3,12 @@
 import { useState, useTransition } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { updateVisibleMetrics } from "./metrics-actions";
-import { METRICS, ALL_METRIC_KEYS, type MetricKey } from "@/lib/nutrients";
+import {
+  METRICS,
+  ALL_METRIC_KEYS,
+  LDL_IMPACT_METRICS,
+  type MetricKey,
+} from "@/lib/nutrients";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -25,6 +30,20 @@ export function MetricsCard({ initial }: { initial: MetricKey[] }) {
 
   const macros = ALL_METRIC_KEYS.filter((k) => METRICS[k].category === "macro");
   const micros = ALL_METRIC_KEYS.filter((k) => METRICS[k].category === "micro");
+  const ldlOn = LDL_IMPACT_METRICS.every((k) => selected.has(k));
+
+  function toggleLdlGroup() {
+    setSaved(false);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const on = LDL_IMPACT_METRICS.every((k) => next.has(k));
+      for (const k of LDL_IMPACT_METRICS) {
+        if (on) next.delete(k);
+        else next.add(k);
+      }
+      return next;
+    });
+  }
 
   function save() {
     setSaved(false);
@@ -72,6 +91,29 @@ export function MetricsCard({ initial }: { initial: MetricKey[] }) {
             {macros.map((k) => (
               <Chip key={k} k={k} />
             ))}
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium">LDL impact</span>
+              <button
+                type="button"
+                onClick={toggleLdlGroup}
+                aria-pressed={ldlOn}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs transition-colors",
+                  ldlOn
+                    ? "border-primary bg-primary/10 font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {ldlOn ? "Added" : "+ Add all"}
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Saturated fat · trans fat · cholesterol — the dietary drivers of
+              blood LDL (“bad cholesterol”). Food has no LDL value itself;
+              saturated fat is the biggest lever.
+            </p>
           </div>
           <p className="pt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
             Micronutrients
