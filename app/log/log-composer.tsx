@@ -3,17 +3,21 @@
 import { useRef, useState } from "react";
 import { Pantry } from "./pantry";
 import { LogForm } from "./log-form";
+import { SavedMeals, type SavedMealItem } from "./saved-meals";
 import type { FrequentItem } from "@/lib/pantry";
 import type { Meal } from "@/lib/types";
 
-// Ties the pantry chips to the type-it form so tapping a frequent food fills
-// the description box (and focuses it) ready to tweak and submit.
+// Orders the log-food flow: meal + "what did you eat" form first, then saved
+// meals, then the auto-detected pantry. Tapping a pantry chip fills the
+// description box (and focuses it) ready to tweak and submit.
 export function LogComposer({
   frequentItems,
+  savedItems,
   defaultMeal,
   logDate,
 }: {
   frequentItems: FrequentItem[];
+  savedItems: SavedMealItem[];
   defaultMeal: Meal;
   logDate?: string | null;
 }) {
@@ -32,17 +36,7 @@ export function LogComposer({
   }
 
   return (
-    <div className="space-y-4">
-      <Pantry items={frequentItems} onPick={pick} logDate={logDate} />
-
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">
-          or type it
-        </span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
+    <div className="space-y-6">
       <LogForm
         defaultMeal={defaultMeal}
         logDate={logDate}
@@ -50,6 +44,10 @@ export function LogComposer({
         onValueChange={setDescription}
         textareaRef={textareaRef}
       />
+
+      <SavedMeals items={savedItems} />
+
+      <Pantry items={frequentItems} onPick={pick} logDate={logDate} />
     </div>
   );
 }

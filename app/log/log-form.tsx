@@ -6,7 +6,7 @@ import { logTextMeal, type LogState } from "./actions";
 import { MEALS } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -51,21 +51,6 @@ export function LogForm({
   return (
     <form ref={formRef} action={formAction} className="space-y-4">
       {logDate ? <input type="hidden" name="date" value={logDate} /> : null}
-      <div className="space-y-2">
-        <Label htmlFor="description">What did you eat?</Label>
-        <Textarea
-          id="description"
-          name="description"
-          ref={textareaRef}
-          required
-          rows={3}
-          placeholder="chicken burrito, no rice"
-          autoFocus
-          {...(controlled
-            ? { value, onChange: (e) => onValueChange?.(e.target.value) }
-            : {})}
-        />
-      </div>
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Meal</legend>
@@ -90,6 +75,21 @@ export function LogForm({
           ))}
         </div>
       </fieldset>
+
+      <div className="space-y-2">
+        <Label htmlFor="description">What did you eat?</Label>
+        <AutoTextarea
+          id="description"
+          name="description"
+          ref={textareaRef}
+          required
+          rows={3}
+          placeholder="chicken burrito, no rice"
+          {...(controlled
+            ? { value, onChange: (e) => onValueChange?.(e.target.value) }
+            : {})}
+        />
+      </div>
 
       {state.error ? (
         <p className="text-sm text-destructive">{state.error}</p>

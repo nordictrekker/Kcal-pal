@@ -279,6 +279,14 @@ export default async function SummaryPage({
         <p className="text-xs text-muted-foreground">{dateLabel}</p>
       </header>
 
+      <Link
+        href="/today/week"
+        className="flex items-center justify-between rounded-lg border bg-muted/40 px-4 py-3 text-sm font-medium hover:bg-muted"
+      >
+        <span>Last 7 days · averages vs goals</span>
+        <span className="text-muted-foreground">→</span>
+      </Link>
+
       <MacroTotals
         totals={totals}
         targets={targets}

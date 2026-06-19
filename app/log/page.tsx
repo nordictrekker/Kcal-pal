@@ -6,7 +6,7 @@ import { defaultMeal } from "@/lib/food";
 import { detectFrequentItems, type PantryComponent } from "@/lib/pantry";
 import { extractComponents } from "@/lib/food-items";
 import { LogComposer } from "./log-composer";
-import { SavedMeals, type SavedMealItem } from "./saved-meals";
+import type { SavedMealItem } from "./saved-meals";
 import type { Meal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -84,7 +84,9 @@ export default async function LogPage({
       },
     })),
   );
-  const frequentItems = detectFrequentItems(components);
+  // Only surface a food in the pantry once it's been logged at least 3 times in
+  // the ~45-day window — enough to be a genuine staple, not a one-off.
+  const frequentItems = detectFrequentItems(components, { minCount: 3 });
 
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
@@ -106,8 +108,6 @@ export default async function LogPage({
           Typed entries only — scan/photo always log to today.
         </p>
       ) : null}
-
-      <SavedMeals items={saved} />
 
       <div className="grid grid-cols-3 gap-2">
         <Link
@@ -135,6 +135,7 @@ export default async function LogPage({
 
       <LogComposer
         frequentItems={frequentItems}
+        savedItems={saved}
         defaultMeal={defaultMeal()}
         logDate={logDate}
       />
