@@ -87,22 +87,19 @@ authenticated path tested first.
   evaluate once per query, not per row.
 - **Instant nav:** root `loading.tsx` so transitions never blank-flash.
 
-## Region co-location (applied)
+## Region co-location (done — verified)
 
-`app/layout.tsx` now sets `preferredRegion = "pdx1"` (Portland), so Vercel runs
-the functions in the same region as Supabase (`us-west-2` / Oregon). That turns
-the per-request auth + data round trips from a cross-region hop (~60–70 ms each)
-into same-region calls (~1–2 ms) — the lever that brings authenticated
-server-render under 50 ms (framework floor is already <15 ms). It's honored on
-plans that support region pinning and gracefully ignored otherwise; verify on a
-deployed environment (the prod host isn't reachable from CI). Revert the one
-line to undo.
+`vercel.json` sets `"regions": ["pdx1"]` (Portland), so Vercel runs the
+functions in the same region as Supabase (`us-west-2` / Oregon). **Verified on a
+preview deployment: `regions: ["pdx1"]`.** This turns the per-request auth +
+data round trips from a cross-region hop (~60–70 ms each) into same-region calls
+(~1–2 ms) — the lever that brings authenticated server-render under 50 ms
+(framework floor is already <15 ms).
 
-## Highest-impact remaining levers (need a decision / real-device test)
-
-1. **If region pinning isn't honored on the current plan**, set the project's
-   function region to a us-west region in Vercel settings, or move Supabase to
-   us-east. Same goal: kill the cross-region hop on every query.
+Note: the Next.js `preferredRegion` route-config did **not** take effect on this
+plan (deploys stayed in `iad1`); the `vercel.json` `regions` field did. It
+applies to production once this lands on the production branch — confirm with
+`get_deployment` that the production deployment reports `regions: ["pdx1"]`.
 2. **Reduce duplicate auth revalidation.** Authenticated pages call
    `getUser()` in middleware *and* in the page. Switching the per-request gate
    to `getClaims()` (local JWT verification) would drop one network round trip
