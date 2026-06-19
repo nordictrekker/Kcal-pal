@@ -10,6 +10,9 @@ import type { SavedMealItem } from "./saved-meals";
 import type { Meal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+// Restaurant logs trigger a live web-search parse, which can take longer than
+// the default function budget — allow up to 60s for the text-log action.
+export const maxDuration = 60;
 
 export default async function LogPage({
   searchParams,
