@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Camera, ImagePlus, BookOpen } from "lucide-react";
 import { defaultMeal } from "@/lib/food";
-import { LogForm } from "./log-form";
+import { detectFrequentItems, type PantryRow } from "@/lib/pantry";
+import { LogComposer } from "./log-composer";
 import { SavedMeals, type SavedMealItem } from "./saved-meals";
+import type { Meal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,24 @@ export default async function LogPage({
     calories: s.calories as number | null,
     protein_g: s.protein_g as number | null,
   }));
+
+  // Auto-detected pantry: the user's most-logged foods over the last ~45 days,
+  // surfaced as quick-fill chips (no manual saving required).
+  const since = new Date(Date.now() - 45 * 86_400_000).toISOString();
+  const { data: recentRaw } = await supabase
+    .from("food_entries")
+    .select("description,meal,consumed_at")
+    .eq("user_id", user.id)
+    .gte("consumed_at", since)
+    .order("consumed_at", { ascending: false })
+    .limit(400);
+  const frequentItems = detectFrequentItems(
+    (recentRaw ?? []).map((r) => ({
+      description: r.description as string | null,
+      meal: r.meal as Meal | null,
+      consumed_at: r.consumed_at as string,
+    })) as PantryRow[],
+  );
 
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
@@ -93,15 +113,11 @@ export default async function LogPage({
         </Link>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">
-          or type it
-        </span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <LogForm defaultMeal={defaultMeal()} logDate={logDate} />
+      <LogComposer
+        frequentItems={frequentItems}
+        defaultMeal={defaultMeal()}
+        logDate={logDate}
+      />
     </main>
   );
 }

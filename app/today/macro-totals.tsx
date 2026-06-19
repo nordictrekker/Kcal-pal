@@ -1,7 +1,9 @@
 import { ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { CountUp } from "./count-up";
+import { NutrientBreakdown } from "./nutrient-breakdown";
 import type { Totals } from "@/lib/food";
+import type { ContribEntry } from "@/lib/contributions";
 import {
   METRICS,
   metricValueAndTarget,
@@ -59,6 +61,7 @@ export function MacroTotals({
   totals,
   targets,
   metrics = DEFAULT_HOME_METRICS,
+  entries,
   phaseAdjustment,
   targetNote,
   recoveryNote,
@@ -69,6 +72,9 @@ export function MacroTotals({
   targets: Totals;
   // Which metric bars to render under the calorie headline.
   metrics?: MetricKey[];
+  // When provided (summary page), each macro bar becomes an expandable
+  // contributor breakdown. Omitted on the home card, which stays static.
+  entries?: ContribEntry[];
   phaseAdjustment?: { phase: string; description: string } | null;
   // Short explanation when targets are auto-computed (e.g. from Oura burn).
   targetNote?: string | null;
@@ -130,7 +136,19 @@ export function MacroTotals({
             const def = METRICS[key];
             if (!def) return null;
             const { value, target } = metricValueAndTarget(def, totals, targets);
-            return (
+            return entries ? (
+              <NutrientBreakdown
+                key={key}
+                label={def.label}
+                value={value}
+                target={target}
+                unit={def.unit}
+                kind={def.kind}
+                colorVar={def.colorVar}
+                field={def.field as string}
+                entries={entries}
+              />
+            ) : (
               <MetricBar
                 key={key}
                 label={def.label}

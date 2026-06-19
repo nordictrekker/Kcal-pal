@@ -25,8 +25,10 @@ import {
   MICRO_METRIC_KEYS,
   PLANT_DIVERSITY_GOAL,
 } from "@/lib/nutrients";
+import type { ContribEntry } from "@/lib/contributions";
 import type { FoodEntry, Profile } from "@/lib/types";
-import { MacroTotals, MetricBar } from "../macro-totals";
+import { MacroTotals } from "../macro-totals";
+import { NutrientBreakdown } from "../nutrient-breakdown";
 import { EntryList } from "../entry-list";
 
 export const dynamic = "force-dynamic";
@@ -139,6 +141,28 @@ export default async function SummaryPage({
     ...foodTotals,
     calories: foodTotals.calories + alcoholCalories,
   };
+
+  // Slim per-entry records powering the expandable "what contributed to this
+  // nutrient" breakdowns. Each food_entries row already carries its own
+  // per-nutrient values, so contributions are just those values per entry.
+  const contribEntries: ContribEntry[] = entries.map((e) => ({
+    id: e.id,
+    label: e.description,
+    meal: e.meal,
+    values: {
+      protein_g: e.protein_g,
+      carbs_g: e.carbs_g,
+      fat_g: e.fat_g,
+      fiber_g: e.fiber_g,
+      saturated_fat_g: e.saturated_fat_g,
+      cholesterol_mg: e.cholesterol_mg,
+      iron_mg: e.iron_mg,
+      calcium_mg: e.calcium_mg,
+      magnesium_mg: e.magnesium_mg,
+      vitamin_d_mcg: e.vitamin_d_mcg,
+      omega3_mg: e.omega3_mg,
+    },
+  }));
 
   // Cycle phase for the target day.
   const cycleSettings: CycleSettings = {
@@ -255,6 +279,7 @@ export default async function SummaryPage({
         totals={totals}
         targets={targets}
         metrics={MACRO_METRIC_KEYS}
+        entries={contribEntries}
         phaseAdjustment={resolved.phaseAdjustment}
         targetNote={resolved.calorieNote}
         recoveryNote={resolved.recoveryNote}
@@ -268,7 +293,7 @@ export default async function SummaryPage({
           const def = METRICS[key];
           const { value, target } = metricValueAndTarget(def, totals, targets);
           return (
-            <MetricBar
+            <NutrientBreakdown
               key={key}
               label={def.label}
               value={value}
@@ -276,6 +301,8 @@ export default async function SummaryPage({
               unit={def.unit}
               kind={def.kind}
               colorVar={def.colorVar}
+              field={def.field as string}
+              entries={contribEntries}
             />
           );
         })}

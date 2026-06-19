@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, type RefObject } from "react";
 import { useFormStatus } from "react-dom";
 import { logTextMeal, type LogState } from "./actions";
 import { MEALS } from "@/lib/food";
@@ -24,15 +24,28 @@ function SubmitButton() {
 export function LogForm({
   defaultMeal,
   logDate,
+  value,
+  onValueChange,
+  textareaRef,
 }: {
   defaultMeal: Meal;
   logDate?: string | null;
+  // When provided, the description field is controlled by the parent (so the
+  // pantry chips can fill it). Otherwise the field is plain/uncontrolled.
+  value?: string;
+  onValueChange?: (v: string) => void;
+  textareaRef?: RefObject<HTMLTextAreaElement | null>;
 }) {
   const [state, formAction] = useActionState(logTextMeal, initial);
   const formRef = useRef<HTMLFormElement>(null);
+  const controlled = value !== undefined && onValueChange !== undefined;
 
   useEffect(() => {
-    if (state.ok) formRef.current?.reset();
+    if (state.ok) {
+      formRef.current?.reset();
+      if (controlled) onValueChange?.("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.ok]);
 
   return (
@@ -43,10 +56,14 @@ export function LogForm({
         <Textarea
           id="description"
           name="description"
+          ref={textareaRef}
           required
           rows={3}
           placeholder="chicken burrito, no rice"
           autoFocus
+          {...(controlled
+            ? { value, onChange: (e) => onValueChange?.(e.target.value) }
+            : {})}
         />
       </div>
 
