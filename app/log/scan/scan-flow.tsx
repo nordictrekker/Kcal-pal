@@ -131,40 +131,54 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
         return;
       }
       fallbackScanner = scanner;
+
       // iOS Safari has no native BarcodeDetector, so this path runs the WASM
-      // decoder per frame. disableFlip halves the work (no mirrored-frame retry),
-      // a capped resolution keeps each decode cheap, and continuous focus stops
-      // the blurry-frame stalls that made scanning feel "very slow".
-      const videoConstraints = {
+      // decoder per frame. disableFlip halves the work (no mirrored-frame retry)
+      // and a lower fps eases CPU — both safe and live in the scan config below.
+      const scanConfig = {
+        fps: 10,
+        qrbox: (vw: number, vh: number) => {
+          const w = Math.min(320, Math.floor(vw * 0.85));
+          const h = Math.max(80, Math.floor(vh * 0.25));
+          return { width: w, height: h };
+        },
+        aspectRatio: 1.333,
+        disableFlip: true,
+      };
+
+      // A capped resolution + continuous focus help decode speed where the
+      // browser honors them, but some iOS Safari versions throw
+      // OverconstrainedError on the `advanced` focus hint and refuse to start.
+      // So try the tuned constraints first, then fall back to a plain
+      // environment-facing request that every browser accepts.
+      const tunedConstraints = {
         facingMode: "environment",
         width: { ideal: 1280 },
         height: { ideal: 720 },
         advanced: [{ focusMode: "continuous" }],
       } as unknown as MediaTrackConstraints;
-      scanner
-        .start(
-          videoConstraints,
-          {
-            fps: 10,
-            qrbox: (vw, vh) => {
-              const w = Math.min(320, Math.floor(vw * 0.85));
-              const h = Math.max(80, Math.floor(vh * 0.25));
-              return { width: w, height: h };
-            },
-            aspectRatio: 1.333,
-            disableFlip: true,
-          },
-          (decoded) => {
-            if (cancelled) return;
-            cancelled = true;
-            scanner.stop().catch(() => {});
-            onScanRef.current(decoded);
-          },
-          () => {},
-        )
-        .catch((e: unknown) => {
+      const basicConstraints = {
+        facingMode: "environment",
+      } as MediaTrackConstraints;
+
+      const onDecode = (decoded: string) => {
+        if (cancelled) return;
+        cancelled = true;
+        scanner.stop().catch(() => {});
+        onScanRef.current(decoded);
+      };
+
+      const begin = (constraints: MediaTrackConstraints) =>
+        scanner.start(constraints, scanConfig, onDecode, () => {});
+
+      begin(tunedConstraints).catch(() => {
+        if (cancelled) return;
+        // Retry with the universally-supported constraints before surfacing
+        // an error, so a rejected focus/resolution hint doesn't dead-end.
+        begin(basicConstraints).catch((e: unknown) => {
           setError(e instanceof Error ? e.message : "Camera failed to start.");
         });
+      });
     }
 
     const Ctor = (window as unknown as { BarcodeDetector?: DetectorCtor })
