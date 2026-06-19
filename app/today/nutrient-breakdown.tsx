@@ -139,6 +139,7 @@ export function NutrientBreakdown({
   colorVar,
   field,
   entries,
+  weekly = false,
 }: {
   label: string;
   value: number;
@@ -148,9 +149,13 @@ export function NutrientBreakdown({
   colorVar: string;
   field: string;
   entries: ContribEntry[];
+  // Weekly mode: table-only, showing the top 5 contributing foods for the week
+  // (merged across days) rather than a per-day pie.
+  weekly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"pie" | "table">("pie");
+  const effectiveView = weekly ? "table" : view;
 
   const pct = target > 0 ? Math.min(100, (value / target) * 100) : 0;
   const over = value > target;
@@ -158,8 +163,9 @@ export function NutrientBreakdown({
 
   const all = contributionsForField(field, entries);
   const total = all.reduce((s, c) => s + c.amount, 0);
-  const slices = topWithOther(all);
+  const slices = weekly ? all.slice(0, 5) : topWithOther(all);
   const maxAmount = slices.reduce((m, s) => Math.max(m, s.amount), 0);
+  const period = weekly ? "this week" : "yet today";
 
   return (
     <div className="space-y-1">
@@ -197,43 +203,46 @@ export function NutrientBreakdown({
         <div className="rounded-lg border bg-muted/20 p-3">
           {total <= 0 ? (
             <p className="text-xs text-muted-foreground">
-              No tracked {label.toLowerCase()} contributors yet today.
+              No tracked {label.toLowerCase()} contributors {period}.
             </p>
           ) : (
             <>
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
                   What contributed to {label.toLowerCase()}
+                  {weekly ? " this week" : ""}
                 </p>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setView("pie")}
-                    aria-label="Percentage pie"
-                    aria-pressed={view === "pie"}
-                    className={cn(
-                      "rounded-md p-1.5 text-muted-foreground hover:bg-accent",
-                      view === "pie" && "bg-accent text-foreground",
-                    )}
-                  >
-                    <ChartPie className="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setView("table")}
-                    aria-label="Exact amounts"
-                    aria-pressed={view === "table"}
-                    className={cn(
-                      "rounded-md p-1.5 text-muted-foreground hover:bg-accent",
-                      view === "table" && "bg-accent text-foreground",
-                    )}
-                  >
-                    <List className="size-4" />
-                  </button>
-                </div>
+                {weekly ? null : (
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setView("pie")}
+                      aria-label="Percentage pie"
+                      aria-pressed={view === "pie"}
+                      className={cn(
+                        "rounded-md p-1.5 text-muted-foreground hover:bg-accent",
+                        view === "pie" && "bg-accent text-foreground",
+                      )}
+                    >
+                      <ChartPie className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView("table")}
+                      aria-label="Exact amounts"
+                      aria-pressed={view === "table"}
+                      className={cn(
+                        "rounded-md p-1.5 text-muted-foreground hover:bg-accent",
+                        view === "table" && "bg-accent text-foreground",
+                      )}
+                    >
+                      <List className="size-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {view === "pie" ? (
+              {effectiveView === "pie" ? (
                 <div className="flex items-center gap-4">
                   <Donut slices={slices} total={total} colorVar={colorVar} />
                   <Legend

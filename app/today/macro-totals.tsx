@@ -67,11 +67,14 @@ export function MacroTotals({
   recoveryNote,
   balanceNote,
   showLogHint,
+  weekly = false,
 }: {
   totals: Totals;
   targets: Totals;
   // Which metric bars to render under the calorie headline.
   metrics?: MetricKey[];
+  // Weekly mode: expandable bars show the week's top-5 contributors (table).
+  weekly?: boolean;
   // When provided (summary page), each macro bar becomes an expandable
   // contributor breakdown. Omitted on the home card, which stays static.
   entries?: ContribEntry[];
@@ -100,7 +103,7 @@ export function MacroTotals({
               <CountUp value={round(totals.calories)} />
             </span>
             <span className="flex items-baseline gap-1 text-sm tabular-nums text-muted-foreground">
-              of {targets.calories} kcal
+              of {targets.calories} {weekly ? "kcal/day" : "kcal"}
               {showLogHint ? (
                 <ChevronRight className="size-4 self-center text-muted-foreground/70" />
               ) : null}
@@ -147,6 +150,7 @@ export function MacroTotals({
                 colorVar={def.colorVar}
                 field={def.field as string}
                 entries={entries}
+                weekly={weekly}
               />
             ) : (
               <MetricBar

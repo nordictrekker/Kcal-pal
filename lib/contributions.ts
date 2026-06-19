@@ -151,3 +151,37 @@ export function topWithOther(
     { id: "__other__", label: "Other", meal: null, amount: restAmount },
   ];
 }
+
+// Merge component contributors that are the same food (by case-insensitive
+// label) into one, summing their nutrient values — so a yogurt eaten five times
+// across the week shows as a single contributor, not five near-identical slices.
+// `scale` rescales every value (e.g. 1/7 to turn a weekly sum into a daily
+// average).
+export function mergeContributorsByLabel(
+  entries: ContribEntry[],
+  scale = 1,
+): ContribEntry[] {
+  const map = new Map<string, ContribEntry>();
+  for (const e of entries) {
+    const key = e.label.trim().toLowerCase();
+    let merged = map.get(key);
+    if (!merged) {
+      merged = { id: key, label: e.label.trim(), meal: null, values: {} };
+      map.set(key, merged);
+    }
+    for (const [field, v] of Object.entries(e.values)) {
+      if (v == null) continue;
+      merged.values[field] = Number(merged.values[field] ?? 0) + Number(v);
+    }
+  }
+  const out = Array.from(map.values());
+  if (scale !== 1) {
+    for (const e of out) {
+      for (const field of Object.keys(e.values)) {
+        e.values[field] = Number(e.values[field] ?? 0) * scale;
+      }
+    }
+  }
+  return out;
+}
+

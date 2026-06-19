@@ -3,6 +3,7 @@ import {
   contributionsForField,
   topWithOther,
   buildComponentContributors,
+  mergeContributorsByLabel,
   type ContribEntry,
 } from "@/lib/contributions";
 import { detectFrequentItems, type PantryComponent } from "@/lib/pantry";
@@ -50,6 +51,29 @@ describe("topWithOther", () => {
     expect(other.label).toBe("Other");
     const total = make(10).reduce((s, c) => s + c.amount, 0);
     expect(grouped.reduce((s, c) => s + c.amount, 0)).toBe(total);
+  });
+});
+
+describe("mergeContributorsByLabel", () => {
+  it("merges same-named foods and sums their values", () => {
+    const entries: ContribEntry[] = [
+      { id: "a", label: "Greek yogurt", meal: "breakfast", values: { protein_g: 17, iron_mg: 1 } },
+      { id: "b", label: "greek yogurt", meal: "snack", values: { protein_g: 17 } },
+      { id: "c", label: "Spinach", meal: "lunch", values: { iron_mg: 3 } },
+    ];
+    const merged = mergeContributorsByLabel(entries);
+    expect(merged).toHaveLength(2);
+    const yogurt = merged.find((m) => m.label === "Greek yogurt");
+    expect(yogurt?.values.protein_g).toBe(34);
+    expect(yogurt?.values.iron_mg).toBe(1);
+  });
+
+  it("applies the scale factor (e.g. weekly sum to daily average)", () => {
+    const entries: ContribEntry[] = [
+      { id: "a", label: "Oats", meal: null, values: { fiber_g: 14 } },
+    ];
+    const merged = mergeContributorsByLabel(entries, 1 / 7);
+    expect(merged[0].values.fiber_g).toBeCloseTo(2);
   });
 });
 

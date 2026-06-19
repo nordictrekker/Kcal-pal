@@ -17,21 +17,59 @@ import {
   resolveDailyTargets,
   recentIntakeFromRows,
 } from "@/lib/daily-targets";
-import { localDayKey, localDayBoundsUTC } from "@/lib/timezone";
 import {
-  METRICS,
-  metricValueAndTarget,
+  localDayKey,
+  localDayBoundsUTC,
+  addDaysToKey,
+} from "@/lib/timezone";
+import {
   MACRO_METRIC_KEYS,
   MICRO_METRIC_KEYS,
   PLANT_DIVERSITY_GOAL,
 } from "@/lib/nutrients";
-import { buildComponentContributors } from "@/lib/contributions";
+import {
+  buildComponentContributors,
+  mergeContributorsByLabel,
+  type EntryForContrib,
+} from "@/lib/contributions";
+import type { Totals } from "@/lib/food";
 import type { FoodEntry, Profile } from "@/lib/types";
-import { MacroTotals } from "../macro-totals";
-import { NutrientBreakdown } from "../nutrient-breakdown";
 import { EntryList } from "../entry-list";
+import { SummaryPanels } from "./summary-panels";
 
 export const dynamic = "force-dynamic";
+
+// Slim a stored entry down to what the contributor breakdown needs.
+function toContribInput(e: FoodEntry): EntryForContrib {
+  return {
+    id: e.id,
+    description: e.description,
+    meal: e.meal,
+    raw_ai_response: e.raw_ai_response,
+    totals: {
+      protein_g: e.protein_g,
+      carbs_g: e.carbs_g,
+      fat_g: e.fat_g,
+      fiber_g: e.fiber_g,
+      saturated_fat_g: e.saturated_fat_g,
+      cholesterol_mg: e.cholesterol_mg,
+      iron_mg: e.iron_mg,
+      calcium_mg: e.calcium_mg,
+      magnesium_mg: e.magnesium_mg,
+      vitamin_d_mcg: e.vitamin_d_mcg,
+      omega3_mg: e.omega3_mg,
+    },
+  };
+}
+
+// Scale every numeric field of a totals object (e.g. ×1/7 for a daily average).
+function scaleTotals(t: Totals, factor: number): Totals {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(t)) {
+    if (typeof v === "number") out[k] = v * factor;
+  }
+  return out as Totals;
+}
 
 // Food log for a day (today by default, or ?date=YYYY-MM-DD to review a past
 // day). Tap any entry to expand its component macros.
@@ -65,6 +103,15 @@ export default async function SummaryPage({
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const sevenDaysAgoDate = sevenDaysAgo.slice(0, 10);
 
+  // 7-day average window (only used for the Today⇄7-day-average toggle, which
+  // only appears on today). The 7 local day-keys ending today, and the UTC
+  // bounds covering them for the entry query.
+  const weekDayKeys = Array.from({ length: 7 }, (_, i) =>
+    addDaysToKey(todayKey, -(6 - i)),
+  );
+  const weekWindowStart = localDayBoundsUTC(tz, weekDayKeys[0]).start;
+  const weekWindowEnd = localDayBoundsUTC(tz, todayKey).end;
+
   const [
     { data: rows },
     { data: drinkRows },
@@ -74,6 +121,8 @@ export default async function SummaryPage({
     { data: recentFood },
     { data: dayStatusRows },
     { data: plantRows },
+    { data: weekRows },
+    { data: weekDrinkRows },
   ] = await Promise.all([
     supabase
       .from("food_entries")
@@ -123,6 +172,25 @@ export default async function SummaryPage({
       .select("plants")
       .eq("user_id", user.id)
       .gte("consumed_at", sevenDaysAgo),
+    // Full entries over the 7-day window, for the average view's totals and
+    // top-contributor breakdowns (fetched only when viewing today).
+    isToday
+      ? supabase
+          .from("food_entries")
+          .select("*")
+          .eq("user_id", user.id)
+          .gte("consumed_at", weekWindowStart)
+          .lt("consumed_at", weekWindowEnd)
+          .order("consumed_at", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    isToday
+      ? supabase
+          .from("alcohol_logs")
+          .select("calories,logged_at")
+          .eq("user_id", user.id)
+          .gte("logged_at", weekWindowStart)
+          .lt("logged_at", weekWindowEnd)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const entries = (rows ?? []) as FoodEntry[];
@@ -146,33 +214,14 @@ export default async function SummaryPage({
   // this nutrient" breakdowns. Each entry is split into its individual foods
   // (from the stored AI items), attributed per component and reconciled to the
   // entry's stored totals.
-  const contribEntries = buildComponentContributors(
-    entries.map((e) => ({
-      id: e.id,
-      description: e.description,
-      meal: e.meal,
-      raw_ai_response: e.raw_ai_response,
-      totals: {
-        protein_g: e.protein_g,
-        carbs_g: e.carbs_g,
-        fat_g: e.fat_g,
-        fiber_g: e.fiber_g,
-        saturated_fat_g: e.saturated_fat_g,
-        cholesterol_mg: e.cholesterol_mg,
-        iron_mg: e.iron_mg,
-        calcium_mg: e.calcium_mg,
-        magnesium_mg: e.magnesium_mg,
-        vitamin_d_mcg: e.vitamin_d_mcg,
-        omega3_mg: e.omega3_mg,
-      },
-    })),
-  );
+  const contribEntries = buildComponentContributors(entries.map(toContribInput));
 
   // Cycle phase for the target day.
   const cycleSettings: CycleSettings = {
     cycleLength: p?.avg_cycle_length ?? 28,
     periodLength: p?.avg_period_length ?? 5,
   };
+  const phaseModifiers = normalizeModifiers(p?.phase_modifiers);
   let cyclePhase = null as ReturnType<typeof phaseForCycleDay> | null;
   if (p?.track_cycle && p.last_period_start) {
     const cd = cycleDayFromPeriodStart(p.last_period_start, cycleSettings, targetDay);
@@ -203,27 +252,29 @@ export default async function SummaryPage({
 
   // For today, resolve with the full adaptive engine so the numbers match the
   // home card exactly. For a past day, just base + that day's phase.
-  const resolved = resolveDailyTargets({
-    targetInputs: {
-      mode: p?.target_mode ?? "manual",
-      manual: {
-        calories: p?.daily_calorie_target ?? 2000,
-        protein_g: p?.daily_protein_target_g ?? 130,
-        carbs_g: p?.daily_carb_target_g ?? 220,
-        fat_g: p?.daily_fat_target_g ?? 70,
-        fiber_g: p?.daily_fiber_target_g ?? 30,
-      },
-      sex: p?.sex ?? null,
-      dateOfBirth: p?.date_of_birth ?? null,
-      heightIn: p?.height_in ?? null,
-      weightLbs: weightRows?.[0] ? Number(weightRows[0].weight_lbs) : null,
-      activityLevel: p?.activity_level ?? null,
-      goal: p?.goal ?? null,
-      proteinPerKg: p?.protein_per_kg ?? null,
-      ouraTdee7d: ouraTdeeValues.length ? mean(ouraTdeeValues) : null,
+  const targetInputs = {
+    mode: p?.target_mode ?? "manual",
+    manual: {
+      calories: p?.daily_calorie_target ?? 2000,
+      protein_g: p?.daily_protein_target_g ?? 130,
+      carbs_g: p?.daily_carb_target_g ?? 220,
+      fat_g: p?.daily_fat_target_g ?? 70,
+      fiber_g: p?.daily_fiber_target_g ?? 30,
     },
+    sex: p?.sex ?? null,
+    dateOfBirth: p?.date_of_birth ?? null,
+    heightIn: p?.height_in ?? null,
+    weightLbs: weightRows?.[0] ? Number(weightRows[0].weight_lbs) : null,
+    activityLevel: p?.activity_level ?? null,
+    goal: p?.goal ?? null,
+    proteinPerKg: p?.protein_per_kg ?? null,
+    ouraTdee7d: ouraTdeeValues.length ? mean(ouraTdeeValues) : null,
+  };
+
+  const resolved = resolveDailyTargets({
+    targetInputs,
     phase: cyclePhase,
-    phaseModifiers: normalizeModifiers(p?.phase_modifiers),
+    phaseModifiers,
     recent: isToday
       ? recentIntakeFromRows(
           (recentFood ?? []).map((f) => ({
@@ -247,6 +298,88 @@ export default async function SummaryPage({
       : null,
   });
   const targets = resolved.targets;
+
+  // 7-day average dataset for the Today⇄7-day-average toggle (today only). The
+  // calorie/macro/micro values are daily averages over the window; the targets
+  // are the per-day goals (cycle-phase aware) averaged; the contributors are the
+  // week's component foods merged by name and scaled to a per-day average.
+  let week: {
+    totals: Totals;
+    targets: Totals;
+    contribEntries: typeof contribEntries;
+    daysLogged: number;
+  } | null = null;
+  if (isToday) {
+    const weekEntries = (weekRows ?? []) as FoodEntry[];
+    const weekDrinks = (weekDrinkRows ?? []) as Array<{
+      calories: number;
+      logged_at: string;
+    }>;
+
+    // Average the per-day macro goals across the window (micros use static
+    // references, resolved later from the metric registry).
+    const goalSum = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 };
+    let daysLogged = 0;
+    for (const day of weekDayKeys) {
+      const { start, end } = localDayBoundsUTC(tz, day);
+      const sMs = Date.parse(start);
+      const eMs = Date.parse(end);
+      const logged =
+        weekEntries.some((e) => {
+          const t = Date.parse(e.consumed_at);
+          return t >= sMs && t < eMs;
+        }) ||
+        weekDrinks.some((d) => {
+          const t = Date.parse(d.logged_at);
+          return t >= sMs && t < eMs;
+        });
+      if (logged) daysLogged += 1;
+
+      let phase = null as ReturnType<typeof phaseForCycleDay> | null;
+      if (p?.track_cycle && p.last_period_start) {
+        const cd = cycleDayFromPeriodStart(p.last_period_start, cycleSettings, day);
+        phase = cd ? phaseForCycleDay(cd, cycleSettings) : null;
+      }
+      const r = resolveDailyTargets({
+        targetInputs: { ...targetInputs, ouraTdee7d: null },
+        phase,
+        phaseModifiers,
+        recent: [],
+        weightTrendLbsPerWeek: null,
+        recovery: null,
+      });
+      goalSum.calories += r.targets.calories;
+      goalSum.protein_g += r.targets.protein_g;
+      goalSum.carbs_g += r.targets.carbs_g;
+      goalSum.fat_g += r.targets.fat_g;
+      goalSum.fiber_g += r.targets.fiber_g;
+    }
+
+    const weekFoodTotals = sumTotals(weekEntries);
+    const weekAlcoholCal = weekDrinks.reduce((s, d) => s + Number(d.calories), 0);
+    const weekAvgTotals = scaleTotals(
+      { ...weekFoodTotals, calories: weekFoodTotals.calories + weekAlcoholCal },
+      1 / 7,
+    );
+    const weekAvgTargets: Totals = {
+      calories: Math.round(goalSum.calories / 7),
+      protein_g: goalSum.protein_g / 7,
+      carbs_g: goalSum.carbs_g / 7,
+      fat_g: goalSum.fat_g / 7,
+      fiber_g: goalSum.fiber_g / 7,
+    };
+    const weekContribEntries = mergeContributorsByLabel(
+      buildComponentContributors(weekEntries.map(toContribInput)),
+      1 / 7,
+    );
+
+    week = {
+      totals: weekAvgTotals,
+      targets: weekAvgTargets,
+      contribEntries: weekContribEntries,
+      daysLogged,
+    };
+  }
 
   // Distinct plants this week (positive, additive diversity goal).
   const weeklyPlants = Array.from(
@@ -279,114 +412,86 @@ export default async function SummaryPage({
         <p className="text-xs text-muted-foreground">{dateLabel}</p>
       </header>
 
-      <Link
-        href="/today/week"
-        className="flex items-center justify-between rounded-lg border bg-muted/40 px-4 py-3 text-sm font-medium hover:bg-muted"
-      >
-        <span>Last 7 days · averages vs goals</span>
-        <span className="text-muted-foreground">→</span>
-      </Link>
-
-      <MacroTotals
-        totals={totals}
-        targets={targets}
-        metrics={MACRO_METRIC_KEYS}
-        entries={contribEntries}
-        phaseAdjustment={resolved.phaseAdjustment}
-        targetNote={resolved.calorieNote}
-        recoveryNote={resolved.recoveryNote}
-        balanceNote={resolved.balanceNote}
-      />
-
-      {/* Cycle-relevant micronutrients (AI-estimated, directional). */}
-      <section className="space-y-3 rounded-lg border p-4">
-        <h2 className="text-sm font-medium">Micronutrients</h2>
-        {MICRO_METRIC_KEYS.map((key) => {
-          const def = METRICS[key];
-          const { value, target } = metricValueAndTarget(def, totals, targets);
-          return (
-            <NutrientBreakdown
-              key={key}
-              label={def.label}
-              value={value}
-              target={target}
-              unit={def.unit}
-              kind={def.kind}
-              colorVar={def.colorVar}
-              field={def.field as string}
-              entries={contribEntries}
-            />
-          );
-        })}
-        <p className="text-[11px] text-muted-foreground">
-          Estimated from your logs against general daily references for women.{" "}
-          <Link href="/reanalyze" className="underline underline-offset-2">
-            Re-analyze logs
-          </Link>
-        </p>
-      </section>
-
-      {/* Plant diversity — a positive, additive weekly goal. */}
-      <section className="space-y-2 rounded-lg border p-4">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-medium">Plants this week</h2>
-          <span className="font-serif text-2xl tabular-nums">
-            {weeklyPlants.length}
-            <span className="text-sm text-muted-foreground">
-              {" "}/ {PLANT_DIVERSITY_GOAL}
-            </span>
-          </span>
-        </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-          <div
-            className="h-full rounded-full bg-[var(--macro-fiber)] transition-all duration-500"
-            style={{
-              width: `${Math.min(100, (weeklyPlants.length / PLANT_DIVERSITY_GOAL) * 100)}%`,
-            }}
-          />
-        </div>
-        {weeklyPlants.length > 0 ? (
-          <p className="text-[11px] capitalize text-muted-foreground">
-            {weeklyPlants.join(" · ")}
-          </p>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">
-            Different fruits, veg, legumes, nuts, seeds, whole grains, herbs &
-            spices each count once. Variety feeds a healthier gut.
-          </p>
-        )}
-      </section>
-
-      <p className="text-xs text-muted-foreground">
-        Tap an entry to see what each part contributed.
-      </p>
-
-      <EntryList entries={entries} />
-
-      {drinks.length > 0 ? (
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Alcohol · {alcoholCalories} kcal
-          </h2>
-          <div className="divide-y rounded-lg border">
-            {drinks.map((d) => (
+      <SummaryPanels
+        macroKeys={MACRO_METRIC_KEYS}
+        microKeys={MICRO_METRIC_KEYS}
+        today={{ totals, targets, contribEntries }}
+        week={week}
+        notes={{
+          phaseAdjustment: resolved.phaseAdjustment,
+          targetNote: resolved.calorieNote,
+          recoveryNote: resolved.recoveryNote,
+          balanceNote: resolved.balanceNote,
+        }}
+        weeklyExtras={
+          /* Plant diversity — a positive, additive weekly goal. */
+          <section className="space-y-2 rounded-lg border p-4">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-sm font-medium">Plants this week</h2>
+              <span className="font-serif text-2xl tabular-nums">
+                {weeklyPlants.length}
+                <span className="text-sm text-muted-foreground">
+                  {" "}/ {PLANT_DIVERSITY_GOAL}
+                </span>
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
               <div
-                key={d.id}
-                className="flex items-center justify-between gap-3 p-3"
-              >
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {describeDrink(d.drink_type, Number(d.volume_ml))}
-                </span>
-                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                  {Math.round(Number(d.calories))} kcal ·{" "}
-                  {(Math.round(Number(d.standard_drinks) * 10) / 10).toFixed(1)}{" "}
-                  drinks
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+                className="h-full rounded-full bg-[var(--macro-fiber)] transition-all duration-500"
+                style={{
+                  width: `${Math.min(100, (weeklyPlants.length / PLANT_DIVERSITY_GOAL) * 100)}%`,
+                }}
+              />
+            </div>
+            {weeklyPlants.length > 0 ? (
+              <p className="text-[11px] capitalize text-muted-foreground">
+                {weeklyPlants.join(" · ")}
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Different fruits, veg, legumes, nuts, seeds, whole grains, herbs
+                & spices each count once. Variety feeds a healthier gut.
+              </p>
+            )}
+          </section>
+        }
+        dayChildren={
+          <>
+            <p className="text-xs text-muted-foreground">
+              Tap an entry to see what each part contributed.
+            </p>
+
+            <EntryList entries={entries} />
+
+            {drinks.length > 0 ? (
+              <section className="space-y-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Alcohol · {alcoholCalories} kcal
+                </h2>
+                <div className="divide-y rounded-lg border">
+                  {drinks.map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center justify-between gap-3 p-3"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {describeDrink(d.drink_type, Number(d.volume_ml))}
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {Math.round(Number(d.calories))} kcal ·{" "}
+                        {(
+                          Math.round(Number(d.standard_drinks) * 10) / 10
+                        ).toFixed(1)}{" "}
+                        drinks
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </>
+        }
+      />
 
       <Link
         href={isToday ? "/log" : `/log?date=${targetDay}`}
