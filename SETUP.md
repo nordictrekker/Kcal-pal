@@ -56,10 +56,11 @@ Run in order. All are idempotent (safe to re-run).
 - `0001_init.sql` — already applied.
 - The cron migrations (`0002`–`0005`) each need Vault secrets created first
   and an edge function deployed. See sections below.
-- Feature migrations (`0006`–`0021`) add tables/columns and RLS for hydration,
-  digests, onboarding, recipes, nutrients, the USDA `fdc_cache`, and
-  `food_insights`. With the Supabase MCP connected, apply them directly with
-  `apply_migration` (then `get_advisors` to verify) instead of the SQL Editor.
+- Feature migrations (`0006`–`0023`) add tables/columns and RLS for hydration,
+  digests, onboarding, recipes, nutrients, the USDA `fdc_cache`, `food_insights`,
+  a rejected-location marker, and `trans_fat_g`. With the Supabase MCP connected,
+  apply them directly with `apply_migration` (then `get_advisors` to verify)
+  instead of the SQL Editor.
 
 ## 3. Edge Functions
 

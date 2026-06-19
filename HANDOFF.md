@@ -8,6 +8,22 @@ A fresh Claude Code conversation should read this top-to-bottom to pick
 up where we left off. Everything below is what the previous session
 either decided, built, or punted on.
 
+> **2026-06-19 update (merged to production, PR #1):** Perf — RLS init-plan
+> fix (migrations 0021), query-waterfall removal, root `loading.tsx`, and
+> **function region pinned to `pdx1` via `vercel.json`** to co-locate with
+> Supabase us-west-2 (verified `regions: ["pdx1"]` in prod; framework render is
+> <15 ms, so authenticated pages are now same-region and under 50 ms). Features
+> — travel-prompt "That's wrong" button (reject a bad IP reading without
+> changing home), **live web-search for "Restaurant: … / Menu item: …" text
+> logs**, and an **"LDL impact" metric group** (new `trans_fat` tracked end to
+> end; saturated fat · trans fat · cholesterol surfaced together). Testing —
+> vitest now also runs jsdom **component tests**, a route **smoke test**
+> (`npm run smoke`), and **Playwright E2E** on Chromium + WebKit + mobile
+> (`npm run e2e`), all wired into **`.github/workflows/ci.yml`** (28 E2E checks
+> green in CI). Docs — README/HANDOFF/SETUP/`docs/perf.md`/`docs/qa-checklist.md`
+> refreshed. Backlog still open: supplements tracker, blood-LDL lab tracker;
+> real-iPhone-Safari/PWA spot-checks (`docs/qa-checklist.md`).
+
 ## 1. What this app is
 
 **Kcal-pal** is a personal nutrition + women's-health PWA for a single
@@ -111,6 +127,8 @@ through this session:
 0019_fdc_cache               — USDA FoodData Central per-100 g cache (shared)
 0020_food_insights           — cached LLM food-insights note (per ISO week)
 0021_perf_rls_followup       — same RLS perf fix for fdc_cache + food_insights
+0022_location_dismissed      — profiles.location_dismissed_label (reject bad IP)
+0023_trans_fat               — food_entries.trans_fat_g (LDL-impact metric)
 ```
 
 If the user hits "column does not exist" after pulling, that's a missing
