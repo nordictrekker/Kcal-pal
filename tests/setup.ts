@@ -1,11 +1,13 @@
-import { expect, afterEach } from "vitest";
+// Registers @testing-library/jest-dom matchers on vitest's `expect` (typed,
+// import-time safe in node). Component tests run in jsdom via a per-file
+// `// @vitest-environment jsdom` docblock; pure-lib tests stay in node. Only
+// run RTL's DOM cleanup when a document actually exists.
+import "@testing-library/jest-dom/vitest";
+import { afterEach } from "vitest";
 
-// Component tests run in jsdom; pure-lib tests run in node. Only wire up the
-// DOM matchers + auto-cleanup when a document actually exists, so the node
-// tests are unaffected.
-if (typeof document !== "undefined") {
-  const matchers = await import("@testing-library/jest-dom/matchers");
-  expect.extend(matchers);
-  const { cleanup } = await import("@testing-library/react");
-  afterEach(() => cleanup());
-}
+afterEach(async () => {
+  if (typeof document !== "undefined") {
+    const { cleanup } = await import("@testing-library/react");
+    cleanup();
+  }
+});
