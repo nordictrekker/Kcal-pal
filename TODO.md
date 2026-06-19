@@ -12,6 +12,30 @@ Edge Function `cleanup-orphans` deletes `food-photos` objects older than
 
 ## Still open / future
 
+### Supplements tracker (planned feature)
+Many users take several supplements daily (vitamin D, magnesium, iron, fish
+oil, B12, creatine, etc.) and want them tracked. Goal: log supplements and
+fold their nutrient contributions into the same macro/micro totals and the
+7-day average so "lagging micros" reflect what's actually being taken.
+
+Rough shape:
+- New `supplements` table: user_id, name, brand (optional), serving label,
+  and per-serving nutrient amounts (reuse the nutrient columns —
+  iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg, omega3_mg, plus room for
+  others like b12_mcg, zinc_mg, vitamin_c_mg). RLS per user, like other tables.
+- New `supplement_logs` table: user_id, supplement_id, taken_at, servings —
+  one row per intake, so totals roll up per day like food_entries.
+- Optional: a "regimen" with reminder schedule (daily AM/PM) and a quick
+  one-tap "took my supplements" action on Today.
+- Onboarding/AI assist: let the user type "Nature Made Vitamin D3 2000 IU" and
+  have the parser fill the per-serving nutrients (same Anthropic pipeline as
+  food), with a manual-edit fallback.
+- Surfacing: add a "Supplements" line to Today and include their micros in the
+  summary + 7-day average totals (clearly attributed, e.g. a "from supplements"
+  sub-slice in the contributor breakdown so food vs supplement is distinguishable).
+- Consider an upper-limit guard (e.g. iron/vitamin D) so the app can gently
+  flag megadosing against tolerable upper intake levels.
+
 - Optional: drop AI-parse `raw_ai_response` blobs older than N days to keep
   the DB lean — only needed for debugging recent edits.
 

@@ -35,6 +35,7 @@ export function SummaryPanels({
   week,
   notes,
   weeklyExtras,
+  weekInsight,
   dayChildren,
 }: {
   macroKeys: MetricKey[];
@@ -43,6 +44,8 @@ export function SummaryPanels({
   week: WeekData | null;
   notes: Notes;
   weeklyExtras: ReactNode;
+  // Generate-on-demand AI insights card, shown only in 7-day-average mode.
+  weekInsight: ReactNode;
   dayChildren: ReactNode;
 }) {
   const [mode, setMode] = useState<"today" | "week">("today");
@@ -125,7 +128,7 @@ export function SummaryPanels({
 
       {weeklyExtras}
 
-      {isWeek ? null : dayChildren}
+      {isWeek ? weekInsight : dayChildren}
     </div>
   );
 }

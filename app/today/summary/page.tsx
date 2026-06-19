@@ -36,6 +36,8 @@ import type { Totals } from "@/lib/food";
 import type { FoodEntry, Profile } from "@/lib/types";
 import { EntryList } from "../entry-list";
 import { SummaryPanels } from "./summary-panels";
+import { FoodInsightCard } from "./insight-card";
+import { getCachedFoodInsight } from "./insight-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -381,6 +383,12 @@ export default async function SummaryPage({
     };
   }
 
+  // Cached food-insights note for the current week (today view only); the card
+  // can (re)generate it on demand.
+  const weekInsightInitial = isToday
+    ? await getCachedFoodInsight()
+    : ({ status: "empty" } as const);
+
   // Distinct plants this week (positive, additive diversity goal).
   const weeklyPlants = Array.from(
     new Set(
@@ -455,6 +463,7 @@ export default async function SummaryPage({
             )}
           </section>
         }
+        weekInsight={<FoodInsightCard initial={weekInsightInitial} />}
         dayChildren={
           <>
             <p className="text-xs text-muted-foreground">
