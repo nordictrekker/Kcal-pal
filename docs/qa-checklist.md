@@ -58,3 +58,13 @@ tap targets ≥ ~40px, and that long entry text wraps rather than overflows.
 public pages 200, gated pages 307 → `/login`, ingest API 401. Latest run:
 **17/17 routes pass.** This covers routing/auth-gating; the interactive
 feature checks above still need a real browser/device.
+
+## Automated browser E2E (Playwright)
+`npm run e2e` runs the `tests/e2e` suite on **Chromium (Chrome) and WebKit
+(Safari)**, desktop + iPhone/Pixel viewports — login render, signed-out
+redirects, mobile no-overflow, manifest. The authenticated specs (today card,
+log form, 7-day toggle, LDL group) run when `E2E_STORAGE_STATE` points at a
+seeded session. Runs in CI (`.github/workflows/ci.yml`, which installs the
+browsers); locally after `npx playwright install`. This is the cross-browser
+engine coverage; the manual checks above remain for real-iPhone-Safari/PWA
+quirks Playwright's WebKit can't fully reproduce.
