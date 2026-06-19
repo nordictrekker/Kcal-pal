@@ -74,8 +74,21 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
   // Bumped by "Try again" so the whole start sequence re-runs (e.g. after the
   // user grants camera permission).
   const [retryKey, setRetryKey] = useState(0);
+  // iOS home-screen PWAs (standalone) block camera access started on page load —
+  // getUserMedia must come from a user gesture. So in standalone mode we wait
+  // for an explicit "Start camera" tap; everywhere else we auto-start.
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
+    const standalone =
+      window.matchMedia?.("(display-mode: standalone)")?.matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone ===
+        true;
+    if (!standalone) setStarted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!started) return;
     let cancelled = false;
     let stream: MediaStream | null = null;
     let rafId = 0;
@@ -217,7 +230,26 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
         // Already stopped / never started.
       }
     };
-  }, [retryKey]);
+  }, [retryKey, started]);
+
+  // Standalone PWA: wait for a tap so getUserMedia runs inside a user gesture.
+  if (!started && !error) {
+    return (
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => setStarted(true)}
+          className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-lg border bg-black text-primary-foreground"
+        >
+          <Camera className="size-8" />
+          <span className="text-sm font-medium">Start camera</span>
+        </button>
+        <p className="text-center text-xs text-muted-foreground">
+          Tap to start scanning. iPhone will ask for camera access the first time.
+        </p>
+      </div>
+    );
+  }
 
   if (error) {
     const perm = isPermissionError(error);
