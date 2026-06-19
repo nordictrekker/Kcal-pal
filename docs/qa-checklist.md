@@ -62,9 +62,13 @@ feature checks above still need a real browser/device.
 ## Automated browser E2E (Playwright)
 `npm run e2e` runs the `tests/e2e` suite on **Chromium (Chrome) and WebKit
 (Safari)**, desktop + iPhone/Pixel viewports — login render, signed-out
-redirects, mobile no-overflow, manifest. The authenticated specs (today card,
-log form, 7-day toggle, LDL group) run when `E2E_STORAGE_STATE` points at a
-seeded session. Runs in CI (`.github/workflows/ci.yml`, which installs the
-browsers); locally after `npx playwright install`. This is the cross-browser
-engine coverage; the manual checks above remain for real-iPhone-Safari/PWA
-quirks Playwright's WebKit can't fully reproduce.
+redirects, mobile no-overflow, manifest, per-page TTFB. The authenticated specs
+(today card, log form, 7-day toggle, LDL group) run automatically when
+`E2E_TEST_EMAIL` + `E2E_TEST_PASSWORD` (a password-enabled account) are set as
+CI secrets — `tests/e2e/global-setup.ts` seeds a real session via
+`@supabase/ssr` so **every authenticated feature is exercised on Chrome +
+Safari too**; without those secrets they skip and CI stays green. Runs in CI
+(`.github/workflows/ci.yml`, which installs the browsers); locally after
+`npx playwright install`. This is the cross-browser engine coverage; the manual
+checks above remain for real-iPhone-Safari/PWA quirks (e.g. the standalone-PWA
+camera) that Playwright's WebKit can't fully reproduce.

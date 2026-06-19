@@ -10,6 +10,9 @@ const PORT = Number(process.env.E2E_PORT ?? 3000);
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: "**/*.spec.ts",
+  // Seeds a signed-in session into e2e-auth.json when E2E_TEST_EMAIL/PASSWORD
+  // are set, so the authenticated specs run; a no-op otherwise.
+  globalSetup: "./tests/e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

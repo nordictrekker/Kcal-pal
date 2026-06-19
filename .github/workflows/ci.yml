@@ -33,6 +33,10 @@ jobs:
       # authenticated specs.
       NEXT_PUBLIC_SUPABASE_URL: https://nrfvsfmhzrkrokzzupen.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_aeyM9IC69bPpHOu9F797HA_QOHfNJ_w
+      # Add these as repo secrets (a password-enabled account) to also run the
+      # authenticated feature specs; without them those specs skip.
+      E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

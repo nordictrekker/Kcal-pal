@@ -1,16 +1,15 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
+import { AUTH_STATE } from "./global-setup";
 
-// Signed-in feature flows. These need a seeded Playwright session because
-// sign-in is email-OTP (can't be automated headlessly). Create one once —
-// sign in, then `await context.storageState({ path: "e2e-auth.json" })` — and
-// point E2E_STORAGE_STATE at it; otherwise this group is skipped so CI stays
-// green without a test account.
-const storage = process.env.E2E_STORAGE_STATE;
-const hasSession = !!storage && fs.existsSync(storage);
+// Signed-in feature flows. The global-setup seeds e2e-auth.json when
+// E2E_TEST_EMAIL/PASSWORD are provided (CI secrets); otherwise this group skips
+// so CI stays green without a test account.
+const storage = process.env.E2E_STORAGE_STATE ?? AUTH_STATE;
+const hasSession = fs.existsSync(storage);
 
 test.describe("authenticated flows", () => {
-  test.skip(!hasSession, "set E2E_STORAGE_STATE to a saved session JSON to run");
+  test.skip(!hasSession, "no seeded session (set E2E_TEST_EMAIL/PASSWORD)");
   test.use({ storageState: storage });
 
   test("today dashboard renders the calorie card", async ({ page }) => {
