@@ -144,7 +144,9 @@ async function callAndParse(
     const resp = await getAnthropic().messages.create(
       {
         model: NUTRITION_MODEL,
-        max_tokens: 1024,
+        // Generous so multi-item meals, now that every component carries its own
+        // full nutrient breakdown, never truncate mid-JSON.
+        max_tokens: 4096,
         system: systemPrompt,
         messages: [{ role: "user", content: userContent }],
       },

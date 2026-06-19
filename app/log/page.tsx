@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Camera, ImagePlus, BookOpen } from "lucide-react";
 import { defaultMeal } from "@/lib/food";
-import { detectFrequentItems, type PantryRow } from "@/lib/pantry";
+import { detectFrequentItems, type PantryComponent } from "@/lib/pantry";
+import { extractComponents } from "@/lib/food-items";
 import { LogComposer } from "./log-composer";
 import { SavedMeals, type SavedMealItem } from "./saved-meals";
 import type { Meal } from "@/lib/types";
@@ -48,23 +49,42 @@ export default async function LogPage({
     protein_g: s.protein_g as number | null,
   }));
 
-  // Auto-detected pantry: the user's most-logged foods over the last ~45 days,
-  // surfaced as quick-fill chips (no manual saving required).
+  // Auto-detected pantry: the user's most-eaten component foods over the last
+  // ~45 days, surfaced as quick-fill chips (no manual saving required). Logs are
+  // broken into their AI component breakdown, then clustered by food token so a
+  // daily yogurt or regular latte surfaces even though it's worded differently
+  // each time and buried inside larger meals.
   const since = new Date(Date.now() - 45 * 86_400_000).toISOString();
   const { data: recentRaw } = await supabase
     .from("food_entries")
-    .select("description,meal,consumed_at")
+    .select("meal,consumed_at,raw_ai_response")
     .eq("user_id", user.id)
     .gte("consumed_at", since)
     .order("consumed_at", { ascending: false })
-    .limit(400);
-  const frequentItems = detectFrequentItems(
-    (recentRaw ?? []).map((r) => ({
-      description: r.description as string | null,
+    .limit(200);
+  const components: PantryComponent[] = (recentRaw ?? []).flatMap((r) =>
+    extractComponents(r.raw_ai_response).map((c) => ({
+      name: c.name,
+      quantity: c.quantity,
       meal: r.meal as Meal | null,
-      consumed_at: r.consumed_at as string,
-    })) as PantryRow[],
+      consumedAt: r.consumed_at as string,
+      nutrients: {
+        calories: c.calories,
+        protein_g: c.protein_g,
+        carbs_g: c.carbs_g,
+        fat_g: c.fat_g,
+        fiber_g: c.fiber_g,
+        saturated_fat_g: c.saturated_fat_g,
+        cholesterol_mg: c.cholesterol_mg,
+        iron_mg: c.iron_mg,
+        calcium_mg: c.calcium_mg,
+        magnesium_mg: c.magnesium_mg,
+        vitamin_d_mcg: c.vitamin_d_mcg,
+        omega3_mg: c.omega3_mg,
+      },
+    })),
   );
+  const frequentItems = detectFrequentItems(components);
 
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">

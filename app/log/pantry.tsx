@@ -27,11 +27,12 @@ export function Pantry({
   function quickAdd(item: FrequentItem) {
     setAddingKey(item.key);
     startTransition(async () => {
-      const r = await quickLogFrequent(
-        item.description,
-        item.meal ?? undefined,
-        logDate ?? undefined,
-      );
+      const r = await quickLogFrequent({
+        description: item.description,
+        meal: item.meal ?? undefined,
+        date: logDate ?? undefined,
+        nutrients: item.nutrients,
+      });
       setAddingKey(null);
       if (r.ok) router.push(logDate ? `/today/summary?date=${logDate}` : "/today");
     });

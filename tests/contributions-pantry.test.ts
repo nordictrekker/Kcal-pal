@@ -5,7 +5,7 @@ import {
   buildComponentContributors,
   type ContribEntry,
 } from "@/lib/contributions";
-import { detectFrequentItems, type PantryRow } from "@/lib/pantry";
+import { detectFrequentItems, type PantryComponent } from "@/lib/pantry";
 
 describe("contributionsForField", () => {
   const entries: ContribEntry[] = [
@@ -109,30 +109,50 @@ describe("buildComponentContributors", () => {
 });
 
 describe("detectFrequentItems", () => {
-  const rows: PantryRow[] = [
-    { description: "Nonfat Greek yogurt", meal: "breakfast", consumed_at: "2026-06-01T08:00:00Z" },
-    { description: "nonfat greek yogurt!", meal: "snack", consumed_at: "2026-06-03T08:00:00Z" },
-    { description: "Nonfat Greek Yogurt", meal: "breakfast", consumed_at: "2026-06-05T08:00:00Z" },
-    { description: "Vanilla latte", meal: "snack", consumed_at: "2026-06-02T10:00:00Z" },
-    { description: "Vanilla latte", meal: "snack", consumed_at: "2026-06-04T10:00:00Z" },
-    { description: "Random one-off", meal: "dinner", consumed_at: "2026-06-04T19:00:00Z" },
+  const comp = (
+    name: string,
+    quantity: string,
+    consumedAt: string,
+    nutrients: Record<string, number> = {},
+  ): PantryComponent => ({ name, quantity, meal: "breakfast", consumedAt, nutrients });
+
+  // Differently-worded each time and buried among other foods — mirrors how
+  // the AI itemizes a real prose log.
+  const components: PantryComponent[] = [
+    comp("Yoplait skyr non fat plain", "1/2 cup", "2026-06-17T08:00:00Z", { protein_g: 11 }),
+    comp("golden kiwi", "1/2", "2026-06-17T08:00:00Z"),
+    comp("yoplait skyr non fat natural", "1/2 cup", "2026-06-18T08:00:00Z"),
+    comp("2 inch whole wheat bread", "1 slice", "2026-06-18T08:00:00Z"),
+    comp("Yoplait skyr natural", "4 tbsp", "2026-06-19T08:00:00Z", { protein_g: 6 }),
+    comp("Golden kiwi, 1/2", "1/2", "2026-06-19T08:00:00Z"),
+    comp("Kiwi, yellow (gold)", "1", "2026-06-18T12:00:00Z"),
+    comp("Croissant (bakery, butter)", "1", "2026-06-17T09:00:00Z"),
   ];
 
-  it("collapses trivially-different phrasings into one item and counts them", () => {
-    const items = detectFrequentItems(rows);
-    const yogurt = items.find((i) => i.key.includes("greek yogurt"));
-    expect(yogurt?.count).toBe(3);
-    // representative description comes from the most recent log
-    expect(yogurt?.description).toBe("Nonfat Greek Yogurt");
+  it("clusters differently-worded components of the same food", () => {
+    const items = detectFrequentItems(components);
+    const skyr = items.find((i) => i.label.toLowerCase().includes("skyr"));
+    const kiwi = items.find((i) => i.label.toLowerCase().includes("kiwi"));
+    expect(skyr?.count).toBe(3);
+    expect(kiwi?.count).toBe(3);
   });
 
-  it("ranks by frequency and excludes items below minCount", () => {
-    const items = detectFrequentItems(rows);
-    expect(items[0].key).toContain("greek yogurt");
-    expect(items.find((i) => i.key === "random one off")).toBeUndefined();
+  it("represents a cluster by its most recent occurrence + nutrients", () => {
+    const skyr = detectFrequentItems(components).find((i) =>
+      i.label.toLowerCase().includes("skyr"),
+    );
+    expect(skyr?.label).toContain("Yoplait skyr natural"); // most recent
+    expect(skyr?.nutrients.protein_g).toBe(6);
   });
 
-  it("respects a custom minCount", () => {
-    expect(detectFrequentItems(rows, { minCount: 3 })).toHaveLength(1);
+  it("excludes one-off foods below minCount", () => {
+    const items = detectFrequentItems(components);
+    expect(items.find((i) => i.label.toLowerCase().includes("croissant"))).toBeUndefined();
+    expect(items.find((i) => i.label.toLowerCase().includes("bread"))).toBeUndefined();
+  });
+
+  it("ranks more-frequent foods first", () => {
+    const items = detectFrequentItems(components);
+    expect(items[0].count).toBeGreaterThanOrEqual(items[items.length - 1].count);
   });
 });
