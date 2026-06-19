@@ -131,17 +131,28 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
         return;
       }
       fallbackScanner = scanner;
+      // iOS Safari has no native BarcodeDetector, so this path runs the WASM
+      // decoder per frame. disableFlip halves the work (no mirrored-frame retry),
+      // a capped resolution keeps each decode cheap, and continuous focus stops
+      // the blurry-frame stalls that made scanning feel "very slow".
+      const videoConstraints = {
+        facingMode: "environment",
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        advanced: [{ focusMode: "continuous" }],
+      } as MediaTrackConstraints;
       scanner
         .start(
-          { facingMode: "environment" },
+          videoConstraints,
           {
-            fps: 15,
+            fps: 10,
             qrbox: (vw, vh) => {
               const w = Math.min(320, Math.floor(vw * 0.85));
               const h = Math.max(80, Math.floor(vh * 0.25));
               return { width: w, height: h };
             },
             aspectRatio: 1.333,
+            disableFlip: true,
           },
           (decoded) => {
             if (cancelled) return;
