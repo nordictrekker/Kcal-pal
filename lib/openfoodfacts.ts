@@ -1,10 +1,18 @@
 // OpenFoodFacts v2 API client. Free, no key. Single-call lookup by barcode.
 
+// Nutrition per single gram of product — the base the portion editor scales.
+export type PerGram = {
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+};
+
 export type OffNutrition = {
   // Description for the food_entries row.
   description: string;
-  // Per the spec we store per-serving values when possible, else per 100g
-  // with the serving_size labeled so the user can adjust.
+  // The values shown by default (one serving when known, else per 100g).
   calories: number | null;
   protein_g: number | null;
   carbs_g: number | null;
@@ -13,6 +21,11 @@ export type OffNutrition = {
   serving_size: string | null;
   // For UI: were these values per serving or per 100g?
   basis: "serving" | "100g";
+  // Base nutrition per gram, so the portion editor can recompute macros for any
+  // amount the user actually ate. Null when the product has no gram-based data.
+  perGram: PerGram | null;
+  // Grams in one labeled serving (so "1 serving" / "½ serving" presets work).
+  servingGrams: number | null;
 };
 
 type OffResponse = {
@@ -98,6 +111,32 @@ export async function lookupOpenFoodFacts(
       .join(" — ")
       .trim() || "Unknown product";
 
+  // Serving size in grams: prefer the structured field, else parse the label.
+  const servingGrams =
+    numeric(p.serving_quantity) ?? gramsFromText(p.serving_size);
+
+  // Per-gram base for the portion editor: prefer per-100g (most products have
+  // it), else derive from per-serving values and the serving weight.
+  const per100Energy = readEnergy(n, "100g");
+  let perGram: PerGram | null = null;
+  if (per100Energy !== null) {
+    perGram = {
+      calories: per100Energy / 100,
+      protein_g: perGramFrom(n["proteins_100g"], 100),
+      carbs_g: perGramFrom(n["carbohydrates_100g"], 100),
+      fat_g: perGramFrom(n["fat_100g"], 100),
+      fiber_g: perGramFrom(n["fiber_100g"], 100),
+    };
+  } else if (servingGrams && readEnergy(n, "serving") !== null) {
+    perGram = {
+      calories: (readEnergy(n, "serving") as number) / servingGrams,
+      protein_g: perGramFrom(n["proteins_serving"], servingGrams),
+      carbs_g: perGramFrom(n["carbohydrates_serving"], servingGrams),
+      fat_g: perGramFrom(n["fat_serving"], servingGrams),
+      fiber_g: perGramFrom(n["fiber_serving"], servingGrams),
+    };
+  }
+
   return {
     description: name,
     calories: readEnergy(n, basis),
@@ -110,5 +149,20 @@ export async function lookupOpenFoodFacts(
         ? p.serving_size?.trim() || `${p.serving_quantity}g`
         : "100g",
     basis,
+    perGram,
+    servingGrams,
   };
+}
+
+function perGramFrom(v: unknown, per: number): number | null {
+  const n = numeric(v);
+  return n === null ? null : n / per;
+}
+
+// Pull a gram weight out of a free-text serving label like "30 g", "1 cup
+// (240ml)", "2 squares (10 g)". Returns null when no grams are present.
+function gramsFromText(text: string | undefined): number | null {
+  if (!text) return null;
+  const m = text.match(/(\d+(?:\.\d+)?)\s*g\b/i);
+  return m ? Number(m[1]) : null;
 }

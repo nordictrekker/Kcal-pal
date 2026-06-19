@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import { useActionState } from "react";
 import Link from "next/link";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { Camera, Loader2 } from "lucide-react";
 import {
   lookupBarcode,
@@ -52,7 +52,23 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
     // Constructing the scanner (or its WASM/worker setup) can throw on some
     // mobile browsers; keep it out of render so it can't white-screen the app.
     try {
-      scanner = new Html5Qrcode(SCANNER_DIV_ID, { verbose: false });
+      scanner = new Html5Qrcode(SCANNER_DIV_ID, {
+        verbose: false,
+        // Only the 1D retail barcodes found on packaging — skipping QR and the
+        // dozens of other symbologies makes each decode pass much faster.
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+        ],
+        // Use the browser's native, hardware-accelerated BarcodeDetector when
+        // present (Chrome/Android, recent Safari) — dramatically faster than the
+        // WASM/zxing fallback.
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Scanner failed to start.");
       return;
@@ -62,7 +78,7 @@ function Viewfinder({ onScan }: { onScan: (code: string) => void }) {
       .start(
         { facingMode: "environment" },
         {
-          fps: 10,
+          fps: 15,
           // Wide & short box matches 1D barcodes on packaging.
           qrbox: (vw, vh) => {
             const w = Math.min(320, Math.floor(vw * 0.85));
@@ -154,15 +170,17 @@ function MealPicker({ defaultMeal: dm }: { defaultMeal: Meal }) {
   );
 }
 
-function MacroField({
+function NumberField({
   name,
   label,
   value,
+  onChange,
   step = "any",
 }: {
   name: string;
   label: string;
-  value: number | null;
+  value: string;
+  onChange: (v: string) => void;
   step?: string;
 }) {
   return (
@@ -177,11 +195,34 @@ function MacroField({
         inputMode="decimal"
         step={step}
         min="0"
-        defaultValue={value ?? ""}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         className="h-9"
       />
     </div>
   );
+}
+
+type Macros = {
+  calories: string;
+  protein_g: string;
+  carbs_g: string;
+  fat_g: string;
+  fiber_g: string;
+};
+
+const MACRO_KEYS: (keyof Macros)[] = [
+  "calories", "protein_g", "carbs_g", "fat_g", "fiber_g",
+];
+
+function fmt(n: number | null, decimals: number): string {
+  if (n === null || !Number.isFinite(n)) return "";
+  const f = 10 ** decimals;
+  return String(Math.round(n * f) / f);
+}
+
+function trimNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
 function SaveButton() {
@@ -194,6 +235,8 @@ function SaveButton() {
 }
 
 const saveInitial: SaveState = { ok: false };
+
+type Unit = "g" | "serving";
 
 function ConfirmForm({
   barcode,
@@ -209,13 +252,100 @@ function ConfirmForm({
   const router = useRouter();
   const [state, formAction] = useActionState(saveBarcodeEntry, saveInitial);
 
+  const hasGramMath = data.perGram != null;
+  const servingGrams = data.servingGrams;
+
+  // Default portion: one labeled serving when we know it, else 100 g when we
+  // have per-gram data, else a 1× serving multiplier of the looked-up values.
+  const [unit, setUnit] = useState<Unit>(
+    servingGrams ? "serving" : hasGramMath ? "g" : "serving",
+  );
+  const [amount, setAmount] = useState<string>(
+    servingGrams ? "1" : hasGramMath ? "100" : "1",
+  );
+
+  // Compute the macros for a chosen portion. With per-gram data we scale by
+  // grams; otherwise we scale the looked-up serving values by a serving count.
+  const computeMacros = useCallback(
+    (amountStr: string, u: Unit): Macros => {
+      const a = Number(amountStr);
+      const amt = Number.isFinite(a) && a >= 0 ? a : 0;
+      const grams = u === "g" ? amt : servingGrams != null ? amt * servingGrams : null;
+
+      if (hasGramMath && grams != null && data.perGram) {
+        const g = data.perGram;
+        return {
+          calories: fmt(g.calories != null ? g.calories * grams : null, 0),
+          protein_g: fmt(g.protein_g != null ? g.protein_g * grams : null, 1),
+          carbs_g: fmt(g.carbs_g != null ? g.carbs_g * grams : null, 1),
+          fat_g: fmt(g.fat_g != null ? g.fat_g * grams : null, 1),
+          fiber_g: fmt(g.fiber_g != null ? g.fiber_g * grams : null, 1),
+        };
+      }
+      // No gram data → scale the looked-up (one-serving) values by serving count.
+      const s = (v: number | null, d: number) => fmt(v != null ? v * amt : null, d);
+      return {
+        calories: s(data.calories, 0),
+        protein_g: s(data.protein_g, 1),
+        carbs_g: s(data.carbs_g, 1),
+        fat_g: s(data.fat_g, 1),
+        fiber_g: s(data.fiber_g, 1),
+      };
+    },
+    [hasGramMath, servingGrams, data],
+  );
+
+  // Macros recompute when the portion changes, but stay editable for manual
+  // fine-tuning (a tweak persists until the portion is changed again).
+  const [macros, setMacros] = useState<Macros>(() => computeMacros(amount, unit));
+  useEffect(() => {
+    setMacros(computeMacros(amount, unit));
+  }, [amount, unit, computeMacros]);
+
+  // A human-readable serving label stored alongside the entry.
+  const servingLabel = useMemo(() => {
+    const a = Number(amount);
+    const amt = Number.isFinite(a) ? a : 0;
+    if (unit === "g") return `${trimNum(amt)} g`;
+    const plural = amt === 1 ? "" : "s";
+    return servingGrams != null
+      ? `${trimNum(amt)} serving${plural} (${Math.round(amt * servingGrams)} g)`
+      : `${trimNum(amt)} serving${plural}`;
+  }, [amount, unit, servingGrams]);
+
   useEffect(() => {
     if (state.ok) router.push("/today");
   }, [state.ok, router]);
 
+  function preset(u: Unit, a: number) {
+    setUnit(u);
+    setAmount(trimNum(a));
+  }
+
+  const presets: { label: string; unit: Unit; amount: number }[] = servingGrams
+    ? [
+        { label: "1 serving", unit: "serving", amount: 1 },
+        { label: "½ serving", unit: "serving", amount: 0.5 },
+        { label: "2 servings", unit: "serving", amount: 2 },
+        { label: "100 g", unit: "g", amount: 100 },
+      ]
+    : hasGramMath
+      ? [
+          { label: "100 g", unit: "g", amount: 100 },
+          { label: "50 g", unit: "g", amount: 50 },
+          { label: "25 g", unit: "g", amount: 25 },
+          { label: "10 g", unit: "g", amount: 10 },
+        ]
+      : [
+          { label: "½ serving", unit: "serving", amount: 0.5 },
+          { label: "1 serving", unit: "serving", amount: 1 },
+          { label: "2 servings", unit: "serving", amount: 2 },
+        ];
+
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="barcode" value={barcode} />
+      <input type="hidden" name="serving_size" value={servingLabel} />
 
       <div className="rounded-md border bg-muted/40 p-3 text-xs">
         <p className="font-mono">{barcode}</p>
@@ -237,28 +367,79 @@ function ConfirmForm({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="serving_size">Serving</Label>
-        <Input
-          id="serving_size"
-          name="serving_size"
-          defaultValue={data.serving_size ?? ""}
-          placeholder={data.basis === "100g" ? "100g" : ""}
-        />
-        {data.basis === "100g" ? (
-          <p className="text-xs text-muted-foreground">
-            OpenFoodFacts didn&apos;t list a per-serving size — values shown are
-            per 100g. Edit if you ate a different amount.
+      {/* Portion editor — macros below recalculate live as you change this. */}
+      <div className="space-y-2 rounded-lg border p-3">
+        <div className="flex items-center justify-between">
+          <Label>How much did you eat?</Label>
+          {hasGramMath && servingGrams ? (
+            <div className="flex overflow-hidden rounded-md border text-xs">
+              <button
+                type="button"
+                onClick={() => setUnit("serving")}
+                className={cn("px-2 py-1", unit === "serving" && "bg-primary text-primary-foreground")}
+              >
+                servings
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnit("g")}
+                className={cn("px-2 py-1", unit === "g" && "bg-primary text-primary-foreground")}
+              >
+                grams
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="any"
+            min="0"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="h-9 w-24"
+          />
+          <span className="text-sm text-muted-foreground">
+            {unit === "g"
+              ? "grams"
+              : servingGrams != null
+                ? `serving${Number(amount) === 1 ? "" : "s"} · ${servingGrams} g each`
+                : `serving${Number(amount) === 1 ? "" : "s"}`}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => preset(p.unit, p.amount)}
+              className="rounded-full border px-2.5 py-1 text-xs hover:bg-accent"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {!hasGramMath ? (
+          <p className="text-[11px] text-muted-foreground">
+            No gram data for this product — adjust by servings.
           </p>
         ) : null}
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <MacroField name="calories" label="kcal" value={data.calories} step="1" />
-        <MacroField name="protein_g" label="Protein" value={data.protein_g} />
-        <MacroField name="carbs_g" label="Carbs" value={data.carbs_g} />
-        <MacroField name="fat_g" label="Fat" value={data.fat_g} />
-        <MacroField name="fiber_g" label="Fiber" value={data.fiber_g} />
+        {MACRO_KEYS.map((k) => (
+          <NumberField
+            key={k}
+            name={k}
+            label={k === "calories" ? "kcal" : k.replace("_g", "").replace(/^\w/, (c) => c.toUpperCase())}
+            value={macros[k]}
+            step={k === "calories" ? "1" : "any"}
+            onChange={(v) => setMacros((m) => ({ ...m, [k]: v }))}
+          />
+        ))}
       </div>
 
       <MealPicker defaultMeal={defaultMeal()} />

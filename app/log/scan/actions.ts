@@ -69,6 +69,19 @@ export async function runClaudeFallback(args: {
   if (!result.ok) return { ok: false, error: result.error };
 
   const d = result.data;
+  // Per-gram base from the estimated serving + its gram weight, so the portion
+  // editor can scale the Claude estimate too.
+  const grams = parseGrams(d.serving_size);
+  const perGram =
+    grams && d.calories != null
+      ? {
+          calories: d.calories / grams,
+          protein_g: d.protein_g != null ? d.protein_g / grams : null,
+          carbs_g: d.carbs_g != null ? d.carbs_g / grams : null,
+          fat_g: d.fat_g != null ? d.fat_g / grams : null,
+          fiber_g: d.fiber_g != null ? d.fiber_g / grams : null,
+        }
+      : null;
   return {
     ok: true,
     data: {
@@ -80,6 +93,8 @@ export async function runClaudeFallback(args: {
       fiber_g: d.fiber_g,
       serving_size: d.serving_size || null,
       basis: "serving",
+      perGram,
+      servingGrams: grams,
     },
   };
 }
