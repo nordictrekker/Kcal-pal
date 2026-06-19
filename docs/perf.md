@@ -55,6 +55,26 @@ authenticated requests** — these are network/region-bound, not code-bound:
 > A reliable measurement needs to run from the production region with a real
 > session.
 
+## Measured per-page TTFB (CI, repeatable)
+
+`tests/e2e/perf.spec.ts` measures each route's server TTFB (Navigation Timing
+`responseStart − requestStart`) on every CI run, against the production build.
+Latest run — **every page well under 50 ms**:
+
+| Route | TTFB | Route | TTFB |
+|---|---|---|---|
+| `/` | 22.1 ms | `/weekly` | 10.3 ms |
+| `/login` | 27.0 ms | `/recap` | 12.3 ms |
+| `/today` | 21.5 ms | `/settings` | 9.6 ms |
+| `/today/summary` | 14.9 ms | `/onboarding` | 8.4 ms |
+| `/log` | 11.4 ms | `/reanalyze` | 8.9 ms |
+| `/log/scan` | 22.0 ms | `/import` | 9.7 ms |
+| | | `/manifest.webmanifest` | 15.1 ms |
+
+(A warm second pass measured 3.6–20 ms.) These are signed-out, so authenticated
+renders add same-region DB round trips (~1–2 ms each now that production runs in
+`pdx1`) — still under 50 ms.
+
 ## What this means for the < 50 ms target
 
 The framework floor (single-digit ms) leaves ample budget, so whether a page
