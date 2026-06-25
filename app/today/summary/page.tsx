@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { sumTotals } from "@/lib/food";
 import { describeDrink } from "@/lib/alcohol";
@@ -434,7 +434,33 @@ export default async function SummaryPage({
         <h1 className="font-serif text-3xl font-medium leading-tight">
           {isToday ? "Today's log" : "Log"}
         </h1>
-        <p className="text-xs text-muted-foreground">{dateLabel}</p>
+        {/* Step day-by-day through past logs to review or edit entries. */}
+        <nav className="flex items-center justify-between gap-2">
+          <Link
+            href={`/today/summary?date=${addDaysToKey(targetDay, -1)}`}
+            aria-label="Previous day"
+            className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <ChevronLeft className="size-4" /> Prev
+          </Link>
+          <p className="text-xs text-muted-foreground">{dateLabel}</p>
+          {isToday ? (
+            <span
+              aria-hidden
+              className="inline-flex min-h-9 items-center gap-1 px-2 text-sm text-transparent"
+            >
+              Next <ChevronRight className="size-4" />
+            </span>
+          ) : (
+            <Link
+              href={`/today/summary?date=${addDaysToKey(targetDay, 1)}`}
+              aria-label="Next day"
+              className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              Next <ChevronRight className="size-4" />
+            </Link>
+          )}
+        </nav>
       </header>
 
       <SummaryPanels

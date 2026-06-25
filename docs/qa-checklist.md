@@ -62,7 +62,12 @@ feature checks above still need a real browser/device.
 ## Automated browser E2E (Playwright)
 `npm run e2e` runs the `tests/e2e` suite on **Chromium (Chrome) and WebKit
 (Safari)**, desktop + iPhone/Pixel viewports — login render, signed-out
-redirects, mobile no-overflow, manifest, per-page TTFB. The authenticated specs
+redirects, mobile no-overflow, per-page TTFB, and **PWA installability**
+(`pwa.spec.ts`: manifest is `standalone` with valid 192/512/maskable icons that
+actually serve, plus the iOS home-screen head tags — `mobile-web-app-capable`,
+`apple-touch-icon`, manifest link — present and resolving). Latest CI run: **66
+passed** on the four engines (42 authenticated specs skip until the secrets
+below are set). The authenticated specs
 (today card, log form, 7-day toggle, LDL group) run automatically when
 `E2E_TEST_EMAIL` + `E2E_TEST_PASSWORD` (a password-enabled account) are set as
 CI secrets — `tests/e2e/global-setup.ts` seeds a real session via
