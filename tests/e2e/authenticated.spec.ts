@@ -36,9 +36,12 @@ test.describe("authenticated flows", () => {
 
   test("can step back to a prior day's log to edit it", async ({ page }) => {
     await page.goto("/today/summary");
-    await page.getByRole("link", { name: /previous day/i }).click();
-    // lands on a past day (URL carries the date) with the editable log heading
-    await expect(page).toHaveURL(/\/today\/summary\?date=\d{4}-\d{2}-\d{2}/);
+    const prev = page.getByRole("link", { name: /previous day/i });
+    await prev.waitFor({ state: "visible" });
+    await prev.click();
+    // wait for the navigation to settle before asserting (webkit can race)
+    await page.waitForURL(/\/today\/summary\?date=\d{4}-\d{2}-\d{2}/);
+    // lands on a past day with the editable log heading
     await expect(page.getByRole("heading", { name: /^Log$/ })).toBeVisible();
     // and the "+ Log to this day" action targets that day, not today
     await expect(page.getByRole("link", { name: /log to this day/i })).toBeVisible();
