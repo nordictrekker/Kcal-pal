@@ -9,6 +9,7 @@ import {
 } from "@/lib/anthropic";
 import { enrichMicrosWithUsda } from "@/lib/fdc";
 import { isMeal } from "@/lib/food";
+import { cleanPlants } from "@/lib/plants";
 import type { Meal, ParsedNutrition } from "@/lib/types";
 
 const ALLOWED_TYPES: SupportedImageMediaType[] = [
@@ -148,7 +149,7 @@ export async function savePhotoEntry(
   let plants: string[] = [];
   try {
     const raw = JSON.parse(String(formData.get("plants") ?? "[]"));
-    if (Array.isArray(raw)) plants = raw.filter((p): p is string => typeof p === "string");
+    if (Array.isArray(raw)) plants = cleanPlants(raw as string[]);
   } catch {
     plants = [];
   }

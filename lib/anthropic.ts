@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ParsedNutrition } from "./types";
+import { cleanPlants } from "./plants";
 
 // Pinned by the project spec.
 export const NUTRITION_MODEL = "claude-opus-4-8";
@@ -8,7 +9,7 @@ const NUTRIENT_FIELDS =
   "calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, saturated_fat_g: number, trans_fat_g: number, cholesterol_mg: number, iron_mg: number, calcium_mg: number, magnesium_mg: number, vitamin_d_mcg: number, omega3_mg: number, plants: string[]";
 
 const NUTRIENT_GUIDANCE =
-  "Also estimate saturated_fat_g, trans_fat_g (industrial/partially-hydrogenated trans fat in grams; ~0 for whole/unprocessed foods, higher for fried fast food, baked goods, margarine), cholesterol_mg (milligrams), and the micronutrients iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg (micrograms), omega3_mg (milligrams) from USDA averages; use 0 when a nutrient is genuinely absent. `plants` is the list of DISTINCT whole-plant foods in the meal (each fruit, vegetable, legume, nut, seed, whole grain, herb or spice once; lowercase singular, e.g. [\"spinach\",\"chickpea\",\"walnut\"]); empty array if none. ";
+  "Also estimate saturated_fat_g, trans_fat_g (industrial/partially-hydrogenated trans fat in grams; ~0 for whole/unprocessed foods, higher for fried fast food, baked goods, margarine), cholesterol_mg (milligrams), and the micronutrients iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg (micrograms), omega3_mg (milligrams) from USDA averages; use 0 when a nutrient is genuinely absent. `plants` is the list of DISTINCT whole-plant foods eaten in a MEANINGFUL amount — a real serving or substantial ingredient, NOT a trace, garnish, or seasoning. Include each fruit, vegetable, legume, nut, seed, or whole grain once (lowercase singular, e.g. [\"spinach\",\"chickpea\",\"walnut\"]). EXCLUDE herbs, spices, and flavourings/beverages used in small amounts — e.g. coffee, espresso, cocoa, chocolate, vanilla, tea, matcha, and seasonings like pepper, cinnamon, or salt. Empty array if none. ";
 
 // Every component carries its OWN full nutrient breakdown so the app can show
 // which specific food in a multi-item log contributed each nutrient. The
@@ -117,14 +118,7 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
   });
 
   const plants = Array.isArray(obj.plants)
-    ? Array.from(
-        new Set(
-          obj.plants
-            .filter((p): p is string => typeof p === "string")
-            .map((p) => p.trim().toLowerCase())
-            .filter(Boolean),
-        ),
-      )
+    ? cleanPlants(obj.plants as unknown[] as string[])
     : [];
 
   return {
