@@ -34,12 +34,14 @@ test.describe("authenticated flows", () => {
     await expect(page.getByText(/LDL impact/i)).toBeVisible();
   });
 
-  test("settings has a working bug-report form", async ({ page }) => {
-    await page.goto("/settings");
-    await expect(page.getByRole("heading", { name: /report a bug/i })).toBeVisible();
-    await page.getByRole("button", { name: /^Report$/ }).click();
-    await page.getByPlaceholder(/what went wrong/i).fill("E2E smoke: prev-day nav felt slow");
-    await page.getByRole("button", { name: /send report/i }).click();
+  test("the floating bug-report button submits a report", async ({ page }) => {
+    await page.goto("/today");
+    await page.getByRole("button", { name: /report a bug or get help/i }).click();
+    await expect(page.getByRole("dialog", { name: /report a bug/i })).toBeVisible();
+    await page
+      .getByPlaceholder(/what went wrong/i)
+      .fill("E2E smoke: testing the report button");
+    await page.getByRole("button", { name: /^Send$/ }).click();
     await expect(page.getByText(/your report was sent/i)).toBeVisible();
   });
 

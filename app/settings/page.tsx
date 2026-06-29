@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { InstallCard } from "./install-card";
-import { FeedbackCard } from "./feedback-card";
 import { Notifications } from "./notifications";
 import { ThemeToggle } from "./theme-toggle";
 import { ShortcutCard } from "./shortcut-card";
@@ -112,8 +111,6 @@ export default async function SettingsPage() {
       {ingestToken ? (
         <ShortcutCard ingestUrl={ingestUrl} token={ingestToken} />
       ) : null}
-
-      <FeedbackCard />
 
       <div className="flex items-center justify-between px-1 pt-2">
         <p className="text-xs text-muted-foreground">

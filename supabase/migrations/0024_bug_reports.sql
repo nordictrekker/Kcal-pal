@@ -24,3 +24,7 @@ create policy "bug_reports select own"
 
 create index if not exists bug_reports_created_idx
   on public.bug_reports (created_at desc);
+
+-- The authenticated role needs table privileges before RLS can apply (RLS then
+-- restricts which rows). Without this, inserts fail with "permission denied".
+grant select, insert on table public.bug_reports to authenticated;
