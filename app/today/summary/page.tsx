@@ -27,6 +27,7 @@ import {
   MICRO_METRIC_KEYS,
   PLANT_DIVERSITY_GOAL,
 } from "@/lib/nutrients";
+import { cleanPlants } from "@/lib/plants";
 import {
   buildComponentContributors,
   mergeContributorsByLabel,
@@ -406,14 +407,12 @@ export default async function SummaryPage({
       }
     : { status: "empty" };
 
-  // Distinct plants this week (positive, additive diversity goal).
-  const weeklyPlants = Array.from(
-    new Set(
-      (plantRows ?? []).flatMap((r) =>
-        Array.isArray(r.plants)
-          ? (r.plants as string[]).map((p) => p.trim().toLowerCase()).filter(Boolean)
-          : [],
-      ),
+  // Distinct plants this week (positive, additive diversity goal). Flavourings
+  // and seasonings (coffee, vanilla, herbs & spices) are filtered out so only
+  // meaningful servings of fruit/veg/whole-plant foods count.
+  const weeklyPlants = cleanPlants(
+    (plantRows ?? []).flatMap((r) =>
+      Array.isArray(r.plants) ? (r.plants as string[]) : [],
     ),
   ).sort();
 
@@ -500,8 +499,10 @@ export default async function SummaryPage({
               </p>
             ) : (
               <p className="text-[11px] text-muted-foreground">
-                Different fruits, veg, legumes, nuts, seeds, whole grains, herbs
-                & spices each count once. Variety feeds a healthier gut.
+                Different fruits, vegetables, legumes, nuts & seeds each count
+                once when you eat enough to meaningfully add vitamins, minerals,
+                or fibre. Grains, flavourings & seasonings (coffee, vanilla,
+                herbs &amp; spices) don&apos;t count.
               </p>
             )}
           </section>

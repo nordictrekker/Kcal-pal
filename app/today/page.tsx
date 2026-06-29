@@ -10,6 +10,7 @@ import { WaterCard } from "./water-card";
 import { CycleForecastCard } from "./cycle-forecast-card";
 import { ProduceMotif } from "./produce-motif";
 import { pickProduceKind, isBirthdayMonth } from "@/lib/produce";
+import { withoutFlavourings } from "@/lib/plants";
 import {
   phaseForCycleDay,
   cycleDayFromPeriodStart,
@@ -173,10 +174,12 @@ export default async function TodayPage() {
   const weekProduceKind = isBirthdayMonth(p?.date_of_birth ?? null, today)
     ? "cake"
     : pickProduceKind(
-        (trendFood ?? [])
-          .filter((r) => (r.consumed_at as string) >= sevenDaysAgo)
-          .reverse()
-          .flatMap((r) => ((r.plants as string[] | null) ?? [])),
+        withoutFlavourings(
+          (trendFood ?? [])
+            .filter((r) => (r.consumed_at as string) >= sevenDaysAgo)
+            .reverse()
+            .flatMap((r) => ((r.plants as string[] | null) ?? [])),
+        ),
       );
 
   const yesterdayKey = addDaysToKey(today, -1);
