@@ -14,10 +14,16 @@ describe("cleanPlants", () => {
     ).toEqual(["tomato"]);
   });
 
-  it("keeps real fruit/veg/legume/nut/seed/grain servings", () => {
+  it("keeps real fruit/veg/legume/nut/seed servings", () => {
     expect(
-      cleanPlants(["apple", "chickpea", "walnut", "oats", "kale"]).sort(),
-    ).toEqual(["apple", "chickpea", "kale", "oats", "walnut"]);
+      cleanPlants(["apple", "chickpea", "walnut", "chia", "kale"]).sort(),
+    ).toEqual(["apple", "chia", "chickpea", "kale", "walnut"]);
+  });
+
+  it("drops whole grains and grain products", () => {
+    expect(
+      cleanPlants(["oats", "rice", "quinoa", "barley", "bread", "pasta", "lentil"]),
+    ).toEqual(["lentil"]);
   });
 
   it("normalises case/whitespace and de-duplicates", () => {

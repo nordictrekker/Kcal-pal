@@ -499,9 +499,10 @@ export default async function SummaryPage({
               </p>
             ) : (
               <p className="text-[11px] text-muted-foreground">
-                Different fruits, vegetables, legumes, nuts, seeds & whole grains
-                each count once when eaten in a real amount. Flavourings and
-                seasonings (coffee, vanilla, herbs & spices) don&apos;t count.
+                Different fruits, vegetables, legumes, nuts & seeds each count
+                once when you eat enough to meaningfully add vitamins, minerals,
+                or fibre. Grains, flavourings & seasonings (coffee, vanilla,
+                herbs &amp; spices) don&apos;t count.
               </p>
             )}
           </section>

@@ -20,6 +20,15 @@ const EXCLUDED_PLANTS = new Set<string>([
   "basil", "oregano", "thyme", "rosemary", "sage", "parsley", "cilantro",
   "coriander leaf", "dill", "mint", "tarragon", "marjoram", "bay leaf", "bay",
   "chive", "lemongrass", "kaffir lime leaf",
+  // whole grains & grain products — excluded by product decision (the count
+  // showcases fruit/veg/legumes/nuts/seeds, not grains)
+  "oat", "oatmeal", "rice", "brown rice", "white rice", "wild rice",
+  "basmati rice", "jasmine rice", "quinoa", "barley", "bulgur", "farro",
+  "freekeh", "millet", "buckwheat", "amaranth", "sorghum", "teff", "rye",
+  "spelt", "wheat", "whole wheat", "wheat berry", "couscous", "bread",
+  "whole grain bread", "whole-grain bread", "toast", "pasta", "noodle",
+  "polenta", "cornmeal", "popcorn", "grits", "cereal", "granola", "muesli",
+  "tortilla", "bagel", "cracker",
 ]);
 
 function isExcluded(normalized: string): boolean {
