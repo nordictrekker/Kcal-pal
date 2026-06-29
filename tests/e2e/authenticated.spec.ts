@@ -34,6 +34,17 @@ test.describe("authenticated flows", () => {
     await expect(page.getByText(/LDL impact/i)).toBeVisible();
   });
 
+  test("the floating bug-report button submits a report", async ({ page }) => {
+    await page.goto("/today");
+    await page.getByRole("button", { name: /report a bug or get help/i }).click();
+    await expect(page.getByRole("dialog", { name: /report a bug/i })).toBeVisible();
+    await page
+      .getByPlaceholder(/what went wrong/i)
+      .fill("E2E smoke: testing the report button");
+    await page.getByRole("button", { name: /^Send$/ }).click();
+    await expect(page.getByText(/your report was sent/i)).toBeVisible();
+  });
+
   test("can step back to a prior day's log to edit it", async ({ page }) => {
     await page.goto("/today/summary");
     const prev = page.getByRole("link", { name: /previous day/i });
