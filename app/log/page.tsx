@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Camera, ImagePlus, BookOpen } from "lucide-react";
 import { defaultMeal } from "@/lib/food";
 import { detectFrequentItems, type PantryComponent } from "@/lib/pantry";
+import { dedupeRecentMeals, type RecentMealRow } from "@/lib/recent-meals";
 import { extractComponents } from "@/lib/food-items";
 import { LogComposer } from "./log-composer";
 import type { SavedMealItem } from "./saved-meals";
@@ -54,7 +55,7 @@ export default async function LogPage({
     // so a daily yogurt or latte surfaces even when worded differently each time.
     supabase
       .from("food_entries")
-      .select("meal,consumed_at,raw_ai_response")
+      .select("id,description,calories,meal,consumed_at,raw_ai_response")
       .eq("user_id", user.id)
       .gte("consumed_at", since)
       .order("consumed_at", { ascending: false })
@@ -92,6 +93,19 @@ export default async function LogPage({
   // Only surface a food in the pantry once it's been logged at least 3 times in
   // the ~45-day window — enough to be a genuine staple, not a one-off.
   const frequentItems = detectFrequentItems(components, { minCount: 3 });
+
+  // Zero-setup repeat logging: recent distinct whole meals, one tap to re-log
+  // with the full original nutrient breakdown (no saving step required).
+  const recentMeals = dedupeRecentMeals(
+    (recentRaw ?? []).map(
+      (r): RecentMealRow => ({
+        id: r.id as string,
+        description: (r.description as string) ?? "",
+        calories: r.calories as number | null,
+        consumed_at: r.consumed_at as string,
+      }),
+    ),
+  );
 
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
@@ -141,6 +155,7 @@ export default async function LogPage({
       <LogComposer
         frequentItems={frequentItems}
         savedItems={saved}
+        recentMeals={recentMeals}
         defaultMeal={defaultMeal()}
         logDate={logDate}
       />
