@@ -236,7 +236,18 @@ function formatHistory(history: MealHistoryItem[]): string {
 }
 
 // When the entry names a specific restaurant + dish, let the model look it up.
-const RESTAURANT_REF = /\brestaurant\b|\bmenu item\b|\bmenu:|\bcafé\b|\bcafe\b|\bbrasserie\b|\bbistro\b/i;
+// Exported for tests.
+export const RESTAURANT_REF = /\brestaurant\b|\bmenu item\b|\bmenu:|\bcafé(?![a-z])|\bcafe\b|\bbrasserie\b|\bbistro\b/i;
+
+// Labeled products (supplements, bars, powders) whose nutrition is a fixed
+// label fact that varies by brand/region — exactly where a knowledge-based
+// guess picks the wrong SKU (e.g. French Berocca has 10 µg vitamin D vs the
+// ~5 µg variant elsewhere). Exported for tests.
+export const SUPPLEMENT_REF =
+  /\b(tablet|capsule|caplet|gumm(?:y|ies)|effervescent|supplement|multivitamin|protein (?:powder|shake|bar)|energy bar|granola bar|meal replacement|electrolyte|creatine|collagen)\b/i;
+
+const SUPPLEMENT_SEARCH_GUIDANCE =
+  " The entry names a branded/labeled product (supplement, bar, powder, or similar). Use web search to find THAT product's official nutrition/supplement facts label, matching any region or language cues in the entry (a French product name means the French formulation, not another market's). Scale every value to the amount actually taken (e.g. 1/3 tablet = one third of the per-tablet label values). In `assumptions`, note which product/label you used and its per-serving values. If you cannot find the exact product, say so in `assumptions` and estimate from the closest variant. Your FINAL output must still be ONLY the JSON object — no prose after it.";
 
 const RESTAURANT_SEARCH_GUIDANCE =
   " The entry names a specific restaurant and/or menu item. Use web search to find that restaurant's menu and the dish's description/typical ingredients, and base your component breakdown on what you actually find rather than a generic guess. In `assumptions`, briefly note what the menu/search told you (e.g. the dish's listed components) and that it informed the estimate. Apply any portion notes the user gave (e.g. \"ate ~40%\"). Your FINAL output must still be ONLY the JSON object — no prose after it.";
@@ -259,6 +270,15 @@ export async function parseTextMeal(
     const searched = await callAndParse(
       userContent,
       TEXT_SYSTEM_PROMPT + RESTAURANT_SEARCH_GUIDANCE,
+      { webSearch: true },
+    );
+    if (searched.ok) return searched;
+  } else if (SUPPLEMENT_REF.test(description)) {
+    // Branded/labeled products get the same live-lookup treatment so the
+    // numbers come from the product's actual label, not a generic guess.
+    const searched = await callAndParse(
+      userContent,
+      TEXT_SYSTEM_PROMPT + SUPPLEMENT_SEARCH_GUIDANCE,
       { webSearch: true },
     );
     if (searched.ok) return searched;
