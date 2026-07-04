@@ -107,6 +107,23 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
           <MacroField name="fat_g" label="Fat" value={entry.fat_g} />
           <MacroField name="fiber_g" label="Fiber" value={entry.fiber_g} />
         </div>
+        {/* Micros collapsed by default — correct a wrong label estimate
+            (e.g. a supplement's vitamin D) without cluttering the editor. */}
+        <details className="rounded-md border px-3 py-2">
+          <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+            Micronutrients
+          </summary>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <MacroField name="saturated_fat_g" label="Sat fat g" value={entry.saturated_fat_g} />
+            <MacroField name="trans_fat_g" label="Trans fat g" value={entry.trans_fat_g} />
+            <MacroField name="cholesterol_mg" label="Cholesterol mg" value={entry.cholesterol_mg} />
+            <MacroField name="iron_mg" label="Iron mg" value={entry.iron_mg} />
+            <MacroField name="calcium_mg" label="Calcium mg" value={entry.calcium_mg} />
+            <MacroField name="magnesium_mg" label="Magnesium mg" value={entry.magnesium_mg} />
+            <MacroField name="vitamin_d_mcg" label="Vit D µg" value={entry.vitamin_d_mcg} />
+            <MacroField name="omega3_mg" label="Omega-3 mg" value={entry.omega3_mg} />
+          </div>
+        </details>
         {state.error || reError ? (
           <p className="text-xs text-destructive">{state.error ?? reError}</p>
         ) : null}
