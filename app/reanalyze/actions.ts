@@ -8,6 +8,7 @@ import { selectRelevantHistory, nutrientColumns } from "@/lib/food";
 
 const MICRO_FIELDS = [
   "fiber_g", "iron_mg", "calcium_mg", "magnesium_mg", "vitamin_d_mcg", "omega3_mg",
+  "folate_mcg", "choline_mg", "iodine_mcg",
 ] as const;
 
 export type ReanalyzeTarget = { id: string; description: string };

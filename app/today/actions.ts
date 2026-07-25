@@ -24,6 +24,9 @@ const EDITABLE_FIELDS = [
   "magnesium_mg",
   "vitamin_d_mcg",
   "omega3_mg",
+  "folate_mcg",
+  "choline_mg",
+  "iodine_mcg",
 ] as const;
 
 export type EditState = { ok: boolean; error?: string };

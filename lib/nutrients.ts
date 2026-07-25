@@ -17,7 +17,10 @@ export type MetricKey =
   | "calcium"
   | "magnesium"
   | "vitamin_d"
-  | "omega3";
+  | "omega3"
+  | "folate"
+  | "choline"
+  | "iodine";
 
 export type MetricDef = {
   key: MetricKey;
@@ -45,11 +48,15 @@ export const METRICS: Record<MetricKey, MetricDef> = {
   magnesium: { key: "magnesium", label: "Magnesium", unit: "mg", field: "magnesium_mg", kind: "goal", colorVar: "--micro-magnesium", reference: 320, category: "micro", cycleRelevant: true },
   vitamin_d: { key: "vitamin_d", label: "Vitamin D", unit: "mcg", field: "vitamin_d_mcg", kind: "goal", colorVar: "--macro-fat", reference: 15, category: "micro" },
   omega3: { key: "omega3", label: "Omega-3", unit: "mg", field: "omega3_mg", kind: "goal", colorVar: "--macro-protein", reference: 1100, category: "micro", cycleRelevant: true },
+  folate: { key: "folate", label: "Folate", unit: "mcg", field: "folate_mcg", kind: "goal", colorVar: "--macro-fiber", reference: 400, category: "micro" },
+  choline: { key: "choline", label: "Choline", unit: "mg", field: "choline_mg", kind: "goal", colorVar: "--micro-magnesium", reference: 425, category: "micro" },
+  iodine: { key: "iodine", label: "Iodine", unit: "mcg", field: "iodine_mcg", kind: "goal", colorVar: "--primary", reference: 150, category: "micro" },
 };
 
 export const ALL_METRIC_KEYS: MetricKey[] = [
   "protein", "carbs", "fat", "saturated_fat", "trans_fat", "cholesterol", "fiber",
   "iron", "calcium", "magnesium", "vitamin_d", "omega3",
+  "folate", "choline", "iodine",
 ];
 export const DEFAULT_HOME_METRICS: MetricKey[] = ["protein", "carbs", "fat", "fiber"];
 export const MACRO_METRIC_KEYS: MetricKey[] = [
@@ -65,6 +72,14 @@ export const LDL_IMPACT_METRICS: MetricKey[] = [
 ];
 export const MICRO_METRIC_KEYS: MetricKey[] = [
   "iron", "calcium", "magnesium", "vitamin_d", "omega3",
+  "folate", "choline", "iodine",
+];
+
+// Conception/pregnancy-critical nutrients, surfaced as a one-tap group on the
+// home-metric picker (same pattern as LDL impact). References here are the
+// general-adult values; TTC/pregnancy target switching arrives in part 2.
+export const PREGNANCY_ESSENTIAL_METRICS: MetricKey[] = [
+  "folate", "choline", "iodine", "iron", "vitamin_d", "omega3",
 ];
 
 export const PLANT_DIVERSITY_GOAL = 30; // distinct plants per week

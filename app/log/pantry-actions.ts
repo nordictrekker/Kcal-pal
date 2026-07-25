@@ -18,6 +18,9 @@ const NUTRIENT_KEYS = [
   "calories", "protein_g", "carbs_g", "fat_g", "fiber_g", "saturated_fat_g",
   "cholesterol_mg", "iron_mg", "calcium_mg", "magnesium_mg", "vitamin_d_mcg",
   "omega3_mg",
+  "folate_mcg",
+  "choline_mg",
+  "iodine_mcg",
 ] as const;
 
 // Instantly log a frequent pantry food, copying the nutrients captured the last

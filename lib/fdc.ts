@@ -27,6 +27,9 @@ type MicroSet = {
   magnesium_mg: number;
   vitamin_d_mcg: number;
   omega3_mg: number;
+  folate_mcg: number;
+  choline_mg: number;
+  iodine_mcg: number;
 };
 
 const ZERO: MicroSet = {
@@ -37,6 +40,9 @@ const ZERO: MicroSet = {
   magnesium_mg: 0,
   vitamin_d_mcg: 0,
   omega3_mg: 0,
+  folate_mcg: 0,
+  choline_mg: 0,
+  iodine_mcg: 0,
 };
 
 // FDC nutrientNumber → our field. FDC reports each in the unit we store, per
@@ -48,7 +54,14 @@ const DIRECT: Record<string, keyof MicroSet> = {
   "301": "calcium_mg", // Calcium, Ca (mg)
   "304": "magnesium_mg", // Magnesium, Mg (mg)
   "328": "vitamin_d_mcg", // Vitamin D (D2 + D3) (µg)
+  "421": "choline_mg", // Choline, total (mg)
+  "314": "iodine_mcg", // Iodine, I (µg)
 };
+
+// Folate: prefer DFE (435, dietary folate equivalents) over total (417) when
+// both are present — DFE is the unit the target is expressed in.
+const FOLATE_DFE = "435";
+const FOLATE_TOTAL = "417";
 
 // Omega-3 fatty acids (reported in g) — summed and converted to mg.
 const OMEGA3 = new Set(["851", "629", "621", "631"]); // ALA, EPA, DHA, DPA
@@ -58,14 +71,19 @@ type FdcNutrient = { nutrientNumber?: string; value?: number };
 function extractPer100g(foodNutrients: FdcNutrient[]): MicroSet {
   const m: MicroSet = { ...ZERO };
   let omega3g = 0;
+  let folateTotal = 0;
+  let folateDfe = 0;
   for (const n of foodNutrients ?? []) {
     const num = String(n.nutrientNumber ?? "");
     const val = typeof n.value === "number" ? n.value : Number(n.value);
     if (!Number.isFinite(val)) continue;
     if (DIRECT[num]) m[DIRECT[num]] = val;
     else if (OMEGA3.has(num)) omega3g += val;
+    else if (num === FOLATE_DFE) folateDfe = val;
+    else if (num === FOLATE_TOTAL) folateTotal = val;
   }
   m.omega3_mg = omega3g * 1000;
+  m.folate_mcg = folateDfe > 0 ? folateDfe : folateTotal;
   return m;
 }
 
@@ -164,6 +182,9 @@ function scaleMicros(per100g: MicroSet, grams: number): MicroSet {
     magnesium_mg: round1(per100g.magnesium_mg * f),
     vitamin_d_mcg: round1(per100g.vitamin_d_mcg * f),
     omega3_mg: Math.round(per100g.omega3_mg * f),
+    folate_mcg: round1(per100g.folate_mcg * f),
+    choline_mg: round1(per100g.choline_mg * f),
+    iodine_mcg: round1(per100g.iodine_mcg * f),
   };
 }
 
@@ -223,6 +244,9 @@ export async function enrichMicrosWithUsda(
         acc.magnesium_mg += per100g.magnesium_mg * f;
         acc.vitamin_d_mcg += per100g.vitamin_d_mcg * f;
         acc.omega3_mg += per100g.omega3_mg * f;
+        acc.folate_mcg += per100g.folate_mcg * f;
+        acc.choline_mg += per100g.choline_mg * f;
+        acc.iodine_mcg += per100g.iodine_mcg * f;
         resolved = true;
       }
     }
@@ -242,6 +266,9 @@ export async function enrichMicrosWithUsda(
         acc.magnesium_mg += data.magnesium_mg * share;
         acc.vitamin_d_mcg += data.vitamin_d_mcg * share;
         acc.omega3_mg += data.omega3_mg * share;
+        acc.folate_mcg += data.folate_mcg * share;
+        acc.choline_mg += data.choline_mg * share;
+        acc.iodine_mcg += data.iodine_mcg * share;
       }
     }
   }
@@ -262,6 +289,9 @@ export async function enrichMicrosWithUsda(
     magnesium_mg: round1(acc.magnesium_mg),
     vitamin_d_mcg: round1(acc.vitamin_d_mcg),
     omega3_mg: Math.round(acc.omega3_mg),
+    folate_mcg: round1(acc.folate_mcg),
+    choline_mg: round1(acc.choline_mg),
+    iodine_mcg: round1(acc.iodine_mcg),
     assumptions: [...data.assumptions, note],
   };
 }

@@ -87,6 +87,9 @@ export default async function LogPage({
         magnesium_mg: c.magnesium_mg,
         vitamin_d_mcg: c.vitamin_d_mcg,
         omega3_mg: c.omega3_mg,
+        folate_mcg: c.folate_mcg,
+        choline_mg: c.choline_mg,
+        iodine_mcg: c.iodine_mcg,
       },
     })),
   );

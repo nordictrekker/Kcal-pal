@@ -17,6 +17,9 @@ export function nutrientColumns(d: ParsedNutrition) {
     magnesium_mg: d.magnesium_mg,
     vitamin_d_mcg: d.vitamin_d_mcg,
     omega3_mg: d.omega3_mg,
+    folate_mcg: d.folate_mcg,
+    choline_mg: d.choline_mg,
+    iodine_mcg: d.iodine_mcg,
     plants: d.plants,
     serving_size: d.serving_size || null,
   };
@@ -44,6 +47,9 @@ export type Totals = {
   magnesium_mg?: number;
   vitamin_d_mcg?: number;
   omega3_mg?: number;
+  folate_mcg?: number;
+  choline_mg?: number;
+  iodine_mcg?: number;
 };
 
 // One entry's nutrient values, all nullable (AI may not estimate everything).
@@ -61,6 +67,9 @@ export type NutrientRow = {
   magnesium_mg?: number | null;
   vitamin_d_mcg?: number | null;
   omega3_mg?: number | null;
+  folate_mcg?: number | null;
+  choline_mg?: number | null;
+  iodine_mcg?: number | null;
 };
 
 // Suggest a meal slot from the local hour (used to pre-select the picker).
@@ -143,6 +152,9 @@ export function sumTotals(entries: NutrientRow[]): Totals {
       magnesium_mg: (acc.magnesium_mg ?? 0) + (e.magnesium_mg ?? 0),
       vitamin_d_mcg: (acc.vitamin_d_mcg ?? 0) + (e.vitamin_d_mcg ?? 0),
       omega3_mg: (acc.omega3_mg ?? 0) + (e.omega3_mg ?? 0),
+      folate_mcg: (acc.folate_mcg ?? 0) + (e.folate_mcg ?? 0),
+      choline_mg: (acc.choline_mg ?? 0) + (e.choline_mg ?? 0),
+      iodine_mcg: (acc.iodine_mcg ?? 0) + (e.iodine_mcg ?? 0),
     }),
     {
       calories: 0,
@@ -158,6 +170,9 @@ export function sumTotals(entries: NutrientRow[]): Totals {
       magnesium_mg: 0,
       vitamin_d_mcg: 0,
       omega3_mg: 0,
+      folate_mcg: 0,
+      choline_mg: 0,
+      iodine_mcg: 0,
     },
   );
 }

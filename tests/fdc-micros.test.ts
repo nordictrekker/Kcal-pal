@@ -47,6 +47,10 @@ const SALMON_FOOD = {
     { nutrientNumber: "601", value: 55 }, // cholesterol mg
     { nutrientNumber: "621", value: 1.0 }, // DHA g
     { nutrientNumber: "629", value: 0.5 }, // EPA g
+    { nutrientNumber: "417", value: 25 }, // folate, total µg
+    { nutrientNumber: "435", value: 26 }, // folate DFE µg (preferred over 417)
+    { nutrientNumber: "421", value: 90 }, // choline mg
+    { nutrientNumber: "314", value: 15 }, // iodine µg
   ],
 };
 
@@ -63,6 +67,9 @@ const base: ParsedNutrition = {
   magnesium_mg: 99,
   vitamin_d_mcg: 99,
   omega3_mg: 99,
+  folate_mcg: 99,
+  choline_mg: 99,
+  iodine_mcg: 99,
   plants: [],
   serving_size: "1 fillet",
   items: [
@@ -105,6 +112,10 @@ describe("enrichMicrosWithUsda", () => {
     expect(out.cholesterol_mg).toBeCloseTo(110, 5);
     // (1.0 + 0.5) g × 2 = 3 g = 3000 mg
     expect(out.omega3_mg).toBe(3000);
+    // Folate uses the DFE value (435), not total (417): 26 × 2.
+    expect(out.folate_mcg).toBeCloseTo(52, 5);
+    expect(out.choline_mg).toBeCloseTo(180, 5);
+    expect(out.iodine_mcg).toBeCloseTo(30, 5);
     expect(out.assumptions.at(-1)).toMatch(/USDA FoodData Central/);
   });
 

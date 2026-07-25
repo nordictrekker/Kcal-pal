@@ -6,16 +6,16 @@ import { cleanPlants } from "./plants";
 export const NUTRITION_MODEL = "claude-opus-4-8";
 
 const NUTRIENT_FIELDS =
-  "calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, saturated_fat_g: number, trans_fat_g: number, cholesterol_mg: number, iron_mg: number, calcium_mg: number, magnesium_mg: number, vitamin_d_mcg: number, omega3_mg: number, plants: string[]";
+  "calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, saturated_fat_g: number, trans_fat_g: number, cholesterol_mg: number, iron_mg: number, calcium_mg: number, magnesium_mg: number, vitamin_d_mcg: number, omega3_mg: number, folate_mcg: number, choline_mg: number, iodine_mcg: number, plants: string[]";
 
 const NUTRIENT_GUIDANCE =
-  "Also estimate saturated_fat_g, trans_fat_g (industrial/partially-hydrogenated trans fat in grams; ~0 for whole/unprocessed foods, higher for fried fast food, baked goods, margarine), cholesterol_mg (milligrams), and the micronutrients iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg (micrograms), omega3_mg (milligrams) from USDA averages; use 0 when a nutrient is genuinely absent. `plants` is the list of DISTINCT whole-plant foods eaten in enough quantity to be a MEANINGFUL contributor of vitamins, minerals, or fibre — NOT a trace, garnish, seasoning, or token amount. Include each fruit, vegetable, legume, nut, or seed once (lowercase singular, e.g. [\"spinach\",\"chickpea\",\"walnut\"]). EXCLUDE whole grains and grain products (rice, oats, quinoa, bread, pasta, cereal, …), herbs and spices, and flavourings/beverages (coffee, espresso, cocoa, chocolate, vanilla, tea, matcha, …). Empty array if none. ";
+  "Also estimate saturated_fat_g, trans_fat_g (industrial/partially-hydrogenated trans fat in grams; ~0 for whole/unprocessed foods, higher for fried fast food, baked goods, margarine), cholesterol_mg (milligrams), and the micronutrients iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg (micrograms), omega3_mg (milligrams), folate_mcg (micrograms DFE), choline_mg (milligrams), iodine_mcg (micrograms) from USDA averages; use 0 when a nutrient is genuinely absent. `plants` is the list of DISTINCT whole-plant foods eaten in enough quantity to be a MEANINGFUL contributor of vitamins, minerals, or fibre — NOT a trace, garnish, seasoning, or token amount. Include each fruit, vegetable, legume, nut, or seed once (lowercase singular, e.g. [\"spinach\",\"chickpea\",\"walnut\"]). EXCLUDE whole grains and grain products (rice, oats, quinoa, bread, pasta, cereal, …), herbs and spices, and flavourings/beverages (coffee, espresso, cocoa, chocolate, vanilla, tea, matcha, …). Empty array if none. ";
 
 // Every component carries its OWN full nutrient breakdown so the app can show
 // which specific food in a multi-item log contributed each nutrient. The
 // top-level totals must equal the sum of the items.
 const ITEM_FIELDS =
-  "name, quantity, grams, calories, protein_g, carbs_g, fat_g, fiber_g, saturated_fat_g, trans_fat_g, cholesterol_mg, iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg, omega3_mg";
+  "name, quantity, grams, calories, protein_g, carbs_g, fat_g, fiber_g, saturated_fat_g, trans_fat_g, cholesterol_mg, iron_mg, calcium_mg, magnesium_mg, vitamin_d_mcg, omega3_mg, folate_mcg, choline_mg, iodine_mcg";
 
 export const TEXT_SYSTEM_PROMPT =
   `You are a nutrition database. Given a free-text meal description, return JSON only with shape {${NUTRIENT_FIELDS}, serving_size: string, items: [{${ITEM_FIELDS}}], assumptions: string[]}. Break the meal into its individual component foods — one entry in \`items\` per distinct food — and give EACH component its own full nutrient estimate (the same fields as the totals). The top-level totals must equal the sum of the items. Estimate using USDA averages. \`grams\` is the estimated total edible weight of that item in grams. ` +
@@ -114,6 +114,9 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
       magnesium_mg: optNum(i.magnesium_mg),
       vitamin_d_mcg: optNum(i.vitamin_d_mcg),
       omega3_mg: optNum(i.omega3_mg),
+      folate_mcg: optNum(i.folate_mcg),
+      choline_mg: optNum(i.choline_mg),
+      iodine_mcg: optNum(i.iodine_mcg),
     };
   });
 
@@ -135,6 +138,9 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
     magnesium_mg: coerceNumberOrNull(obj.magnesium_mg) ?? 0,
     vitamin_d_mcg: coerceNumberOrNull(obj.vitamin_d_mcg) ?? 0,
     omega3_mg: coerceNumberOrNull(obj.omega3_mg) ?? 0,
+    folate_mcg: coerceNumberOrNull(obj.folate_mcg) ?? 0,
+    choline_mg: coerceNumberOrNull(obj.choline_mg) ?? 0,
+    iodine_mcg: coerceNumberOrNull(obj.iodine_mcg) ?? 0,
     plants,
     serving_size:
       typeof obj.serving_size === "string" ? obj.serving_size : "",

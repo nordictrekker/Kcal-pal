@@ -22,6 +22,9 @@ export type ParsedItem = {
   magnesium_mg?: number;
   vitamin_d_mcg?: number;
   omega3_mg?: number;
+  folate_mcg?: number;
+  choline_mg?: number;
+  iodine_mcg?: number;
 };
 
 export type ParsedNutrition = {
@@ -39,6 +42,9 @@ export type ParsedNutrition = {
   magnesium_mg: number;
   vitamin_d_mcg: number;
   omega3_mg: number;
+  folate_mcg: number;
+  choline_mg: number;
+  iodine_mcg: number;
   // Distinct whole-plant foods in the meal (for plant-diversity goal).
   plants: string[];
   serving_size: string;
@@ -73,6 +79,9 @@ export type FoodEntry = {
   magnesium_mg: number | null;
   vitamin_d_mcg: number | null;
   omega3_mg: number | null;
+  folate_mcg: number | null;
+  choline_mg: number | null;
+  iodine_mcg: number | null;
   plants: string[] | null;
   serving_size: string | null;
   raw_ai_response: unknown;

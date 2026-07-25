@@ -122,6 +122,9 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
             <MacroField name="magnesium_mg" label="Magnesium mg" value={entry.magnesium_mg} />
             <MacroField name="vitamin_d_mcg" label="Vit D µg" value={entry.vitamin_d_mcg} />
             <MacroField name="omega3_mg" label="Omega-3 mg" value={entry.omega3_mg} />
+            <MacroField name="folate_mcg" label="Folate µg" value={entry.folate_mcg} />
+            <MacroField name="choline_mg" label="Choline mg" value={entry.choline_mg} />
+            <MacroField name="iodine_mcg" label="Iodine µg" value={entry.iodine_mcg} />
           </div>
         </details>
         {state.error || reError ? (

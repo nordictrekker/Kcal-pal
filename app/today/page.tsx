@@ -90,7 +90,7 @@ export default async function TodayPage() {
       // Home only needs nutrient totals + description/serving (beverage
       // detection). The heavy raw_ai_response and per-entry chrome live on the
       // food-log page, not here.
-      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,description,serving_size,plants")
+      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,folate_mcg,choline_mg,iodine_mcg,description,serving_size,plants")
       .eq("user_id", user.id)
       .gte("consumed_at", fourteenDaysAgo)
       .order("consumed_at", { ascending: true }),

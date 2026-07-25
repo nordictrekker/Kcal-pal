@@ -28,7 +28,7 @@ export async function relogEntry(
   const { data: src, error: readErr } = await supabase
     .from("food_entries")
     .select(
-      "meal,description,source,serving_size,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,trans_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,plants,raw_ai_response",
+      "meal,description,source,serving_size,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,trans_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,folate_mcg,choline_mg,iodine_mcg,plants,raw_ai_response",
     )
     .eq("id", entryId)
     .eq("user_id", user.id)
@@ -65,6 +65,9 @@ export async function relogEntry(
     magnesium_mg: src.magnesium_mg,
     vitamin_d_mcg: src.vitamin_d_mcg,
     omega3_mg: src.omega3_mg,
+    folate_mcg: src.folate_mcg,
+    choline_mg: src.choline_mg,
+    iodine_mcg: src.iodine_mcg,
     plants: src.plants,
     raw_ai_response: src.raw_ai_response,
     ...(consumedAt ? { consumed_at: consumedAt } : {}),
