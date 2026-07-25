@@ -7,12 +7,23 @@ import { selectRelevantHistory, nutrientColumns } from "@/lib/food";
 
 const MAX_DESC = 1000;
 
-const MACRO_FIELDS = [
+// Every numeric field the inline editor may correct. Micros included so a
+// wrong supplement/label estimate (e.g. vitamin D on a foreign product) can be
+// fixed from the label instead of living with the AI's guess.
+const EDITABLE_FIELDS = [
   "calories",
   "protein_g",
   "carbs_g",
   "fat_g",
   "fiber_g",
+  "saturated_fat_g",
+  "trans_fat_g",
+  "cholesterol_mg",
+  "iron_mg",
+  "calcium_mg",
+  "magnesium_mg",
+  "vitamin_d_mcg",
+  "omega3_mg",
 ] as const;
 
 export type EditState = { ok: boolean; error?: string };
@@ -36,7 +47,7 @@ export async function updateEntry(
     edited_by_user: true,
   };
 
-  for (const field of MACRO_FIELDS) {
+  for (const field of EDITABLE_FIELDS) {
     const raw = formData.get(field);
     if (raw === null) continue;
     const s = String(raw).trim();
