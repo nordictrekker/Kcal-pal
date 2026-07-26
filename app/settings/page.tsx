@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { InstallCard } from "./install-card";
+import { SupplementsCard } from "./supplements-card";
 import { Notifications } from "./notifications";
 import { ThemeToggle } from "./theme-toggle";
 import { ShortcutCard } from "./shortcut-card";
@@ -94,6 +95,10 @@ export default async function SettingsPage() {
       <TravelCard state={travelState} />
 
       <PhaseModifiersCard initial={phaseModifiers} />
+
+      <SupplementsCard
+        initial={Array.isArray(p?.supplements) ? (p.supplements as string[]) : []}
+      />
 
       <ThemeToggle />
 
