@@ -9,16 +9,18 @@ Surfaces:
 - **C** = desktop/Android Chrome
 - **P** = iOS home-screen app (Add to Home Screen, standalone)
 
+_Pass 1 (2026-07-26, reported by Julie): Auth, Today, and Nav verified ✓ on all three surfaces. Remaining sections pending._
+
 | Area | Check | S | C | P |
 |---|---|---|---|---|
-| **Auth** | Request code → email arrives with a 6-digit code (no link) | ☐ | ☐ | ☐ |
-| | Enter code → lands on `/today` (or `/onboarding` first run) | ☐ | ☐ | ☐ |
-| **Today** | Greeting, produce motif animates (or static under Reduce Motion) | ☐ | ☐ | ☐ |
-| | Calorie ring + macro bars reflect today's logs | ☐ | ☐ | ☐ |
-| | Oura / Weight / Water / Cycle cards render (or hide when no data) | ☐ | ☐ | ☐ |
-| | Water quick-add (+8/+16/+20) updates total; undo works | ☐ | ☐ | ☐ |
-| | "+ Log food" FAB → `/log` | ☐ | ☐ | ☐ |
-| **Nav** | Each page shows the loading spinner briefly, never a blank flash | ☐ | ☐ | ☐ |
+| **Auth** | Request code → email arrives with a 6-digit code (no link) | ✓ | ✓ | ✓ |
+| | Enter code → lands on `/today` (or `/onboarding` first run) | ✓ | ✓ | ✓ |
+| **Today** | Greeting, produce motif animates (or static under Reduce Motion) | ✓ | ✓ | ✓ |
+| | Calorie ring + macro bars reflect today's logs | ✓ | ✓ | ✓ |
+| | Oura / Weight / Water / Cycle cards render (or hide when no data) | ✓ | ✓ | ✓ |
+| | Water quick-add (+8/+16/+20) updates total; undo works | ✓ | ✓ | ✓ |
+| | "+ Log food" FAB → `/log` | ✓ | ✓ | ✓ |
+| **Nav** | Each page shows the loading spinner briefly, never a blank flash | ✓ | ✓ | ✓ |
 | **Log (text)** | Meal first → description box auto-grows as you type | ☐ | ☐ | ☐ |
 | | Submit → entry parsed, macros + micros populated | ☐ | ☐ | ☐ |
 | | Saved meals one-tap log; pantry chip fills box / ＋ logs instantly | ☐ | ☐ | ☐ |
