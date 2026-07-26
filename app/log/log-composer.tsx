@@ -17,12 +17,14 @@ export function LogComposer({
   frequentItems,
   savedItems,
   recentMeals,
+  supplements,
   defaultMeal,
   logDate,
 }: {
   frequentItems: FrequentItem[];
   savedItems: SavedMealItem[];
   recentMeals: RecentMeal[];
+  supplements: string[];
   defaultMeal: Meal;
   logDate?: string | null;
 }) {
@@ -54,7 +56,7 @@ export function LogComposer({
 
       <SavedMeals items={savedItems} />
 
-      <Pantry items={frequentItems} onPick={pick} logDate={logDate} />
+      <Pantry items={frequentItems} supplements={supplements} onPick={pick} logDate={logDate} />
     </div>
   );
 }

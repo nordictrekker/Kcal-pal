@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MEALS, defaultMeal } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
-export type RelogResult = { ok: boolean; error?: string };
+export type RelogResult = { ok: boolean; error?: string; noMatch?: boolean };
 
 function isMeal(v: string): v is Meal {
   return (MEALS as string[]).includes(v);
@@ -77,4 +77,38 @@ export async function relogEntry(
   revalidatePath("/today");
   revalidatePath("/log");
   return { ok: true };
+}
+
+// One-tap log for a Settings-declared supplement: copy the LATEST logged entry
+// whose description matches the supplement name (so corrections carry over).
+// `noMatch: true` when it's never been logged — the UI then falls back to
+// filling the composer so the first log goes through the AI parse (which does
+// a label web-search for branded supplements).
+export async function relogLatestByName(
+  name: string,
+  meal?: string,
+  logDate?: string | null,
+): Promise<RelogResult> {
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Empty name." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  // Escape LIKE wildcards in the user-supplied name.
+  const pattern = `%${trimmed.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+  const { data: match } = await supabase
+    .from("food_entries")
+    .select("id")
+    .eq("user_id", user.id)
+    .ilike("description", pattern)
+    .order("consumed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!match) return { ok: false, noMatch: true };
+  return relogEntry(match.id as string, meal, logDate);
 }

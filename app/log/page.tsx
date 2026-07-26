@@ -41,7 +41,7 @@ export default async function LogPage({
   // Saved meals and the pantry source (recent logs) are independent — fetch in
   // parallel rather than one after the other.
   const since = new Date(Date.now() - 45 * 86_400_000).toISOString();
-  const [{ data: savedRaw }, { data: recentRaw }] = await Promise.all([
+  const [{ data: savedRaw }, { data: recentRaw }, { data: profileRow }] = await Promise.all([
     supabase
       .from("saved_meals")
       .select("id,label,description,calories,protein_g,last_used_at,use_count")
@@ -60,7 +60,15 @@ export default async function LogPage({
       .gte("consumed_at", since)
       .order("consumed_at", { ascending: false })
       .limit(200),
+    supabase
+      .from("profiles")
+      .select("supplements")
+      .eq("user_id", user.id)
+      .maybeSingle(),
   ]);
+  const supplements: string[] = Array.isArray(profileRow?.supplements)
+    ? (profileRow.supplements as string[])
+    : [];
   const saved: SavedMealItem[] = (savedRaw ?? []).map((s) => ({
     id: s.id as string,
     label: s.label as string,
@@ -159,6 +167,7 @@ export default async function LogPage({
         frequentItems={frequentItems}
         savedItems={saved}
         recentMeals={recentMeals}
+        supplements={supplements}
         defaultMeal={defaultMeal()}
         logDate={logDate}
       />

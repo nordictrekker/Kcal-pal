@@ -9,7 +9,7 @@ Surfaces:
 - **C** = desktop/Android Chrome
 - **P** = iOS home-screen app (Add to Home Screen, standalone)
 
-_Pass 1 (2026-07-26, reported by Julie): Auth, Today, and Nav verified ✓ on all three surfaces. Remaining sections pending._
+_Pass 1 (2026-07-26, reported by Julie): Auth, Today, Nav, Log (text), and Summary verified ✓ on all three surfaces. Remaining: Log (photo), Log (scan), and later sections._
 
 | Area | Check | S | C | P |
 |---|---|---|---|---|
@@ -21,18 +21,18 @@ _Pass 1 (2026-07-26, reported by Julie): Auth, Today, and Nav verified ✓ on al
 | | Water quick-add (+8/+16/+20) updates total; undo works | ✓ | ✓ | ✓ |
 | | "+ Log food" FAB → `/log` | ✓ | ✓ | ✓ |
 | **Nav** | Each page shows the loading spinner briefly, never a blank flash | ✓ | ✓ | ✓ |
-| **Log (text)** | Meal first → description box auto-grows as you type | ☐ | ☐ | ☐ |
-| | Submit → entry parsed, macros + micros populated | ☐ | ☐ | ☐ |
-| | Saved meals one-tap log; pantry chip fills box / ＋ logs instantly | ☐ | ☐ | ☐ |
+| **Log (text)** | Meal first → description box auto-grows as you type | ✓ | ✓ | ✓ |
+| | Submit → entry parsed, macros + micros populated | ✓ | ✓ | ✓ |
+| | Saved meals one-tap log; pantry chip fills box / ＋ logs instantly | ✓ | ✓ | ✓ |
 | **Log (photo)** | Pick/take photo → parsed entry to confirm | ☐ | ☐ | ☐ |
 | **Log (scan)** | Tab → **Start camera** tap prompts for camera (PWA) | ☐ | ☐ | ☐ |
 | | Camera auto-starts in a Safari tab / Chrome (no extra tap) | ☐ | ☐ | ☐ |
 | | Scan a barcode → OFF/Claude lookup → portion editor recalcs macros | ☐ | ☐ | ☐ |
 | | Camera error (deny permission) shows the real reason + Try again | ☐ | ☐ | ☐ |
-| **Summary** | Tap an entry → component breakdown; micros expand to contributors | ☐ | ☐ | ☐ |
-| | Toggle **7-day average** → bars switch to daily-average vs goal | ☐ | ☐ | ☐ |
-| | In average mode, expand shows top-5 weekly foods (table) | ☐ | ☐ | ☐ |
-| | Food insights: Generate → two-paragraph note; Refresh re-runs | ☐ | ☐ | ☐ |
+| **Summary** | Tap an entry → component breakdown; micros expand to contributors | ✓ | ✓ | ✓ |
+| | Toggle **7-day average** → bars switch to daily-average vs goal | ✓ | ✓ | ✓ |
+| | In average mode, expand shows top-5 weekly foods (table) | ✓ | ✓ | ✓ |
+| | Food insights: Generate → two-paragraph note; Refresh re-runs | ✓ | ✓ | ✓ |
 | **Reanalyze** | `/reanalyze` → "Re-analyze all N" → progress + before/after | ☐ | ☐ | ☐ |
 | **Recipes** | Paste URL → parsed recipe saved; servings stepper scales macros; Log | ☐ | ☐ | ☐ |
 | **Weekly** | Digest Generate/Refresh; range tabs (14/30/90); charts render | ☐ | ☐ | ☐ |
