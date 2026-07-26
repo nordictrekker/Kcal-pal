@@ -16,6 +16,9 @@ const MICRO_LABELS: Record<string, string> = {
   magnesium_mg: "Mag",
   vitamin_d_mcg: "Vit D",
   omega3_mg: "Omega-3",
+  folate_mcg: "Folate",
+  choline_mg: "Choline",
+  iodine_mcg: "Iodine",
 };
 
 function round(n: number | null): string {

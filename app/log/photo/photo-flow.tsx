@@ -214,6 +214,9 @@ function ConfirmForm({
               ["magnesium_mg", parsed.magnesium_mg],
               ["vitamin_d_mcg", parsed.vitamin_d_mcg],
               ["omega3_mg", parsed.omega3_mg],
+              ["folate_mcg", parsed.folate_mcg],
+              ["choline_mg", parsed.choline_mg],
+              ["iodine_mcg", parsed.iodine_mcg],
             ] as const
           ).map(([name, value]) => (
             <input

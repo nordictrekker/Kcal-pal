@@ -173,6 +173,9 @@ export async function savePhotoEntry(
     magnesium_mg: readNumberOrNull(formData.get("magnesium_mg")),
     vitamin_d_mcg: readNumberOrNull(formData.get("vitamin_d_mcg")),
     omega3_mg: readNumberOrNull(formData.get("omega3_mg")),
+    folate_mcg: readNumberOrNull(formData.get("folate_mcg")),
+    choline_mg: readNumberOrNull(formData.get("choline_mg")),
+    iodine_mcg: readNumberOrNull(formData.get("iodine_mcg")),
     plants,
     edited_by_user: false,
   });

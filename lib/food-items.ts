@@ -21,6 +21,9 @@ export type ComponentItem = {
   magnesium_mg?: number;
   vitamin_d_mcg?: number;
   omega3_mg?: number;
+  folate_mcg?: number;
+  choline_mg?: number;
+  iodine_mcg?: number;
 };
 
 function stripFences(text: string): string {
@@ -53,6 +56,9 @@ function normalizeItems(arr: unknown): ComponentItem[] {
       magnesium_mg: optNum(i.magnesium_mg),
       vitamin_d_mcg: optNum(i.vitamin_d_mcg),
       omega3_mg: optNum(i.omega3_mg),
+      folate_mcg: optNum(i.folate_mcg),
+      choline_mg: optNum(i.choline_mg),
+      iodine_mcg: optNum(i.iodine_mcg),
     }))
     .filter((i) => i.name !== "");
 }

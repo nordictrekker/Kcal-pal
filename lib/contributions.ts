@@ -15,6 +15,9 @@ const FIELDS = [
   "magnesium_mg",
   "vitamin_d_mcg",
   "omega3_mg",
+  "folate_mcg",
+  "choline_mg",
+  "iodine_mcg",
 ] as const;
 
 // A slim per-entry record carrying just what the contributor breakdown needs:
