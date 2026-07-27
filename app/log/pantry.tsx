@@ -69,7 +69,7 @@ export function Pantry({
   const chipClass =
     "flex items-stretch overflow-hidden rounded-full border bg-secondary/60";
   const nameBtnClass =
-    "max-w-[150px] truncate py-1.5 pl-3 pr-2 text-left text-sm hover:bg-accent";
+    "max-w-full py-1.5 pl-3 pr-2 text-left text-sm hover:bg-accent";
   const plusBtnClass =
     "flex items-center border-l px-2 text-muted-foreground hover:bg-primary hover:text-primary-foreground disabled:opacity-50";
 

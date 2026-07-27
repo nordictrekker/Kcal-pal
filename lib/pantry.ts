@@ -47,8 +47,37 @@ function tokensOf(name: string): string[] {
     .filter((t) => t.length >= 3 && !STOP.has(t));
 }
 
+// Compact a parsed quantity for chip display: drop weight parentheticals
+// ("1 half (~2 g)" → "1 half"), turn word-fractions into numerals ("1 half" →
+// "1/2"), and drop words the name already says ("12 fries" on a French-fries
+// chip → "12"). The full quantity still rides along in `description` for
+// logging. Exported for tests.
+export function simplifyQuantity(quantity: string, name: string): string {
+  let q = quantity.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+  const FRACTIONS: Array<[RegExp, string]> = [
+    [/\b(?:1|a|one) half\b/gi, "1/2"],
+    [/\b(?:1|a|one) quarter\b/gi, "1/4"],
+    [/\b(?:1|a|one) third\b/gi, "1/3"],
+    [/^half\b/i, "1/2"],
+  ];
+  for (const [re, rep] of FRACTIONS) q = q.replace(re, rep);
+  const nameTokens = new Set(
+    name.toLowerCase().split(/[^a-zà-ÿ0-9/]+/i).filter(Boolean),
+  );
+  q = q
+    .split(/\s+/)
+    .filter((w) => {
+      const t = w.toLowerCase().replace(/[.,;]+$/, "");
+      const singular = t.endsWith("s") ? t.slice(0, -1) : t;
+      return !nameTokens.has(t) && !nameTokens.has(singular);
+    })
+    .join(" ")
+    .trim();
+  return q;
+}
+
 function phrase(c: PantryComponent): string {
-  const q = c.quantity?.trim();
+  const q = c.quantity ? simplifyQuantity(c.quantity, c.name) : "";
   if (q && !c.name.toLowerCase().includes(q.toLowerCase())) {
     return `${c.name} (${q})`;
   }
