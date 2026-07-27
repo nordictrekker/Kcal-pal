@@ -9,7 +9,7 @@ Surfaces:
 - **C** = desktop/Android Chrome
 - **P** = iOS home-screen app (Add to Home Screen, standalone)
 
-_Pass 1 (2026-07-26, reported by Julie): Auth, Today, Nav, Log (text), and Summary verified ✓ on all three surfaces. Remaining: Log (scan) and later sections. Log (photo): ✓ on Chrome; on S/P the confirm page rendered a blank photo (object-URL revocation bug — fixed, ↻ = re-test) and offline PWA launch showed the raw browser error (offline fallback added, re-test the PWA offline row)._
+_Pass 1 (2026-07-26, reported by Julie): Auth, Today, Nav, Log (text), and Summary verified ✓ on all three surfaces. Remaining: Log (scan) rows 3–4 (barcode lookup, camera-error path) and later sections. Log (photo): ✓ on Chrome; on S/P the confirm page rendered a blank photo (object-URL revocation bug — fixed, ↻ = re-test) and offline PWA launch showed the raw browser error (offline fallback added, re-test the PWA offline row)._
 
 | Area | Check | S | C | P |
 |---|---|---|---|---|
@@ -25,8 +25,8 @@ _Pass 1 (2026-07-26, reported by Julie): Auth, Today, Nav, Log (text), and Summa
 | | Submit → entry parsed, macros + micros populated | ✓ | ✓ | ✓ |
 | | Saved meals one-tap log; pantry chip fills box / ＋ logs instantly | ✓ | ✓ | ✓ |
 | **Log (photo)** | Pick/take photo → parsed entry to confirm | ↻ | ✓ | ↻ |
-| **Log (scan)** | Tab → **Start camera** tap prompts for camera (PWA) | ☐ | ☐ | ☐ |
-| | Camera auto-starts in a Safari tab / Chrome (no extra tap) | ☐ | ☐ | ☐ |
+| **Log (scan)** | Tab → **Start camera** tap prompts for camera (PWA) | ✓ | ✓ | ✓ |
+| | Camera auto-starts in a Safari tab / Chrome (no extra tap) | ✓ | ✓ | ✓ |
 | | Scan a barcode → OFF/Claude lookup → portion editor recalcs macros | ☐ | ☐ | ☐ |
 | | Camera error (deny permission) shows the real reason + Try again | ☐ | ☐ | ☐ |
 | **Summary** | Tap an entry → component breakdown; micros expand to contributors | ✓ | ✓ | ✓ |
