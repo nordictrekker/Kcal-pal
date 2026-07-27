@@ -301,19 +301,23 @@ export function PhotoFlow() {
   const [pending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  // The live object URL. Revoked only when replaced by a new photo, on reset,
+  // or on unmount — NOT on stage transitions: the same URL is carried from
+  // preview through analyze to the confirm page, and revoking per-transition
+  // left the confirm page pointing at a dead blob (photo rendered blank).
+  const previewUrlRef = useRef<string | null>(null);
 
-  // Tear down object URLs when we leave a stage that owns one.
   useEffect(() => {
     return () => {
-      if (stage.kind !== "picking") {
-        URL.revokeObjectURL(stage.previewUrl);
-      }
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
-  }, [stage]);
+  }, []);
 
   function onFile(file: File | null | undefined) {
     if (!file) return;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     const previewUrl = URL.createObjectURL(file);
+    previewUrlRef.current = previewUrl;
     setStage({ kind: "previewing", file, previewUrl });
   }
 
@@ -352,6 +356,10 @@ export function PhotoFlow() {
   }
 
   function reset() {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
     setStage({ kind: "picking" });
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (galleryInputRef.current) galleryInputRef.current.value = "";
