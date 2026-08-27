@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export type ProfileResult = { ok: boolean; error?: string };
 
 const ACTIVITY = ["sedentary", "light", "moderate", "active", "very_active"];
-const GOALS = ["lose", "maintain", "gain"];
+const GOALS = ["lose", "maintain", "gain", "muscle"];
 const SEXES = ["female", "male", "other"];
 
 // Update the body + goal + cycle fields that drive smarter targets and
@@ -85,7 +85,15 @@ export async function updateProfileSettings(
   // Cycle settings.
   const trackCycle = formData.get("track_cycle");
   if (trackCycle !== null) patch.track_cycle = trackCycle === "on" || trackCycle === "true";
-  // Male profiles never track a cycle — enforce server-side so every consumer
+  const bodyBuild = formData.get("body_build");
+  if (bodyBuild !== null) {
+    const v = String(bodyBuild);
+    patch.body_build = ["lean", "average", "muscular", "higher_fat"].includes(v)
+      ? v
+      : null;
+  }
+
+// Male profiles never track a cycle — enforce server-side so every consumer
   // (today, summary, recap, insights) sees cycle features off.
   if (patch.sex === "male") {
     patch.track_cycle = false;

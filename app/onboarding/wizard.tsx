@@ -18,7 +18,8 @@ export type WizardPrefill = {
   height_in: number | null;
   weight_lbs: number | null;
   activity_level: string;
-  goal: "lose" | "maintain" | "gain";
+  goal: "lose" | "maintain" | "gain" | "muscle";
+  body_build: string | null;
   goal_weight_lbs: number | null;
   target_mode: "auto" | "manual";
   track_cycle: boolean;
@@ -39,6 +40,14 @@ const GOAL_OPTIONS = [
   { value: "lose", label: "Lose", hint: "Gentle deficit" },
   { value: "maintain", label: "Maintain", hint: "Hold steady" },
   { value: "gain", label: "Gain", hint: "Build slowly" },
+  { value: "muscle", label: "Build muscle", hint: "Lean surplus" },
+];
+
+const BUILD_OPTIONS = [
+  { value: "lean", label: "Lean", hint: "" },
+  { value: "average", label: "Average", hint: "" },
+  { value: "muscular", label: "Muscular", hint: "" },
+  { value: "higher_fat", label: "Softer", hint: "" },
 ];
 
 function OptionGrid({
@@ -94,6 +103,7 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
   );
   const [activity, setActivity] = useState(prefill.activity_level);
   const [goal, setGoal] = useState<WizardPrefill["goal"]>(prefill.goal);
+  const [bodyBuild, setBodyBuild] = useState<string>(prefill.body_build ?? "average");
   const [goalWeight, setGoalWeight] = useState(
     prefill.goal_weight_lbs ? String(prefill.goal_weight_lbs) : "",
   );
@@ -232,6 +242,18 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
             value={goal}
             onChange={(v) => setGoal(v as WizardPrefill["goal"])}
           />
+          <div className="space-y-2">
+            <Label>How would you describe your build?</Label>
+            <OptionGrid
+              options={BUILD_OPTIONS}
+              value={bodyBuild}
+              onChange={setBodyBuild}
+            />
+            <p className="text-xs text-muted-foreground">
+              Protein need tracks lean mass, not just weight — this tunes your
+              protein target.
+            </p>
+          </div>
           {goal !== "maintain" ? (
             <div className="space-y-2 rounded-lg border p-3">
               <Label htmlFor="goalWeight">Goal weight (optional)</Label>
@@ -402,6 +424,7 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
           ? goalWeightNum
           : null,
       target_mode: targetMode,
+      body_build: bodyBuild,
       track_cycle: sex === "male" ? false : trackCycle,
       last_period_start:
         sex !== "male" && trackCycle && periodStart ? periodStart : null,

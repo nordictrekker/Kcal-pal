@@ -18,6 +18,7 @@ export type ProfileSettings = {
   goal_weight_lbs: number | null;
   target_mode: string;
   track_cycle: boolean;
+  body_build?: string | null;
   last_period_start: string;
   avg_cycle_length: number;
   avg_period_length: number;
@@ -152,6 +153,20 @@ export function ProfileCard({ initial }: { initial: ProfileSettings }) {
                   ["lose", "Lose"],
                   ["maintain", "Maintain"],
                   ["gain", "Gain"],
+                  ["muscle", "Build muscle"],
+                ]}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Build</Label>
+              <Select
+                name="body_build"
+                defaultValue={initial.body_build ?? "average"}
+                options={[
+                  ["lean", "Lean"],
+                  ["average", "Average"],
+                  ["muscular", "Muscular"],
+                  ["higher_fat", "Softer"],
                 ]}
               />
             </div>

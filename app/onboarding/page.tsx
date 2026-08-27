@@ -32,13 +32,16 @@ export default async function OnboardingPage() {
     | "male"
     | "other";
   const goal = (
-    p?.goal === "lose" || p?.goal === "gain" ? p.goal : "maintain"
-  ) as "lose" | "maintain" | "gain";
+    p?.goal === "lose" || p?.goal === "gain" || p?.goal === "muscle"
+      ? p.goal
+      : "maintain"
+  ) as "lose" | "maintain" | "gain" | "muscle";
 
   const prefill: WizardPrefill = {
     first_name: p?.first_name ?? "",
     date_of_birth: p?.date_of_birth ?? "",
     sex,
+    body_build: p?.body_build ?? null,
     height_in: p?.height_in ?? null,
     weight_lbs: weights?.[0]?.weight_lbs
       ? Number(weights[0].weight_lbs)

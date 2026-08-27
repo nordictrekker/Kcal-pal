@@ -58,6 +58,7 @@ export default async function SettingsPage() {
     goal_weight_lbs: p?.goal_weight_lbs ?? null,
     target_mode: p?.target_mode ?? "manual",
     track_cycle: p?.track_cycle ?? true,
+    body_build: p?.body_build ?? null,
     last_period_start: p?.last_period_start ?? "",
     avg_cycle_length: p?.avg_cycle_length ?? 28,
     avg_period_length: p?.avg_period_length ?? 5,

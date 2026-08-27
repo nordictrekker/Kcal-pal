@@ -286,6 +286,7 @@ export default async function SummaryPage({
     weightLbs: weightRows?.[0] ? Number(weightRows[0].weight_lbs) : null,
     activityLevel: p?.activity_level ?? null,
     goal: p?.goal ?? null,
+    bodyBuild: p?.body_build ?? null,
     proteinPerKg: p?.protein_per_kg ?? null,
     ouraTdee7d: ouraTdeeValues.length ? mean(ouraTdeeValues) : null,
   };

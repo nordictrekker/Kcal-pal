@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { sumTotals } from "@/lib/food";
-import type { FoodEntry, Profile } from "@/lib/types";
+import type { FoodEntry, Meal, Profile } from "@/lib/types";
 import { MacroTotals } from "./macro-totals";
 import { OuraCard, type OuraSnapshot } from "./oura-card";
 import { WeightCard, type WeightSnapshot } from "./weight-card";
@@ -54,6 +54,7 @@ import { LocationSync } from "./location-sync";
 import { LogCheckIn } from "./log-checkin";
 import { TravelCard } from "./travel-card";
 import { weightTrendLbsPerWeek, projectGoalEta } from "@/lib/targets";
+import { proteinDistributionNote } from "@/lib/protein-timing";
 import { mean } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
@@ -90,7 +91,7 @@ export default async function TodayPage() {
       // Home only needs nutrient totals + description/serving (beverage
       // detection). The heavy raw_ai_response and per-entry chrome live on the
       // food-log page, not here.
-      .select("consumed_at,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,folate_mcg,choline_mg,iodine_mcg,description,serving_size,plants")
+      .select("consumed_at,meal,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,folate_mcg,choline_mg,iodine_mcg,description,serving_size,plants")
       .eq("user_id", user.id)
       .gte("consumed_at", fourteenDaysAgo)
       .order("consumed_at", { ascending: true }),
@@ -455,6 +456,7 @@ export default async function TodayPage() {
       weightLbs: weightSnapshot?.weight_lbs ?? null,
       activityLevel: p?.activity_level ?? null,
       goal: p?.goal ?? null,
+      bodyBuild: p?.body_build ?? null,
       proteinPerKg: p?.protein_per_kg ?? null,
       ouraTdee7d,
     },
@@ -647,6 +649,14 @@ export default async function TodayPage() {
           targetNote={resolved.calorieNote}
           recoveryNote={resolved.recoveryNote}
           balanceNote={resolved.balanceNote}
+          proteinNote={proteinDistributionNote({
+            goal: p?.goal ?? null,
+            entries: entries.map((e) => ({
+              meal: (e as { meal?: Meal | null }).meal ?? null,
+              protein_g: (e.protein_g as number | null) ?? null,
+            })),
+            proteinTargetG: resolved.targets.protein_g,
+          })}
           showLogHint
         />
       </Link>

@@ -250,7 +250,7 @@ export const RESTAURANT_REF = /\brestaurant\b|\bmenu item\b|\bmenu:|\bcafé(?![a
 // guess picks the wrong SKU (e.g. French Berocca has 10 µg vitamin D vs the
 // ~5 µg variant elsewhere). Exported for tests.
 export const SUPPLEMENT_REF =
-  /\b(tablet|capsule|caplet|gumm(?:y|ies)|effervescent|supplement|multivitamin|protein (?:powder|shake|bar)|energy bar|granola bar|meal replacement|electrolyte|creatine|collagen)\b/i;
+  /\b(tablet|capsule|caplet|kapsel|tablett|g\u00e9lule|capsula|comprim\u00e9|gumm(?:y|ies)|effervescent|supplement|multivitamin|prenatal|nac|probiotic|omega-3|fish oil|protein (?:powder|shake|bar)|energy bar|granola bar|meal replacement|electrolyte|creatine|collagen)\b/i;
 
 const SUPPLEMENT_SEARCH_GUIDANCE =
   " The entry names a branded/labeled product (supplement, bar, powder, or similar). Use web search to find THAT product's official nutrition/supplement facts label, matching any region or language cues in the entry (a French product name means the French formulation, not another market's). Scale every value to the amount actually taken (e.g. 1/3 tablet = one third of the per-tablet label values). In `assumptions`, note which product/label you used and its per-serving values. If you cannot find the exact product, say so in `assumptions` and estimate from the closest variant. Your FINAL output must still be ONLY the JSON object — no prose after it.";
@@ -261,6 +261,7 @@ const RESTAURANT_SEARCH_GUIDANCE =
 export async function parseTextMeal(
   description: string,
   history: MealHistoryItem[] = [],
+  opts: { forceSupplementSearch?: boolean } = {},
 ): Promise<ParseResult> {
   const userContent =
     history.length === 0
@@ -272,7 +273,14 @@ export async function parseTextMeal(
   // Restaurant + dish entries get a live web-search lookup to ground the
   // estimate in the real menu. If search is unavailable or fails, fall back to
   // the normal knowledge-based parse so logging never breaks.
-  if (RESTAURANT_REF.test(description)) {
+  if (opts.forceSupplementSearch) {
+    const searched = await callAndParse(
+      userContent,
+      TEXT_SYSTEM_PROMPT + SUPPLEMENT_SEARCH_GUIDANCE,
+      { webSearch: true },
+    );
+    if (searched.ok) return searched;
+  } else if (RESTAURANT_REF.test(description)) {
     const searched = await callAndParse(
       userContent,
       TEXT_SYSTEM_PROMPT + RESTAURANT_SEARCH_GUIDANCE,

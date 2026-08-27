@@ -31,11 +31,25 @@ const GOAL_OFFSET: Record<string, number> = {
   lose: -500,
   maintain: 0,
   gain: 300,
+  // Build muscle: a lean surplus — enough to fuel muscle protein synthesis
+  // without the fat gain of a full bulk.
+  muscle: 150,
 };
 const GOAL_PROTEIN_PER_KG: Record<string, number> = {
   lose: 2.0, // preserve lean mass in a deficit
   maintain: 1.6,
   gain: 1.8,
+  muscle: 2.2, // top of the muscle-protein-synthesis range
+};
+
+// Self-described build scales the per-kg protein: protein need tracks lean
+// mass, not scale weight, so a muscular person needs more per total kg and a
+// higher-body-fat person needs less. Unset/average keeps today's behavior.
+const BUILD_PROTEIN_MULT: Record<string, number> = {
+  lean: 1.05,
+  average: 1.0,
+  muscular: 1.1,
+  higher_fat: 0.85,
 };
 
 export type TargetInputs = {
@@ -49,6 +63,7 @@ export type TargetInputs = {
   weightLbs: number | null;
   activityLevel: string | null;
   goal: string | null;
+  bodyBuild?: string | null;
   proteinPerKg: number | null;
   // Rolling 7-day average of Oura total_calories (measured TDEE), or null.
   ouraTdee7d: number | null;
@@ -218,8 +233,10 @@ export function computeTargets(input: TargetInputs): ComputedTargets {
   // most want to avoid for an active woman.
   const calories = Math.max(Math.round(restingBurn * 1.05), Math.round(tdee + offset));
 
+  const buildMult =
+    BUILD_PROTEIN_MULT[input.bodyBuild ?? "average"] ?? 1.0;
   const proteinPerKg =
-    input.proteinPerKg ?? GOAL_PROTEIN_PER_KG[goal] ?? 1.6;
+    input.proteinPerKg ?? (GOAL_PROTEIN_PER_KG[goal] ?? 1.6) * buildMult;
   const protein_g = Math.round(proteinPerKg * kg);
 
   // Fat ~0.9 g/kg (a healthy-hormones floor), carbs fill the remainder.

@@ -147,6 +147,7 @@ export async function regenerateFoodInsight(): Promise<InsightState> {
     weightLbs: latestWeight,
     activityLevel: p?.activity_level ?? null,
     goal: p?.goal ?? null,
+    bodyBuild: p?.body_build ?? null,
     proteinPerKg: p?.protein_per_kg ?? null,
     ouraTdee7d: null,
   };

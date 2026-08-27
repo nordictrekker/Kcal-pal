@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { MEALS, defaultMeal } from "@/lib/food";
+import { MEALS, defaultMeal, nutrientColumns } from "@/lib/food";
+import { parseTextMeal } from "@/lib/anthropic";
+import { enrichMicrosWithUsda } from "@/lib/fdc";
 import type { Meal } from "@/lib/types";
 
-export type RelogResult = { ok: boolean; error?: string; noMatch?: boolean };
+export type RelogResult = { ok: boolean; error?: string };
 
 function isMeal(v: string): v is Meal {
   return (MEALS as string[]).includes(v);
@@ -79,11 +81,11 @@ export async function relogEntry(
   return { ok: true };
 }
 
-// One-tap log for a Settings-declared supplement: copy the LATEST logged entry
-// whose description matches the supplement name (so corrections carry over).
-// `noMatch: true` when it's never been logged — the UI then falls back to
-// filling the composer so the first log goes through the AI parse (which does
-// a label web-search for branded supplements).
+// One-tap log for a Settings-declared supplement. Fast path: copy the LATEST
+// logged entry matching the name (corrections carry over). First-ever log:
+// run the full AI parse server-side with the supplement label web-search
+// forced (declared names like "prenatal" or "NAC" don't always hit the
+// trigger regex), then insert — one tap either way.
 export async function relogLatestByName(
   name: string,
   meal?: string,
@@ -109,6 +111,36 @@ export async function relogLatestByName(
     .limit(1)
     .maybeSingle();
 
-  if (!match) return { ok: false, noMatch: true };
-  return relogEntry(match.id as string, meal, logDate);
+  if (match) return relogEntry(match.id as string, meal, logDate);
+
+  const result = await parseTextMeal(trimmed, [], {
+    forceSupplementSearch: true,
+  });
+  if (!result.ok) {
+    return { ok: false, error: `Couldn't look that up: ${result.error}` };
+  }
+  const enriched = await enrichMicrosWithUsda(supabase, result.data);
+
+  const m: Meal = meal && isMeal(meal) ? meal : defaultMeal();
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const consumedAt =
+    logDate && /^\d{4}-\d{2}-\d{2}$/.test(logDate) && logDate < todayKey
+      ? `${logDate}T12:00:00.000Z`
+      : null;
+
+  const { error: insertErr } = await supabase.from("food_entries").insert({
+    user_id: user.id,
+    meal: m,
+    description: trimmed,
+    source: "text",
+    ...nutrientColumns(enriched),
+    raw_ai_response: (result.raw as object) ?? null,
+    edited_by_user: false,
+    ...(consumedAt ? { consumed_at: consumedAt } : {}),
+  });
+  if (insertErr) return { ok: false, error: insertErr.message };
+
+  revalidatePath("/today");
+  revalidatePath("/log");
+  return { ok: true };
 }
