@@ -68,9 +68,11 @@ export function MacroTotals({
   balanceNote,
   showLogHint,
   weekly = false,
+  sex = null,
 }: {
   totals: Totals;
   targets: Totals;
+  sex?: string | null;
   // Which metric bars to render under the calorie headline.
   metrics?: MetricKey[];
   // Weekly mode: expandable bars show the week's top-5 contributors (table).
@@ -138,7 +140,7 @@ export function MacroTotals({
           {metrics.map((key) => {
             const def = METRICS[key];
             if (!def) return null;
-            const { value, target } = metricValueAndTarget(def, totals, targets);
+            const { value, target } = metricValueAndTarget(def, totals, targets, sex);
             return entries ? (
               <NutrientBreakdown
                 key={key}
