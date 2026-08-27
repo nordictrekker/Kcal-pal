@@ -10,10 +10,11 @@ export type OnboardingPayload = {
   height_in: number;
   weight_lbs: number;
   activity_level: string;
-  goal: "lose" | "maintain" | "gain";
+  goal: "lose" | "maintain" | "gain" | "muscle";
   goal_weight_lbs: number | null;
   target_mode: "auto" | "manual";
   track_cycle: boolean;
+  body_build?: string | null;
   last_period_start: string | null; // YYYY-MM-DD
   avg_cycle_length: number;
   avg_period_length: number;
@@ -24,7 +25,7 @@ export type OnboardingPayload = {
 export type OnboardingResult = { ok: boolean; error?: string };
 
 const ACTIVITY = ["sedentary", "light", "moderate", "active", "very_active"];
-const GOALS = ["lose", "maintain", "gain"];
+const GOALS = ["lose", "maintain", "gain", "muscle"];
 const SEXES = ["female", "male", "other"];
 
 export async function completeOnboarding(
@@ -102,6 +103,9 @@ export async function completeOnboarding(
       goal_weight_lbs: goalWeight,
       target_mode: p.target_mode,
       track_cycle: p.sex === "male" ? false : p.track_cycle,
+      body_build: ["lean", "average", "muscular", "higher_fat"].includes(p.body_build ?? "")
+        ? p.body_build
+        : null,
       last_period_start: lastPeriod,
       avg_cycle_length: cycleLen,
       avg_period_length: periodLen,

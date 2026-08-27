@@ -40,3 +40,21 @@ describe("dedupeRecentMeals", () => {
     expect(out.map((m) => m.entryId)).toEqual(["c"]);
   });
 });
+
+import { proteinDistributionNote } from "@/lib/protein-timing";
+
+describe("proteinDistributionNote", () => {
+  const dinnerHeavy = [
+    { meal: "breakfast" as const, protein_g: 10 },
+    { meal: "dinner" as const, protein_g: 70 },
+  ];
+  it("nudges when protein is back-loaded on a muscle goal", () => {
+    const note = proteinDistributionNote({ goal: "muscle", entries: dinnerHeavy, proteinTargetG: 160 });
+    expect(note).toMatch(/protein/i);
+  });
+  it("silent for other goals, balanced days, and thin data", () => {
+    expect(proteinDistributionNote({ goal: "lose", entries: dinnerHeavy, proteinTargetG: 160 })).toBeNull();
+    expect(proteinDistributionNote({ goal: "muscle", entries: [{ meal: "breakfast", protein_g: 40 }, { meal: "dinner", protein_g: 45 }], proteinTargetG: 160 })).toBeNull();
+    expect(proteinDistributionNote({ goal: "muscle", entries: [{ meal: "dinner", protein_g: 20 }], proteinTargetG: 160 })).toBeNull();
+  });
+});

@@ -139,3 +139,35 @@ describe("projectGoalEta", () => {
     expect(eta!.weeksAway).toBeCloseTo(10, 0);
   });
 });
+
+describe("build & muscle-goal protein", () => {
+  const base = {
+    mode: "auto" as const,
+    manual: { calories: 2000, protein_g: 130, carbs_g: 220, fat_g: 70, fiber_g: 30 },
+    sex: "male",
+    dateOfBirth: "1990-01-01",
+    heightIn: 71,
+    weightLbs: 176, // ~80 kg
+    activityLevel: "moderate",
+    goal: "maintain",
+    proteinPerKg: null,
+    ouraTdee7d: null,
+  };
+
+  it("build multiplier scales protein; average matches previous behavior", () => {
+    const avg = computeTargets({ ...base, bodyBuild: "average" });
+    const none = computeTargets({ ...base });
+    expect(avg.targets.protein_g).toBe(none.targets.protein_g);
+    const musc = computeTargets({ ...base, bodyBuild: "muscular" });
+    const soft = computeTargets({ ...base, bodyBuild: "higher_fat" });
+    expect(musc.targets.protein_g).toBeGreaterThan(avg.targets.protein_g);
+    expect(soft.targets.protein_g).toBeLessThan(avg.targets.protein_g);
+  });
+
+  it("muscle goal: 2.2 g/kg protein and a lean surplus", () => {
+    const maintain = computeTargets({ ...base });
+    const muscle = computeTargets({ ...base, goal: "muscle" });
+    expect(muscle.targets.protein_g).toBeGreaterThan(maintain.targets.protein_g);
+    expect(muscle.targets.calories).toBe(maintain.targets.calories + 150);
+  });
+});

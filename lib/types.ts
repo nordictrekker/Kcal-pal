@@ -92,6 +92,7 @@ export type FoodEntry = {
 export type Profile = {
   user_id: string;
   supplements?: string[] | null;
+  body_build?: string | null;
   daily_calorie_target: number;
   daily_protein_target_g: number;
   daily_carb_target_g: number;

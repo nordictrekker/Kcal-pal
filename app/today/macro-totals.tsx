@@ -66,6 +66,7 @@ export function MacroTotals({
   targetNote,
   recoveryNote,
   balanceNote,
+  proteinNote,
   showLogHint,
   weekly = false,
   sex = null,
@@ -87,6 +88,7 @@ export function MacroTotals({
   recoveryNote?: string | null;
   // Rolling 7-day energy-balance correction explanation.
   balanceNote?: string | null;
+  proteinNote?: string | null;
   // When true, renders a "View full log" affordance (card is wrapped in a link).
   showLogHint?: boolean;
 }) {
@@ -134,6 +136,9 @@ export function MacroTotals({
           ) : null}
           {balanceNote ? (
             <p className="pt-1 text-xs text-muted-foreground">{balanceNote}</p>
+          ) : null}
+          {proteinNote ? (
+            <p className="pt-1 text-xs text-muted-foreground">{proteinNote}</p>
           ) : null}
         </div>
         <div className="space-y-3">

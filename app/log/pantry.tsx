@@ -26,6 +26,7 @@ export function Pantry({
 }) {
   const router = useRouter();
   const [addingKey, setAddingKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const sorted = [...items].sort((a, b) =>
@@ -54,14 +55,12 @@ export function Pantry({
 
   function quickAddSupplement(name: string) {
     setAddingKey(`supp:${name}`);
+    setError(null);
     startTransition(async () => {
+      // Instant either way: copies the latest matching log, or (first time)
+      // parses the label server-side and inserts. May take ~10s on first log.
       const r = await relogLatestByName(name, undefined, logDate);
-      if (r.noMatch) {
-        // Never logged before: fill the box so the first log gets a real parse.
-        setAddingKey(null);
-        onPick(name);
-        return;
-      }
+      if (!r.ok) setError(r.error ?? "Couldn't log that.");
       done(r.ok);
     });
   }
@@ -107,6 +106,7 @@ export function Pantry({
               </div>
             ))}
           </div>
+          {error ? <p className="text-xs text-destructive">{error}</p> : null}
         </section>
       ) : null}
 
