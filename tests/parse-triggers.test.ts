@@ -14,6 +14,9 @@ describe("web-search parse triggers", () => {
     expect(SUPPLEMENT_REF.test("magnesium supplement")).toBe(true);
     expect(SUPPLEMENT_REF.test("two vitamin D gummies")).toBe(true);
     expect(SUPPLEMENT_REF.test("an RXBAR protein bar")).toBe(true);
+    // Non-English label words (the Swedish Kapsel bug from the field).
+    expect(SUPPLEMENT_REF.test("Apoteket Hjärtats Omega-3 Forte Kapsel")).toBe(true);
+    expect(SUPPLEMENT_REF.test("magnesium tablett")).toBe(true);
   });
 
   it("supplement trigger stays quiet on ordinary meals", () => {
