@@ -101,7 +101,7 @@ export async function completeOnboarding(
       goal: p.goal,
       goal_weight_lbs: goalWeight,
       target_mode: p.target_mode,
-      track_cycle: p.track_cycle,
+      track_cycle: p.sex === "male" ? false : p.track_cycle,
       last_period_start: lastPeriod,
       avg_cycle_length: cycleLen,
       avg_period_length: periodLen,

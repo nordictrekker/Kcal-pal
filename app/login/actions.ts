@@ -3,8 +3,15 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-function allowedEmail(): string {
-  return (process.env.ALLOWED_EMAIL ?? "").trim().toLowerCase();
+// Comma-separated allowlist (e.g. "a@x.com,b@y.com"). The var name stays
+// ALLOWED_EMAIL for compatibility with the existing deployment config.
+function allowedEmails(): Set<string> {
+  return new Set(
+    (process.env.ALLOWED_EMAIL ?? "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  );
 }
 
 function reject(reason: string, email?: string): never {
@@ -30,9 +37,9 @@ function reject(reason: string, email?: string): never {
 // {{ .Token }} and contain NO {{ .ConfirmationURL }} link (see SETUP.md).
 export async function sendMagicLink(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const allowed = allowedEmail();
-  if (!allowed) reject("Server misconfigured: ALLOWED_EMAIL unset");
-  if (email !== allowed) reject("Not authorized");
+  const allowed = allowedEmails();
+  if (allowed.size === 0) reject("Server misconfigured: ALLOWED_EMAIL unset");
+  if (!allowed.has(email)) reject("Not authorized");
 
   const supabase = await createClient();
   // No emailRedirectTo: we verify the code in-app, never via a redirect.
@@ -56,10 +63,10 @@ export async function sendMagicLink(formData: FormData) {
 export async function verifyMagicLinkUrl(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const raw = String(formData.get("code") ?? formData.get("url") ?? "").trim();
-  const allowed = allowedEmail();
+  const allowed = allowedEmails();
 
-  if (!allowed) reject("Server misconfigured: ALLOWED_EMAIL unset");
-  if (email !== allowed) reject("Not authorized", email);
+  if (allowed.size === 0) reject("Server misconfigured: ALLOWED_EMAIL unset");
+  if (!allowed.has(email)) reject("Not authorized", email);
   if (!raw) reject("Enter the 6-digit code from your email.", email);
 
   const supabase = await createClient();
@@ -89,7 +96,7 @@ export async function verifyMagicLinkUrl(formData: FormData) {
         continue;
       }
       const userEmail = (data.user.email ?? "").trim().toLowerCase();
-      if (userEmail !== allowed) {
+      if (!allowed.has(userEmail)) {
         await supabase.auth.signOut();
         reject("Not authorized");
       }
@@ -118,7 +125,7 @@ export async function verifyMagicLinkUrl(formData: FormData) {
       continue;
     }
     const userEmail = (data.user.email ?? "").trim().toLowerCase();
-    if (userEmail !== allowed) {
+    if (!allowed.has(userEmail)) {
       await supabase.auth.signOut();
       reject("Not authorized");
     }

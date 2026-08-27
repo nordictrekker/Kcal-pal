@@ -1,12 +1,9 @@
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { InstallCard } from "./install-card";
 import { SupplementsCard } from "./supplements-card";
 import { Notifications } from "./notifications";
 import { ThemeToggle } from "./theme-toggle";
-import { ShortcutCard } from "./shortcut-card";
 import { TargetsCard, type Targets } from "./targets-card";
 import { MetricsCard } from "./metrics-card";
 import { sanitizeMetricKeys } from "@/lib/nutrients";
@@ -28,7 +25,6 @@ export default async function SettingsPage() {
   if (!user) redirect("/login");
 
   const vapidPublicKey = process.env.VAPID_PUBLIC_KEY ?? "";
-  const ingestToken = process.env.HEALTH_INGEST_TOKEN ?? "";
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -67,13 +63,6 @@ export default async function SettingsPage() {
     avg_period_length: p?.avg_period_length ?? 5,
   };
 
-  const hdrs = await headers();
-  const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "";
-  const proto = hdrs.get("x-forwarded-proto") ?? "https";
-  const ingestUrl = host
-    ? `${proto}://${host}/api/health/ingest`
-    : "/api/health/ingest";
-
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">
       <header className="flex items-center justify-between">
@@ -94,15 +83,15 @@ export default async function SettingsPage() {
 
       <TravelCard state={travelState} />
 
-      <PhaseModifiersCard initial={phaseModifiers} />
+      {p?.sex !== "male" ? (
+        <PhaseModifiersCard initial={phaseModifiers} />
+      ) : null}
 
       <SupplementsCard
         initial={Array.isArray(p?.supplements) ? (p.supplements as string[]) : []}
       />
 
       <ThemeToggle />
-
-      <InstallCard />
 
       {vapidPublicKey ? (
         <Notifications vapidPublicKey={vapidPublicKey} />
@@ -112,10 +101,6 @@ export default async function SettingsPage() {
           server).
         </p>
       )}
-
-      {ingestToken ? (
-        <ShortcutCard ingestUrl={ingestUrl} token={ingestToken} />
-      ) : null}
 
       <div className="flex items-center justify-between px-1 pt-2">
         <p className="text-xs text-muted-foreground">

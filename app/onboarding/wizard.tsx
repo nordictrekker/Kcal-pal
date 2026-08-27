@@ -365,8 +365,12 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
     },
   ];
 
-  const current = steps[step];
-  const isLast = step === steps.length - 1;
+  // Male profiles skip the cycle step entirely — period tracking and
+  // phase-aware nutrition don't apply.
+  const visibleSteps =
+    sex === "male" ? steps.filter((st) => st.title !== "Cycle") : steps;
+  const current = visibleSteps[Math.min(step, visibleSteps.length - 1)];
+  const isLast = step >= visibleSteps.length - 1;
 
   function next() {
     setError(null);
@@ -398,8 +402,9 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
           ? goalWeightNum
           : null,
       target_mode: targetMode,
-      track_cycle: trackCycle,
-      last_period_start: trackCycle && periodStart ? periodStart : null,
+      track_cycle: sex === "male" ? false : trackCycle,
+      last_period_start:
+        sex !== "male" && trackCycle && periodStart ? periodStart : null,
       avg_cycle_length: Number(cycleLen) || 28,
       avg_period_length: Number(periodLen) || 5,
       home: home

@@ -35,15 +35,21 @@ function Select({
   name,
   defaultValue,
   options,
+  value,
+  onChange,
 }: {
   name: string;
-  defaultValue: string;
+  defaultValue?: string;
   options: Array<[string, string]>;
+  value?: string;
+  onChange?: (v: string) => void;
 }) {
   return (
     <select
       name={name}
-      defaultValue={defaultValue}
+      defaultValue={value === undefined ? defaultValue : undefined}
+      value={value}
+      onChange={onChange ? (e) => onChange(e.target.value) : undefined}
       className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
     >
       {options.map(([v, label]) => (
@@ -59,6 +65,7 @@ export function ProfileCard({ initial }: { initial: ProfileSettings }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ProfileResult | null>(null);
   const [trackCycle, setTrackCycle] = useState(initial.track_cycle);
+  const [sexValue, setSexValue] = useState(initial.sex);
   const [mode, setMode] = useState(initial.target_mode);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -106,7 +113,8 @@ export function ProfileCard({ initial }: { initial: ProfileSettings }) {
               <Label className="text-xs text-muted-foreground">Sex</Label>
               <Select
                 name="sex"
-                defaultValue={initial.sex}
+                value={sexValue}
+                onChange={setSexValue}
                 options={[
                   ["female", "Female"],
                   ["male", "Male"],
@@ -185,6 +193,7 @@ export function ProfileCard({ initial }: { initial: ProfileSettings }) {
             </p>
           </div>
 
+          {sexValue !== "male" ? (
           <div className="space-y-3 rounded-lg border p-3">
             <label className="flex items-center justify-between text-sm">
               <span className="font-medium">Track my cycle</span>
@@ -247,6 +256,7 @@ export function ProfileCard({ initial }: { initial: ProfileSettings }) {
               </div>
             ) : null}
           </div>
+          ) : null}
 
           <div className="flex items-center gap-3">
             <Button type="submit" disabled={pending}>
