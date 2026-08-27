@@ -466,6 +466,7 @@ export default async function SummaryPage({
       </header>
 
       <SummaryPanels
+        sex={p?.sex ?? null}
         macroKeys={MACRO_METRIC_KEYS}
         microKeys={MICRO_METRIC_KEYS}
         today={{ totals, targets, contribEntries }}

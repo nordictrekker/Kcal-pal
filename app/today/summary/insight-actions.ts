@@ -230,6 +230,7 @@ export async function regenerateFoodInsight(): Promise<InsightState> {
         def,
         weekAvgTotals,
         weekAvgTargets,
+        p?.sex ?? null,
       );
       const pct = target > 0 ? value / target : 0;
       const topFoods = contributionsForField(def.field as string, merged)

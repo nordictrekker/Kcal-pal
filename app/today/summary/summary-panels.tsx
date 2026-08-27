@@ -37,6 +37,7 @@ export function SummaryPanels({
   weeklyExtras,
   weekInsight,
   dayChildren,
+  sex = null,
 }: {
   macroKeys: MetricKey[];
   microKeys: MetricKey[];
@@ -47,6 +48,7 @@ export function SummaryPanels({
   // Generate-on-demand AI insights card, shown only in 7-day-average mode.
   weekInsight: ReactNode;
   dayChildren: ReactNode;
+  sex?: string | null;
 }) {
   const [mode, setMode] = useState<"today" | "week">("today");
   const isWeek = mode === "week" && week != null;
@@ -101,6 +103,7 @@ export function SummaryPanels({
             def,
             active.totals,
             active.targets,
+            sex,
           );
           return (
             <NutrientBreakdown

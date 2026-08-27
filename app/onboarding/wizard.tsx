@@ -124,7 +124,7 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
             id="firstName"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
-            placeholder="Julie"
+            placeholder="Your first name"
             autoFocus
           />
         </div>

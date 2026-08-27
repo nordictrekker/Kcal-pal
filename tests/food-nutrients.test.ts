@@ -98,6 +98,20 @@ describe("nutrients registry", () => {
     expect(iron.value).toBe(9);
     expect(iron.target).toBe(METRICS.iron.reference);
   });
+
+  it("uses male RDA references when sex is male", () => {
+    const totals = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, iron_mg: 8, magnesium_mg: 400, omega3_mg: 1200, choline_mg: 500 } as never;
+    const targets = { calories: 2000, protein_g: 130, carbs_g: 220, fat_g: 70, fiber_g: 30 } as never;
+    expect(metricValueAndTarget(METRICS.iron, totals, targets, "male").target).toBe(8);
+    expect(metricValueAndTarget(METRICS.iron, totals, targets, "female").target).toBe(18);
+    expect(metricValueAndTarget(METRICS.iron, totals, targets).target).toBe(18);
+    expect(metricValueAndTarget(METRICS.magnesium, totals, targets, "male").target).toBe(420);
+    expect(metricValueAndTarget(METRICS.choline, totals, targets, "male").target).toBe(550);
+    expect(metricValueAndTarget(METRICS.omega3, totals, targets, "male").target).toBe(1600);
+    // Sex-invariant references unchanged.
+    expect(metricValueAndTarget(METRICS.calcium, totals, targets, "male").target).toBe(1000);
+    expect(metricValueAndTarget(METRICS.folate, totals, targets, "male").target).toBe(400);
+  });
 });
 
 describe("evidenceFor", () => {

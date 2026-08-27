@@ -639,6 +639,7 @@ export default async function TodayPage() {
 
       <Link href="/today/summary" className="block" aria-label="View today's full log">
         <MacroTotals
+          sex={p?.sex ?? null}
           totals={displayTotals}
           targets={targets}
           metrics={sanitizeMetricKeys(p?.visible_metrics)}
