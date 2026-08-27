@@ -11,6 +11,7 @@ import {
   MIN_TRAVEL_DISTANCE_KM,
 } from "@/lib/travel";
 import { searchCities, type CityResult } from "@/lib/geocode";
+import { logQueryError } from "@/lib/log";
 
 export type TravelPrompt = {
   label: string;
@@ -45,11 +46,17 @@ export async function syncLocation(): Promise<{
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, prompt: null };
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("home_tz,home_lat,home_lng,travel_status,location_dismissed_label")
     .eq("user_id", user.id)
     .single();
+  // Without the profile we'd read a missing home base as "first detection" and
+  // overwrite it with wherever this request came from.
+  if (profileErr) {
+    logQueryError("location.syncLocation.profile", profileErr);
+    return { ok: false, prompt: null };
+  }
   const p = profile as LocProfile | null;
 
   const now = new Date();
@@ -68,7 +75,14 @@ export async function syncLocation(): Promise<{
     patch.home_lat = loc.lat;
     patch.home_lng = loc.lng;
     patch.travel_status = "home";
-    await supabase.from("profiles").update(patch).eq("user_id", user.id);
+    const { error } = await supabase
+      .from("profiles")
+      .update(patch)
+      .eq("user_id", user.id);
+    if (error) {
+      logQueryError("location.syncLocation.setHome", error);
+      return { ok: false, prompt: null };
+    }
     return { ok: true, prompt: null };
   }
 
@@ -106,7 +120,14 @@ export async function syncLocation(): Promise<{
   }
   // status === "traveling" → leave it; Today shows the card.
 
-  await supabase.from("profiles").update(patch).eq("user_id", user.id);
+  const { error } = await supabase
+    .from("profiles")
+    .update(patch)
+    .eq("user_id", user.id);
+  if (error) {
+    logQueryError("location.syncLocation.update", error);
+    return { ok: false, prompt: null };
+  }
   if (patch.travel_status && patch.travel_status !== status) {
     revalidatePath("/today");
   }
@@ -125,7 +146,10 @@ async function setStatus(
     .from("profiles")
     .update(patch)
     .eq("user_id", user.id);
-  if (error) return { ok: false };
+  if (error) {
+    logQueryError("location.setStatus", error, { fields: Object.keys(patch) });
+    return { ok: false };
+  }
   revalidatePath("/today");
   revalidatePath("/settings");
   return { ok: true };
@@ -194,11 +218,15 @@ export async function rejectLocation(): Promise<{ ok: boolean }> {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false };
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("current_label")
     .eq("user_id", user.id)
     .single();
+  if (profileErr) {
+    logQueryError("location.rejectLocation.profile", profileErr);
+    return { ok: false };
+  }
   const label = (profile as { current_label: string | null } | null)?.current_label ?? null;
 
   return setStatus({
@@ -218,11 +246,16 @@ export async function dismissTravel(): Promise<{ ok: boolean }> {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false };
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("current_tz,current_label,current_lat,current_lng")
     .eq("user_id", user.id)
     .single();
+  // Adopting a null current location would wipe the stored home base.
+  if (profileErr) {
+    logQueryError("location.dismissTravel.profile", profileErr);
+    return { ok: false };
+  }
   const c = profile as {
     current_tz: string | null;
     current_label: string | null;

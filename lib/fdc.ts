@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ParsedNutrition } from "./types";
+import { logError, logQueryError } from "./log";
 
 // USDA FoodData Central micronutrient enrichment.
 //
@@ -113,7 +114,10 @@ async function fetchFdc(query: string): Promise<FdcResult> {
       cache: "no-store",
       signal: controller.signal,
     });
-    if (!res.ok) return { matched: false };
+    if (!res.ok) {
+      logError("fdc.fetch", `FDC search ${res.status}`, { query });
+      return { matched: false };
+    }
     const json = (await res.json()) as {
       foods?: Array<{
         fdcId?: number;
@@ -129,7 +133,8 @@ async function fetchFdc(query: string): Promise<FdcResult> {
       description: food.description,
       per100g: extractPer100g(food.foodNutrients ?? []),
     };
-  } catch {
+  } catch (err) {
+    logError("fdc.fetch", err, { query });
     return { matched: false };
   } finally {
     clearTimeout(timer);
@@ -145,11 +150,12 @@ async function lookupCached(
   const query = name.trim().toLowerCase();
   if (!query) return { matched: false };
 
-  const { data: cached } = await supabase
+  const { data: cached, error: cacheReadErr } = await supabase
     .from("fdc_cache")
     .select("matched, per100g")
     .eq("query", query)
     .maybeSingle();
+  logQueryError("fdc.cacheRead", cacheReadErr, { query });
   if (cached) {
     return {
       matched: Boolean(cached.matched),
@@ -159,7 +165,7 @@ async function lookupCached(
 
   const fresh = await fetchFdc(query);
   // Best-effort cache write — never let a cache failure break logging.
-  await supabase.from("fdc_cache").upsert({
+  const { error: cacheWriteErr } = await supabase.from("fdc_cache").upsert({
     query,
     fdc_id: fresh.fdcId ?? null,
     description: fresh.description ?? null,
@@ -167,6 +173,7 @@ async function lookupCached(
     matched: fresh.matched,
     fetched_at: new Date().toISOString(),
   });
+  logQueryError("fdc.cacheWrite", cacheWriteErr, { query });
   return { matched: fresh.matched, per100g: fresh.per100g };
 }
 

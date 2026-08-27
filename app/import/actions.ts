@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseHealthExport, type HealthPoint } from "@/lib/apple-health";
+import { logQueryError } from "@/lib/log";
 
 export type ImportResult =
   | {
@@ -92,12 +93,20 @@ export async function importHealthFile(
     // body_weights has no natural unique key, so dedupe against existing
     // apple_health rows by (measured_at) to keep re-imports idempotent.
     const measuredAts = weightRows.map((w) => w.measured_at);
-    const { data: existing } = await supabase
+    const { data: existing, error: existingErr } = await supabase
       .from("body_weights")
       .select("measured_at")
       .eq("user_id", user.id)
       .eq("source", "apple_health")
       .in("measured_at", measuredAts);
+    // A failed dedupe read would look like "nothing imported yet" and duplicate
+    // every reading, so the health data stands and the backfill is reported.
+    if (existingErr) {
+      return {
+        ok: false,
+        error: `Imported ${imported} records, but the weight backfill failed: ${existingErr.message}`,
+      };
+    }
     const seen = new Set(
       (existing ?? []).map((e) => new Date(e.measured_at as string).getTime()),
     );
@@ -108,19 +117,28 @@ export async function importHealthFile(
       for (let i = 0; i < fresh.length; i += BATCH) {
         const slice = fresh.slice(i, i + BATCH);
         const { error } = await supabase.from("body_weights").insert(slice);
-        if (!error) weightsBackfilled += slice.length;
+        if (error) {
+          return {
+            ok: false,
+            error: `Imported ${imported} records, but the weight backfill failed: ${error.message}`,
+          };
+        }
+        weightsBackfilled += slice.length;
       }
     }
   }
 
-  // Record the import.
-  await supabase.from("apple_health_imports").insert({
-    user_id: user.id,
-    date_range_start: parsed.rangeStart,
-    date_range_end: parsed.rangeEnd,
-    records_imported: imported,
-    file_name: file.name,
-  });
+  // Record the import — audit trail only, the data is already in.
+  const { error: recordErr } = await supabase
+    .from("apple_health_imports")
+    .insert({
+      user_id: user.id,
+      date_range_start: parsed.rangeStart,
+      date_range_end: parsed.rangeEnd,
+      records_imported: imported,
+      file_name: file.name,
+    });
+  logQueryError("import.recordImport", recordErr, { imported });
 
   revalidatePath("/today");
 

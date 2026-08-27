@@ -127,7 +127,10 @@ async function fetchOuraOptional<T>(
   try {
     const env = await fetchOura<T>(endpoint, token, start_date, end_date);
     return env.data;
-  } catch {
+  } catch (err) {
+    // Optional endpoints (workouts, tags, …) vary by subscription — a miss must
+    // not abort the sync, but it should show up in the function logs.
+    console.error(`[sync-oura] optional endpoint ${endpoint} failed:`, err);
     return [];
   }
 }

@@ -73,13 +73,15 @@ export async function undoLastWater(): Promise<WaterResult> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const { data: latest } = await supabase
+  const { data: latest, error: readErr } = await supabase
     .from("water_logs")
     .select("id")
     .eq("user_id", user.id)
     .gte("logged_at", startOfDay.toISOString())
     .order("logged_at", { ascending: false })
     .limit(1);
+  // A failed read isn't an empty day — don't tell the user there's nothing to undo.
+  if (readErr) return { ok: false, error: readErr.message };
 
   const id = latest?.[0]?.id;
   if (!id) return { ok: false, error: "Nothing to undo today." };

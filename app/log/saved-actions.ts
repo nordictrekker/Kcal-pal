@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { MEALS, defaultMeal } from "@/lib/food";
+import { logQueryError } from "@/lib/log";
 import type { Meal } from "@/lib/types";
 
 export type SavedMealActionResult = { ok: boolean; error?: string };
@@ -93,8 +94,9 @@ export async function quickAddSavedMeal(
   });
   if (insertErr) return { ok: false, error: insertErr.message };
 
-  // Bump usage stats for sort order.
-  await supabase
+  // Bump usage stats for sort order — the meal is already logged, so a failure
+  // here only costs sort accuracy.
+  const { error: bumpErr } = await supabase
     .from("saved_meals")
     .update({
       use_count: ((tpl.use_count as number) ?? 0) + 1,
@@ -102,6 +104,7 @@ export async function quickAddSavedMeal(
     })
     .eq("id", savedMealId)
     .eq("user_id", user.id);
+  logQueryError("savedMeals.bumpUseCount", bumpErr, { savedMealId });
 
   revalidatePath("/today");
   revalidatePath("/log");
