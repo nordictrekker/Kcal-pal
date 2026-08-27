@@ -85,6 +85,12 @@ export async function updateProfileSettings(
   // Cycle settings.
   const trackCycle = formData.get("track_cycle");
   if (trackCycle !== null) patch.track_cycle = trackCycle === "on" || trackCycle === "true";
+  // Male profiles never track a cycle — enforce server-side so every consumer
+  // (today, summary, recap, insights) sees cycle features off.
+  if (patch.sex === "male") {
+    patch.track_cycle = false;
+    patch.last_period_start = null;
+  }
 
   const periodStart = String(formData.get("last_period_start") ?? "").trim();
   if (periodStart) {
