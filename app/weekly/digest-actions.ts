@@ -151,6 +151,7 @@ export async function regenerateDigest(): Promise<DigestState> {
     activityLevel: prof?.activity_level ?? null,
     goal: prof?.goal ?? null,
     proteinPerKg: prof?.protein_per_kg ?? null,
+    bodyBuild: prof?.body_build ?? null,
     ouraTdee7d,
   }).targets;
 

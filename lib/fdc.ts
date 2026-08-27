@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ParsedNutrition } from "./types";
+import { isLabeledProduct, SUPPLEMENT_REF } from "./labeled-products";
 
 // USDA FoodData Central micronutrient enrichment.
 //
@@ -218,13 +219,24 @@ export async function usdaMicrosForItem(
 // Enrich a parsed meal's micronutrients with USDA FoodData Central data.
 // Returns the input unchanged when there's no API key, no items, or nothing
 // resolves — so it's always safe to call.
+//
+// Labeled products (supplements, bars, powders) are skipped per item and keep
+// the parse's label values, since FDC has no supplement labels and would match
+// some unrelated generic food. `description` covers the single-component case
+// where the trigger word is in the entry text but not in the item name.
 export async function enrichMicrosWithUsda(
   supabase: SupabaseClient,
   data: ParsedNutrition,
+  opts: { description?: string } = {},
 ): Promise<ParsedNutrition> {
   if (!process.env.USDA_FDC_API_KEY) return data;
   const items = data.items ?? [];
   if (items.length === 0) return data;
+  const wholeEntryIsLabeled =
+    items.length === 1 &&
+    opts.description != null &&
+    SUPPLEMENT_REF.test(opts.description);
+  if (wholeEntryIsLabeled) return data;
 
   const totalCalories = items.reduce((s, i) => s + (i.calories || 0), 0);
   const acc: MicroSet = { ...ZERO };
@@ -233,7 +245,11 @@ export async function enrichMicrosWithUsda(
 
   for (const item of items) {
     let resolved = false;
-    if (typeof item.grams === "number" && item.grams > 0) {
+    if (
+      typeof item.grams === "number" &&
+      item.grams > 0 &&
+      !isLabeledProduct(item.name)
+    ) {
       const { matched, per100g } = await lookupCached(supabase, item.name);
       if (matched && per100g) {
         const f = item.grams / 100;

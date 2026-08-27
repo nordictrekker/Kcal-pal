@@ -151,6 +151,57 @@ describe("enrichMicrosWithUsda", () => {
     // 100 + 100 g = 200 g total → same as the single 200 g case.
     expect(out.iron_mg).toBeCloseTo(1.6, 5);
   });
+
+  it("keeps label values for a single-component supplement entry", async () => {
+    process.env.USDA_FDC_API_KEY = "test-key";
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ foods: [SALMON_FOOD] }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const supplement: ParsedNutrition = {
+      ...base,
+      items: [
+        { name: "prenatal", quantity: "1", grams: 1, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+      ],
+    };
+    const { client } = fakeSupabase();
+    const out = await enrichMicrosWithUsda(client, supplement, {
+      description: "1 pure encapsulations prenatal capsule",
+    });
+    expect(out).toBe(supplement);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("enriches ordinary foods in a meal that also names a labeled product", async () => {
+    process.env.USDA_FDC_API_KEY = "test-key";
+    const fetchMock = vi.fn(async (_url: string, init: { body: string }) => ({
+      ok: true,
+      json: async () =>
+        JSON.parse(init.body).query === "salmon"
+          ? { foods: [SALMON_FOOD] }
+          : { foods: [] },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const mixed: ParsedNutrition = {
+      ...base,
+      items: [
+        { name: "salmon", quantity: "200 g", grams: 200, calories: 400, protein_g: 40, carbs_g: 0, fat_g: 25 },
+        { name: "omega-3 capsule", quantity: "1", grams: 1, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+      ],
+    };
+    const { client } = fakeSupabase();
+    const out = await enrichMicrosWithUsda(client, mixed, {
+      description: "salmon with an omega-3 capsule",
+    });
+    // The salmon was looked up (its FDC iron dominates the AI's bogus 99 mg)...
+    expect(out.iron_mg).toBeLessThan(10);
+    // ...and the capsule was never sent to FDC, which has no supplement labels.
+    const queries = fetchMock.mock.calls.map(
+      (c) => JSON.parse((c[1] as { body: string }).body).query,
+    );
+    expect(queries).toEqual(["salmon"]);
+  });
 });
 
 describe("parseGrams", () => {
