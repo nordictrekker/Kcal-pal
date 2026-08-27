@@ -157,6 +157,11 @@ export async function setHomeToCurrent(): Promise<{ ok: boolean }> {
 
 // Typeahead for the home-base city search (onboarding + Settings).
 export async function searchHomeCities(query: string): Promise<CityResult[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
   return searchCities(query);
 }
 
