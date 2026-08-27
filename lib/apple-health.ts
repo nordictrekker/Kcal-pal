@@ -9,6 +9,8 @@
 // We never invent values — anything we can't parse is skipped, and the
 // caller reports how many records actually landed.
 
+import { logError } from "./log";
+
 export type HealthPoint = {
   metric: string;
   value: number;
@@ -239,8 +241,9 @@ export function parseHealthExport(text: string): ParsedHealth {
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
       return parseJson(JSON.parse(trimmed));
-    } catch {
+    } catch (err) {
       // fall through to CSV attempt
+      logError("appleHealth.parseJson", err);
     }
   }
   return parseCsv(trimmed);

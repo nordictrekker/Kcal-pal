@@ -1,4 +1,10 @@
 // OpenFoodFacts v2 API client. Free, no key. Single-call lookup by barcode.
+//
+// `null` means "OFF has no such product" — the caller then offers the Claude
+// fallback. Transport/parse failures throw instead, so a network blip is never
+// reported to the user as an unknown barcode.
+
+import { errorMessage, logError } from "./log";
 
 // Nutrition per single gram of product — the base the portion editor scales.
 export type PerGram = {
@@ -81,17 +87,26 @@ export async function lookupOpenFoodFacts(
       // Don't cache between users — values can change as OFF community edits.
       cache: "no-store",
     });
-  } catch {
-    return null;
+  } catch (err) {
+    logError("openfoodfacts.fetch", err, { barcode });
+    throw new Error(
+      `Couldn't reach OpenFoodFacts: ${errorMessage(err, "network error")}`,
+    );
   }
 
-  if (!res.ok) return null;
+  // 404 is a genuine miss; anything else is an OFF-side failure.
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    logError("openfoodfacts.fetch", `OFF lookup ${res.status}`, { barcode });
+    throw new Error(`OpenFoodFacts returned ${res.status}.`);
+  }
 
   let body: OffResponse;
   try {
     body = (await res.json()) as OffResponse;
-  } catch {
-    return null;
+  } catch (err) {
+    logError("openfoodfacts.parse", err, { barcode });
+    throw new Error("OpenFoodFacts returned a malformed response.");
   }
 
   if (body.status !== 1 || !body.product) return null;

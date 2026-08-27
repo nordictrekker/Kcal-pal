@@ -63,6 +63,7 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
   const [reanalyzing, startReanalyze] = useTransition();
   const [reError, setReError] = useState<string | null>(null);
   const [state, formAction] = useActionState(updateEntry, initial);
+  const [deleteState, deleteAction] = useActionState(deleteEntry, initial);
   const items = extractComponents(entry.raw_ai_response);
   const canExpand = items.length > 0;
 
@@ -215,7 +216,7 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
         >
           <Pencil className="size-4" />
         </button>
-        <form action={deleteEntry}>
+        <form action={deleteAction}>
           <input type="hidden" name="id" value={entry.id} />
           <button
             type="submit"
@@ -226,6 +227,12 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
           </button>
         </form>
       </div>
+
+      {deleteState.error ? (
+        <p className="px-3 pb-2 text-xs text-destructive" role="alert">
+          Couldn&apos;t delete: {deleteState.error}
+        </p>
+      ) : null}
 
       {canExpand && expanded ? (
         <ul className="space-y-1.5 border-t bg-muted/30 px-3 py-2.5 pl-9">

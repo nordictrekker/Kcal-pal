@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log";
 
 export type OnboardingPayload = {
   first_name: string;
@@ -117,11 +118,13 @@ export async function completeOnboarding(
   if (profErr) return { ok: false, error: profErr.message };
 
   // Seed a body-weight reading so auto-targets and the weight card have data.
-  await supabase.from("body_weights").insert({
+  const { error: weightErr } = await supabase.from("body_weights").insert({
     user_id: user.id,
     weight_lbs: p.weight_lbs,
     source: "onboarding",
   });
+  // The profile is saved either way; the user can log a weight from Today.
+  logQueryError("onboarding.seedWeight", weightErr);
 
   revalidatePath("/today");
   revalidatePath("/settings");

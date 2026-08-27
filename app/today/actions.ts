@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseTextMeal } from "@/lib/anthropic";
 import { selectRelevantHistory, nutrientColumns } from "@/lib/food";
+import { logQueryError } from "@/lib/log";
 
 const MAX_DESC = 1000;
 
@@ -110,13 +111,15 @@ export async function reanalyzeEntry(
   if (!user) return { ok: false, error: "Not signed in." };
 
   // Reference the user's other logs for consistency (exclude this entry).
-  const { data: histRows } = await supabase
+  const { data: histRows, error: histErr } = await supabase
     .from("food_entries")
     .select("description,serving_size,calories,protein_g,carbs_g,fat_g,edited_by_user")
     .eq("user_id", user.id)
     .neq("id", id)
     .order("consumed_at", { ascending: false })
     .limit(200);
+  // History only sharpens the estimate — log and carry on without it.
+  logQueryError("today.reanalyzeEntry.history", histErr, { id });
   const history = selectRelevantHistory(
     text,
     (histRows ?? []).map((r) => ({
@@ -152,21 +155,28 @@ export async function reanalyzeEntry(
   return { ok: true };
 }
 
-export async function deleteEntry(formData: FormData): Promise<void> {
+export async function deleteEntry(
+  _prev: EditState,
+  formData: FormData,
+): Promise<EditState> {
   const id = String(formData.get("id") ?? "");
-  if (!id) return;
+  if (!id) return { ok: false, error: "Missing entry id." };
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { ok: false, error: "Not signed in." };
 
-  await supabase
+  const { error } = await supabase
     .from("food_entries")
     .delete()
     .eq("id", id)
     .eq("user_id", user.id);
 
+  if (error) return { ok: false, error: error.message };
+
   revalidatePath("/today");
+  revalidatePath("/today/summary");
+  return { ok: true };
 }

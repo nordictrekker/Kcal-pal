@@ -2,6 +2,7 @@
 // the IANA timezone and coordinates we need for travel/home-base logic.
 
 import { isValidTimeZone } from "./timezone";
+import { logError } from "./log";
 
 export type CityResult = {
   id: string;
@@ -32,9 +33,13 @@ export async function searchCities(query: string): Promise<CityResult[]> {
   let data: { results?: RawCity[] };
   try {
     const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      logError("geocode.search", `Geocoding API ${resp.status}`, { query: q });
+      return [];
+    }
     data = await resp.json();
-  } catch {
+  } catch (err) {
+    logError("geocode.search", err, { query: q });
     return [];
   }
 

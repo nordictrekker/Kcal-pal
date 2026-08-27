@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { configureWebPush, webpush } from "@/lib/push";
 import { localDayKey, localDayBoundsUTC } from "@/lib/timezone";
+import { logError, logQueryError } from "@/lib/log";
 
 // Lapse re-entry nudge (P0 #3, docs/product/feature-priorities.md): once a day,
 // each push-subscribed user who has logged recently but has nothing logged for
@@ -40,15 +41,21 @@ export async function GET(req: Request) {
   const userIds = Array.from(new Set((subs ?? []).map((s) => s.user_id as string)));
   if (userIds.length === 0) return NextResponse.json({ nudged: 0 });
 
-  const { data: profiles } = await supabase
+  const { data: profiles, error: profilesErr } = await supabase
     .from("profiles")
     .select("user_id,timezone")
     .in("user_id", userIds);
+  // Missing timezones only fall back to UTC day bounds, so this stays non-fatal.
+  logQueryError("cron.lapseNudge.profiles", profilesErr, {
+    users: userIds.length,
+  });
   const tzByUser = new Map(
     (profiles ?? []).map((p) => [p.user_id as string, p.timezone as string | null]),
   );
 
   let nudged = 0;
+  let skipped = 0;
+  let failed = 0;
   const stale: string[] = [];
   for (const userId of userIds) {
     const tz = tzByUser.get(userId) ?? null;
@@ -60,7 +67,10 @@ export async function GET(req: Request) {
 
     // Skip if they already logged today, or haven't logged at all recently
     // (don't nag brand-new or long-gone accounts).
-    const [{ count: todayCount }, { count: recentCount }] = await Promise.all([
+    const [
+      { count: todayCount, error: todayErr },
+      { count: recentCount, error: recentErr },
+    ] = await Promise.all([
       supabase
         .from("food_entries")
         .select("id", { count: "exact", head: true })
@@ -73,6 +83,13 @@ export async function GET(req: Request) {
         .eq("user_id", userId)
         .gte("consumed_at", activeSince),
     ]);
+    // A failed count reads as "nothing logged today", which would nudge someone
+    // who did log. Skip the user instead of guessing.
+    if (todayErr || recentErr) {
+      logQueryError("cron.lapseNudge.counts", todayErr ?? recentErr, { userId });
+      skipped++;
+      continue;
+    }
     if ((todayCount ?? 0) > 0 || (recentCount ?? 0) === 0) continue;
 
     const payload = JSON.stringify({
@@ -93,13 +110,24 @@ export async function GET(req: Request) {
       } catch (e: unknown) {
         // 404/410 = subscription expired — clean it up instead of retrying forever.
         const status = (e as { statusCode?: number }).statusCode;
-        if (status === 404 || status === 410) stale.push(sub.endpoint as string);
+        if (status === 404 || status === 410) {
+          stale.push(sub.endpoint as string);
+        } else {
+          failed++;
+          logError("cron.lapseNudge.send", e, { userId, status });
+        }
       }
     }
   }
 
   if (stale.length > 0) {
-    await supabase.from("push_subscriptions").delete().in("endpoint", stale);
+    const { error: pruneErr } = await supabase
+      .from("push_subscriptions")
+      .delete()
+      .in("endpoint", stale);
+    logQueryError("cron.lapseNudge.pruneStale", pruneErr, {
+      count: stale.length,
+    });
   }
-  return NextResponse.json({ nudged, cleaned: stale.length });
+  return NextResponse.json({ nudged, cleaned: stale.length, skipped, failed });
 }

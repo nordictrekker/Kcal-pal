@@ -6,6 +6,8 @@
 // ring generations don't populate. Optional endpoints are wrapped so a 404
 // or empty response never breaks the whole sync.
 
+import { logError } from "./log";
+
 const OURA_BASE = "https://api.ouraring.com/v2/usercollection";
 
 type OuraEnvelope<T> = { data: T[]; next_token: string | null };
@@ -123,7 +125,8 @@ async function fetchOuraOptional<T>(
   try {
     const env = await fetchOura<T>(endpoint, token, start_date, end_date);
     return env.data;
-  } catch {
+  } catch (err) {
+    logError("oura.optionalEndpoint", err, { endpoint });
     return [];
   }
 }

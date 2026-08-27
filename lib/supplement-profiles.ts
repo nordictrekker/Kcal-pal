@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseTextMeal } from "./anthropic";
 import { nutrientColumns } from "./food";
+import { logQueryError } from "./log";
 import type { ParsedNutrition } from "./types";
 
 // Cached label nutrition for a declared supplement. Researched once (label
@@ -53,7 +54,7 @@ export async function parseAndStoreSupplementProfile(
 ): Promise<{ data: ParsedNutrition; raw: unknown } | null> {
   const result = await parseTextMeal(name, [], { forceSupplementSearch: true });
   if (!result.ok) return null;
-  await supabase.from("supplement_profiles").upsert(
+  const { error } = await supabase.from("supplement_profiles").upsert(
     {
       user_id: userId,
       name: name.trim(),
@@ -63,5 +64,7 @@ export async function parseAndStoreSupplementProfile(
     },
     { onConflict: "user_id,name_key" },
   );
+  // The parse still stands even if caching it failed — the next log re-parses.
+  logQueryError("supplementProfiles.cacheWrite", error, { name });
   return { data: result.data, raw: result.raw };
 }

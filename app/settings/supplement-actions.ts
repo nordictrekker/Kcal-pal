@@ -7,6 +7,7 @@ import {
   parseAndStoreSupplementProfile,
   supplementNameKey,
 } from "@/lib/supplement-profiles";
+import { logError } from "@/lib/log";
 
 export type SupplementResult = { ok: boolean; error?: string };
 
@@ -63,8 +64,9 @@ export async function updateSupplements(
       for (const name of added) {
         try {
           await parseAndStoreSupplementProfile(supabase, userId, name);
-        } catch {
+        } catch (err) {
           // Best-effort: the quick-add path parses on demand if this failed.
+          logError("supplements.prewarmProfile", err, { name });
         }
       }
     });

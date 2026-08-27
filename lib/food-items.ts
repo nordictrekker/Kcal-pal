@@ -4,6 +4,8 @@
 // that text as JSON — not at the top level. Handles a direct parsed object
 // too, in case storage changes later.
 
+import { logError } from "./log";
+
 export type ComponentItem = {
   name: string;
   quantity: string;
@@ -81,7 +83,8 @@ export function extractComponents(raw: unknown): ComponentItem[] {
           items?: unknown;
         };
         return normalizeItems(parsed.items);
-      } catch {
+      } catch (err) {
+        logError("foodItems.parseEnvelope", err);
         return [];
       }
     }
