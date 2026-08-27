@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, revalidatePaths } from "@/lib/actions";
 import {
   locationFromHeaders,
   offsetDiffHours,
@@ -39,11 +39,9 @@ export async function syncLocation(): Promise<{
   const loc = locationFromHeaders((k) => h.get(k));
   if (!loc) return { ok: false, prompt: null };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, prompt: null };
+  const auth = await requireUser();
+  if (!auth.ok) return { ok: false, prompt: null };
+  const { supabase, user } = auth;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -116,18 +114,15 @@ export async function syncLocation(): Promise<{
 async function setStatus(
   patch: Record<string, string | number | boolean | null>,
 ): Promise<{ ok: boolean }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false };
+  const auth = await requireUser();
+  if (!auth.ok) return { ok: false };
+  const { supabase, user } = auth;
   const { error } = await supabase
     .from("profiles")
     .update(patch)
     .eq("user_id", user.id);
   if (error) return { ok: false };
-  revalidatePath("/today");
-  revalidatePath("/settings");
+  revalidatePaths("/today", "/settings");
   return { ok: true };
 }
 
@@ -188,11 +183,9 @@ export async function endTravel(): Promise<{ ok: boolean }> {
 // existing home untouched, clear the pending travel state, and remember the
 // rejected label so the same wrong reading doesn't immediately re-prompt.
 export async function rejectLocation(): Promise<{ ok: boolean }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false };
+  const auth = await requireUser();
+  if (!auth.ok) return { ok: false };
+  const { supabase, user } = auth;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -212,11 +205,9 @@ export async function rejectLocation(): Promise<{ ok: boolean }> {
 // "No, this isn't travel — I live here": adopt current location as the new
 // home (relocation, VPN, or a bad IP guess) and clear travel.
 export async function dismissTravel(): Promise<{ ok: boolean }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false };
+  const auth = await requireUser();
+  if (!auth.ok) return { ok: false };
+  const { supabase, user } = auth;
 
   const { data: profile } = await supabase
     .from("profiles")

@@ -1,14 +1,17 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
-import { createClient } from "@/lib/supabase/server";
+import {
+  requireUser,
+  revalidatePaths,
+  type ActionResult,
+} from "@/lib/actions";
 import {
   parsePhotoMeal,
   type SupportedImageMediaType,
 } from "@/lib/anthropic";
 import { enrichMicrosWithUsda } from "@/lib/fdc";
-import { isMeal } from "@/lib/food";
+import { isMeal, nutrientColumnsFromForm } from "@/lib/food";
 import { cleanPlants } from "@/lib/plants";
 import type { Meal, ParsedNutrition } from "@/lib/types";
 
@@ -44,13 +47,10 @@ export type AnalyzeResult =
 // succeeds but parsing fails, we still return the path so the user can
 // save with manual macros — never fabricate.
 export async function analyzePhoto(formData: FormData): Promise<AnalyzeResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { ok: false, photo_path: null, parsed: null, error: "Not signed in." };
-  }
+  const auth = await requireUser();
+  if (!auth.ok)
+    return { ok: false, photo_path: null, parsed: null, error: auth.error };
+  const { supabase, user } = auth;
 
   const file = formData.get("photo");
   if (!(file instanceof File) || file.size === 0) {
@@ -115,25 +115,15 @@ export async function analyzePhoto(formData: FormData): Promise<AnalyzeResult> {
   return { ok: true, photo_path: path, parsed };
 }
 
-function readNumberOrNull(v: FormDataEntryValue | null): number | null {
-  if (v === null) return null;
-  const s = String(v).trim();
-  if (s === "") return null;
-  const n = Number(s);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-}
-
-export type SaveState = { ok: boolean; error?: string };
+export type SaveState = ActionResult;
 
 export async function savePhotoEntry(
   _prev: SaveState,
   formData: FormData,
 ): Promise<SaveState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const photo_url = String(formData.get("photo_url") ?? "").trim();
   if (!photo_url) return { ok: false, error: "Missing photo reference." };
@@ -161,27 +151,13 @@ export async function savePhotoEntry(
     source: "photo",
     photo_url,
     serving_size: serving,
-    calories: readNumberOrNull(formData.get("calories")),
-    protein_g: readNumberOrNull(formData.get("protein_g")),
-    carbs_g: readNumberOrNull(formData.get("carbs_g")),
-    fat_g: readNumberOrNull(formData.get("fat_g")),
-    fiber_g: readNumberOrNull(formData.get("fiber_g")),
-    saturated_fat_g: readNumberOrNull(formData.get("saturated_fat_g")),
-    cholesterol_mg: readNumberOrNull(formData.get("cholesterol_mg")),
-    iron_mg: readNumberOrNull(formData.get("iron_mg")),
-    calcium_mg: readNumberOrNull(formData.get("calcium_mg")),
-    magnesium_mg: readNumberOrNull(formData.get("magnesium_mg")),
-    vitamin_d_mcg: readNumberOrNull(formData.get("vitamin_d_mcg")),
-    omega3_mg: readNumberOrNull(formData.get("omega3_mg")),
-    folate_mcg: readNumberOrNull(formData.get("folate_mcg")),
-    choline_mg: readNumberOrNull(formData.get("choline_mg")),
-    iodine_mcg: readNumberOrNull(formData.get("iodine_mcg")),
+    ...nutrientColumnsFromForm(formData),
     plants,
     edited_by_user: false,
   });
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/today");
+  revalidatePaths("/today");
   return { ok: true };
 }

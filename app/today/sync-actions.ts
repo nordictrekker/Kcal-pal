@@ -1,7 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, revalidatePaths } from "@/lib/actions";
 import { fetchOuraDaily } from "@/lib/oura";
 
 export type SyncResult = {
@@ -11,11 +10,9 @@ export type SyncResult = {
 };
 
 export async function syncOura(): Promise<SyncResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const token = process.env.OURA_PERSONAL_ACCESS_TOKEN;
   if (!token) {
@@ -36,9 +33,7 @@ export async function syncOura(): Promise<SyncResult> {
 
     if (error) return { ok: false, error: error.message };
 
-    revalidatePath("/today");
-    revalidatePath("/weekly");
-    revalidatePath("/recap");
+    revalidatePaths("/today", "/weekly", "/recap");
     return { ok: true, daysSynced: rows.length };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown sync error";

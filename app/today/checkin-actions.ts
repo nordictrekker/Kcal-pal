@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/actions";
+import { isDayKey } from "@/lib/form-values";
 
 // Record whether a given day was fully logged. Days marked "partial"/"skipped"
 // are excluded from the adaptive-target engine so an under-logged day can't be
@@ -10,13 +11,11 @@ export async function markDayStatus(
   day: string,
   status: "complete" | "partial" | "skipped",
 ): Promise<{ ok: boolean }> {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false };
+  if (!isDayKey(day)) return { ok: false };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false };
+  const auth = await requireUser();
+  if (!auth.ok) return { ok: false };
+  const { supabase, user } = auth;
 
   const { error } = await supabase
     .from("day_log_status")

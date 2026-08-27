@@ -1,16 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireUserOrRedirect } from "@/lib/actions";
 import Link from "next/link";
 import { PhotoFlow } from "./photo-flow";
 
 export const dynamic = "force-dynamic";
 
 export default async function PhotoPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  await requireUserOrRedirect();
 
   return (
     <main className="mx-auto max-w-md p-4 space-y-4">

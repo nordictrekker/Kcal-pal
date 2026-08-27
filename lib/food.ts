@@ -1,4 +1,29 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { readNumberOrNull } from "./form-values";
 import type { Meal, ParsedNutrition } from "./types";
+
+// Every nutrient column on food_entries, in one list, so copy-an-entry paths
+// (re-log, saved meals, quick-add) can't drift from the write paths.
+export const NUTRIENT_COLUMNS = [
+  "calories",
+  "protein_g",
+  "carbs_g",
+  "fat_g",
+  "fiber_g",
+  "saturated_fat_g",
+  "trans_fat_g",
+  "cholesterol_mg",
+  "iron_mg",
+  "calcium_mg",
+  "magnesium_mg",
+  "vitamin_d_mcg",
+  "omega3_mg",
+  "folate_mcg",
+  "choline_mg",
+  "iodine_mcg",
+] as const;
+
+export type NutrientColumn = (typeof NUTRIENT_COLUMNS)[number];
 
 // Map an AI parse to the food_entries nutrient columns (one place, so every
 // log path — text, photo, re-analyze — stores the same fields).
@@ -23,6 +48,31 @@ export function nutrientColumns(d: ParsedNutrition) {
     plants: d.plants,
     serving_size: d.serving_size || null,
   };
+}
+
+// Copy the nutrient columns off an existing entry row (re-log, saved meal),
+// normalizing anything missing to null.
+export function pickNutrientColumns(
+  row: Record<string, unknown>,
+): Record<NutrientColumn, number | null> {
+  const out = {} as Record<NutrientColumn, number | null>;
+  for (const col of NUTRIENT_COLUMNS) {
+    const v = row[col];
+    out[col] = typeof v === "number" && Number.isFinite(v) ? v : null;
+  }
+  return out;
+}
+
+// Same columns, read off a submitted review form (photo, barcode) where the
+// user may have corrected the AI's numbers.
+export function nutrientColumnsFromForm(
+  formData: FormData,
+): Record<NutrientColumn, number | null> {
+  const out = {} as Record<NutrientColumn, number | null>;
+  for (const col of NUTRIENT_COLUMNS) {
+    out[col] = readNumberOrNull(formData.get(col));
+  }
+  return out;
 }
 
 export const MEALS: Meal[] = ["breakfast", "lunch", "dinner", "snack"];
@@ -132,6 +182,43 @@ export function selectRelevantHistory(
       b.overlap - a.overlap,
   );
   return scored.slice(0, limit).map((x) => x.e);
+}
+
+// Columns the AI needs to see to stay consistent with past logs.
+const HISTORY_COLUMNS =
+  "description,serving_size,calories,protein_g,carbs_g,fat_g,edited_by_user";
+
+// Fetch the user's recent logs and narrow them to the ones relevant to
+// `description` — the reference block every parse path (text log, inline
+// re-analyze, /reanalyze backfill) feeds to the model.
+export async function loadRelevantHistory(
+  supabase: SupabaseClient,
+  userId: string,
+  description: string,
+  excludeEntryId?: string,
+): Promise<HistoryEntry[]> {
+  let query = supabase
+    .from("food_entries")
+    .select(HISTORY_COLUMNS)
+    .eq("user_id", userId);
+  if (excludeEntryId) query = query.neq("id", excludeEntryId);
+
+  const { data } = await query
+    .order("consumed_at", { ascending: false })
+    .limit(200);
+
+  return selectRelevantHistory(
+    description,
+    ((data ?? []) as unknown as Record<string, unknown>[]).map((r) => ({
+      description: r.description as string,
+      serving_size: (r.serving_size as string | null) ?? null,
+      calories: (r.calories as number | null) ?? null,
+      protein_g: (r.protein_g as number | null) ?? null,
+      carbs_g: (r.carbs_g as number | null) ?? null,
+      fat_g: (r.fat_g as number | null) ?? null,
+      edited_by_user: Boolean(r.edited_by_user),
+    })),
+  );
 }
 
 // Sum a list of entries into daily totals. Null macros count as 0 so a

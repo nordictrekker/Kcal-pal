@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserOrRedirect } from "@/lib/actions";
 import { sumTotals } from "@/lib/food";
 import { describeDrink } from "@/lib/alcohol";
 import { mean } from "@/lib/stats";
@@ -86,11 +85,7 @@ export default async function SummaryPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireUserOrRedirect();
 
   // Profile first — it carries the timezone that defines "today" and the day
   // query bounds.

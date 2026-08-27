@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { useFormStatus } from "react-dom";
 import { ChevronDown, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { updateEntry, deleteEntry, reanalyzeEntry, type EditState } from "./actions";
 import { saveEntryAsTemplate } from "../log/saved-actions";
@@ -9,6 +8,7 @@ import { SaveEntryButton } from "../log/saved-meals";
 import type { FoodEntry } from "@/lib/types";
 import { extractComponents } from "@/lib/food-items";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,15 +17,6 @@ const initial: EditState = { ok: false };
 
 function fmt(n: number | null) {
   return n === null ? "—" : Math.round(n).toString();
-}
-
-function SaveButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" size="sm" disabled={pending}>
-      {pending ? "Saving…" : "Save"}
-    </Button>
-  );
 }
 
 function MacroField({
@@ -131,7 +122,9 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
           <p className="text-xs text-destructive">{state.error ?? reError}</p>
         ) : null}
         <div className="flex flex-wrap gap-2">
-          <SaveButton />
+          <SubmitButton size="sm" pendingLabel="Saving…">
+            Save
+          </SubmitButton>
           <Button
             type="button"
             size="sm"

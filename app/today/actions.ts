@@ -1,33 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, revalidatePaths } from "@/lib/actions";
 import { parseTextMeal } from "@/lib/anthropic";
-import { selectRelevantHistory, nutrientColumns } from "@/lib/food";
+import {
+  NUTRIENT_COLUMNS,
+  loadRelevantHistory,
+  nutrientColumns,
+} from "@/lib/food";
 
 const MAX_DESC = 1000;
-
-// Every numeric field the inline editor may correct. Micros included so a
-// wrong supplement/label estimate (e.g. vitamin D on a foreign product) can be
-// fixed from the label instead of living with the AI's guess.
-const EDITABLE_FIELDS = [
-  "calories",
-  "protein_g",
-  "carbs_g",
-  "fat_g",
-  "fiber_g",
-  "saturated_fat_g",
-  "trans_fat_g",
-  "cholesterol_mg",
-  "iron_mg",
-  "calcium_mg",
-  "magnesium_mg",
-  "vitamin_d_mcg",
-  "omega3_mg",
-  "folate_mcg",
-  "choline_mg",
-  "iodine_mcg",
-] as const;
 
 export type EditState = { ok: boolean; error?: string };
 
@@ -40,17 +22,17 @@ export async function updateEntry(
   const id = String(formData.get("id") ?? "");
   if (!id) return { ok: false, error: "Missing entry id." };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const patch: Record<string, number | string | boolean | null> = {
     edited_by_user: true,
   };
 
-  for (const field of EDITABLE_FIELDS) {
+  // Micros are editable too, so a wrong supplement/label estimate can be fixed
+  // from the label instead of living with the AI's guess.
+  for (const field of NUTRIENT_COLUMNS) {
     const raw = formData.get(field);
     if (raw === null) continue;
     const s = String(raw).trim();
@@ -84,8 +66,7 @@ export async function updateEntry(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/today");
-  revalidatePath("/today/summary");
+  revalidatePaths("/today", "/today/summary");
   return { ok: true };
 }
 
@@ -103,32 +84,12 @@ export async function reanalyzeEntry(
     return { ok: false, error: `Description too long (max ${MAX_DESC}).` };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   // Reference the user's other logs for consistency (exclude this entry).
-  const { data: histRows } = await supabase
-    .from("food_entries")
-    .select("description,serving_size,calories,protein_g,carbs_g,fat_g,edited_by_user")
-    .eq("user_id", user.id)
-    .neq("id", id)
-    .order("consumed_at", { ascending: false })
-    .limit(200);
-  const history = selectRelevantHistory(
-    text,
-    (histRows ?? []).map((r) => ({
-      description: r.description as string,
-      serving_size: (r.serving_size as string | null) ?? null,
-      calories: (r.calories as number | null) ?? null,
-      protein_g: (r.protein_g as number | null) ?? null,
-      carbs_g: (r.carbs_g as number | null) ?? null,
-      fat_g: (r.fat_g as number | null) ?? null,
-      edited_by_user: Boolean(r.edited_by_user),
-    })),
-  );
+  const history = await loadRelevantHistory(supabase, user.id, text, id);
 
   const result = await parseTextMeal(text, history);
   if (!result.ok) return { ok: false, error: result.error };
@@ -147,8 +108,7 @@ export async function reanalyzeEntry(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/today");
-  revalidatePath("/today/summary");
+  revalidatePaths("/today", "/today/summary");
   return { ok: true };
 }
 
@@ -156,11 +116,9 @@ export async function deleteEntry(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
+  const auth = await requireUser();
+  if (!auth.ok) return;
+  const { supabase, user } = auth;
 
   await supabase
     .from("food_entries")

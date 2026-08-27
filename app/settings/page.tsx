@@ -1,5 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireUserOrRedirect } from "@/lib/actions";
 import Link from "next/link";
 import { SupplementsCard } from "./supplements-card";
 import { Notifications } from "./notifications";
@@ -14,15 +13,12 @@ import { normalizeModifiers } from "@/lib/phase-modifiers";
 import { signOut } from "../login/actions";
 import { Button } from "@/components/ui/button";
 import type { Profile } from "@/lib/types";
+import { mlToOz } from "@/lib/hydration";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireUserOrRedirect();
 
   const vapidPublicKey = process.env.VAPID_PUBLIC_KEY ?? "";
 
@@ -38,7 +34,7 @@ export default async function SettingsPage() {
     carbs_g: p?.daily_carb_target_g ?? 220,
     fat_g: p?.daily_fat_target_g ?? 70,
     fiber_g: p?.daily_fiber_target_g ?? 30,
-    water_oz: Math.round((p?.daily_water_target_ml ?? 2400) / 29.5735),
+    water_oz: mlToOz(p?.daily_water_target_ml ?? 2400),
     water_mode: (p?.water_goal_mode ?? "auto") as "auto" | "manual",
   };
   const travelState: TravelState = {

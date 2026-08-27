@@ -1,33 +1,40 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import {
+  requireUser,
+  revalidatePaths,
+  undoLastLogToday,
+  type ActionResult,
+} from "@/lib/actions";
 import {
   computeDrink,
   isDrinkType,
   resolveVolumeMl,
   type ContainerId,
 } from "@/lib/alcohol";
+import { parseNumber } from "@/lib/form-values";
 
-export type AlcoholResult = { ok: boolean; error?: string };
+export type AlcoholResult = ActionResult;
+
+const REVALIDATE = ["/today", "/today/summary", "/weekly"];
 
 export async function logAlcohol(formData: FormData): Promise<AlcoholResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const drink = String(formData.get("drink") ?? "").trim();
   const container = String(formData.get("container") ?? "glass").trim() as ContainerId;
-  const amount = Number(formData.get("amount") ?? "1");
+  const amount = parseNumber(formData.get("amount") ?? "1", {
+    min: 0,
+    max: 20,
+    exclusiveMin: true,
+  });
 
   if (!isDrinkType(drink)) return { ok: false, error: "Unknown drink." };
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 20) {
-    return { ok: false, error: "Pick an amount." };
-  }
+  if (!amount.ok) return { ok: false, error: "Pick an amount." };
 
-  const volumeMl = resolveVolumeMl(drink, container, amount);
+  const volumeMl = resolveVolumeMl(drink, container, amount.value);
   if (volumeMl <= 0 || volumeMl > 3000) {
     return { ok: false, error: "That volume looks off." };
   }
@@ -43,38 +50,21 @@ export async function logAlcohol(formData: FormData): Promise<AlcoholResult> {
   });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/today");
-  revalidatePath("/today/summary");
-  revalidatePath("/weekly");
+  revalidatePaths(...REVALIDATE);
   return { ok: true };
 }
 
 export async function undoLastAlcohol(): Promise<AlcoholResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const result = await undoLastLogToday(
+    auth.supabase,
+    "alcohol_logs",
+    auth.user.id,
+  );
+  if (!result.ok) return result;
 
-  const { data: latest } = await supabase
-    .from("alcohol_logs")
-    .select("id")
-    .eq("user_id", user.id)
-    .gte("logged_at", startOfDay.toISOString())
-    .order("logged_at", { ascending: false })
-    .limit(1);
-
-  const id = latest?.[0]?.id;
-  if (!id) return { ok: false, error: "Nothing to undo today." };
-
-  const { error } = await supabase.from("alcohol_logs").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/today");
-  revalidatePath("/today/summary");
-  revalidatePath("/weekly");
+  revalidatePaths(...REVALIDATE);
   return { ok: true };
 }

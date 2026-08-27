@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireUserOrRedirect } from "@/lib/actions";
 import {
   lastNDays,
   rollingAverage,
@@ -40,11 +39,7 @@ export default async function WeeklyPage({
 }: {
   searchParams: Promise<{ range?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireUserOrRedirect();
 
   const params = await searchParams;
   const rangeKey: RangeKey =

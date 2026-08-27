@@ -1,8 +1,15 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import { MEALS, defaultMeal, nutrientColumns } from "@/lib/food";
+import { requireUser, revalidatePaths, type ActionResult } from "@/lib/actions";
+import { backdatedConsumedAt } from "@/lib/form-values";
+import {
+  NUTRIENT_COLUMNS,
+  defaultMeal,
+  isMeal,
+  nutrientColumns,
+  pickNutrientColumns,
+  type NutrientColumn,
+} from "@/lib/food";
 import {
   parseAndStoreSupplementProfile,
   profileNutrientColumns,
@@ -10,11 +17,28 @@ import {
 } from "@/lib/supplement-profiles";
 import type { Meal } from "@/lib/types";
 
-export type RelogResult = { ok: boolean; error?: string };
+export type RelogResult = ActionResult;
 
-function isMeal(v: string): v is Meal {
-  return (MEALS as string[]).includes(v);
-}
+// Everything a repeat log copies verbatim: the full nutrient breakdown plus the
+// descriptive columns.
+const COPY_COLUMNS = [
+  "meal",
+  "description",
+  "source",
+  "serving_size",
+  ...NUTRIENT_COLUMNS,
+  "plants",
+  "raw_ai_response",
+].join(",");
+
+type CopyRow = Record<NutrientColumn, number | null> & {
+  meal: string | null;
+  description: string;
+  source: string;
+  serving_size: string | null;
+  plants: string[] | null;
+  raw_ai_response: object | null;
+};
 
 // One-tap "log again": copy a previous entry into a new row, keeping the FULL
 // nutrient breakdown (macros, micros, trans fat, plants, component breakdown)
@@ -24,20 +48,17 @@ export async function relogEntry(
   meal?: string,
   logDate?: string | null,
 ): Promise<RelogResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const { data: src, error: readErr } = await supabase
     .from("food_entries")
-    .select(
-      "meal,description,source,serving_size,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,trans_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,folate_mcg,choline_mg,iodine_mcg,plants,raw_ai_response",
-    )
+    .select(COPY_COLUMNS)
     .eq("id", entryId)
     .eq("user_id", user.id)
-    .single();
+    .single()
+    .returns<CopyRow>();
   if (readErr || !src) return { ok: false, error: "Entry not found." };
 
   const m: Meal =
@@ -45,11 +66,7 @@ export async function relogEntry(
 
   // Same convention as the text log: a valid past date lands at noon UTC of
   // that day; otherwise the entry is stamped now.
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const consumedAt =
-    logDate && /^\d{4}-\d{2}-\d{2}$/.test(logDate) && logDate < todayKey
-      ? `${logDate}T12:00:00.000Z`
-      : null;
+  const consumedAt = backdatedConsumedAt(logDate);
 
   const { error: insertErr } = await supabase.from("food_entries").insert({
     user_id: user.id,
@@ -57,30 +74,14 @@ export async function relogEntry(
     description: src.description,
     source: src.source,
     serving_size: src.serving_size,
-    calories: src.calories,
-    protein_g: src.protein_g,
-    carbs_g: src.carbs_g,
-    fat_g: src.fat_g,
-    fiber_g: src.fiber_g,
-    saturated_fat_g: src.saturated_fat_g,
-    trans_fat_g: src.trans_fat_g,
-    cholesterol_mg: src.cholesterol_mg,
-    iron_mg: src.iron_mg,
-    calcium_mg: src.calcium_mg,
-    magnesium_mg: src.magnesium_mg,
-    vitamin_d_mcg: src.vitamin_d_mcg,
-    omega3_mg: src.omega3_mg,
-    folate_mcg: src.folate_mcg,
-    choline_mg: src.choline_mg,
-    iodine_mcg: src.iodine_mcg,
+    ...pickNutrientColumns(src),
     plants: src.plants,
     raw_ai_response: src.raw_ai_response,
     ...(consumedAt ? { consumed_at: consumedAt } : {}),
   });
   if (insertErr) return { ok: false, error: insertErr.message };
 
-  revalidatePath("/today");
-  revalidatePath("/log");
+  revalidatePaths("/today", "/log");
   return { ok: true };
 }
 
@@ -98,11 +99,9 @@ export async function relogLatestByName(
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Empty name." };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   // Escape LIKE wildcards in the user-supplied name.
   const pattern = `%${trimmed.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
@@ -127,18 +126,14 @@ export async function relogLatestByName(
   if (corrected) return relogEntry(corrected.id as string, meal, logDate);
 
   const m: Meal = meal && isMeal(meal) ? meal : defaultMeal();
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const consumedAt =
-    logDate && /^\d{4}-\d{2}-\d{2}$/.test(logDate) && logDate < todayKey
-      ? `${logDate}T12:00:00.000Z`
-      : null;
+  const consumedAt = backdatedConsumedAt(logDate);
 
   async function insertFromColumns(
     cols: Record<string, unknown>,
     raw: unknown,
   ): Promise<RelogResult> {
     const { error: insertErr } = await supabase.from("food_entries").insert({
-      user_id: user!.id,
+      user_id: user.id,
       meal: m,
       description: trimmed,
       source: "text",
@@ -148,8 +143,7 @@ export async function relogLatestByName(
       ...(consumedAt ? { consumed_at: consumedAt } : {}),
     });
     if (insertErr) return { ok: false, error: insertErr.message };
-    revalidatePath("/today");
-    revalidatePath("/log");
+    revalidatePaths("/today", "/log");
     return { ok: true };
   }
 

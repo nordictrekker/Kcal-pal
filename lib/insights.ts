@@ -9,7 +9,7 @@
 import type { Phase } from "./cycle";
 import type { Totals } from "./food";
 import type { Trends } from "./trends";
-import { hydrationPace } from "./hydration";
+import { hydrationPace, mlToOz } from "./hydration";
 
 export type InsightContext = {
   phase: Phase | null;
@@ -195,8 +195,6 @@ const hydrationWeekLow = (c: InsightContext) =>
   c.hydration.targetMl > 0 &&
   c.trends.avgWaterMl7 < c.hydration.targetMl * 0.7;
 
-const ozFromMl = (ml: number) => Math.round(ml / 29.5735);
-
 const RULES: Rule[] = [
   // ─── Forecast-driven rules (top priority — temporally specific) ───────────
 
@@ -349,7 +347,7 @@ const RULES: Rule[] = [
     build: (c) => ({
       id: "hydration_today_behind",
       tone: "suggest",
-      text: `Water's running behind today — only ${ozFromMl(c.hydration.todayMl)} oz so far. A tall glass now will lift your afternoon more than a snack will.`,
+      text: `Water's running behind today — only ${mlToOz(c.hydration.todayMl)} oz so far. A tall glass now will lift your afternoon more than a snack will.`,
     }),
   },
   {
@@ -359,7 +357,7 @@ const RULES: Rule[] = [
     build: (c) => ({
       id: "hydration_caught_up",
       tone: "encourage",
-      text: `Nice — that one counts. You're up to ${ozFromMl(c.hydration.todayMl)} oz. Keep a glass within reach and you'll close the gap easily.`,
+      text: `Nice — that one counts. You're up to ${mlToOz(c.hydration.todayMl)} oz. Keep a glass within reach and you'll close the gap easily.`,
     }),
   },
   {

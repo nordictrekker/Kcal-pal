@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Printer, Mail } from "lucide-react";
 import type { CycleAggregate } from "@/lib/cycles";
+import { mlToOz } from "@/lib/hydration";
 
 export type RecapSummary = {
   rangeStart: string;
@@ -66,7 +67,7 @@ function fmtDate(iso: string): string {
 
 function ozFromMl(ml: number | null): string {
   if (ml == null) return "—";
-  return `${Math.round(ml / 29.5735)} oz`;
+  return `${mlToOz(ml)} oz`;
 }
 
 function hrFromMin(m: number | null): string {

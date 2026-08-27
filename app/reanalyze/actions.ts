@@ -1,10 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, revalidatePaths } from "@/lib/actions";
 import { parseTextMeal, SUPPLEMENT_REF } from "@/lib/anthropic";
 import { enrichMicrosWithUsda } from "@/lib/fdc";
-import { selectRelevantHistory, nutrientColumns } from "@/lib/food";
+import { loadRelevantHistory, nutrientColumns } from "@/lib/food";
 
 const MICRO_FIELDS = [
   "fiber_g", "iron_mg", "calcium_mg", "magnesium_mg", "vitamin_d_mcg", "omega3_mg",
@@ -30,11 +29,9 @@ export type ReanalyzeOneResult =
 
 // List the user's text logs, oldest first, so the client can re-analyze each.
 export async function getReanalyzeTargets(): Promise<ReanalyzeTarget[]> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return [];
+  const auth = await requireUser();
+  if (!auth.ok) return [];
+  const { supabase, user } = auth;
 
   const { data } = await supabase
     .from("food_entries")
@@ -79,11 +76,9 @@ function componentMicroCount(raw: unknown): number {
 // Re-run one entry through the real logging pipeline (Claude parse + USDA micro
 // enrichment) and update it in place. Returns a before/after micro snapshot.
 export async function reanalyzeOne(id: string): Promise<ReanalyzeOneResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, id, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return { ok: false, id, error: auth.error };
+  const { supabase, user } = auth;
 
   const { data: entry, error: readErr } = await supabase
     .from("food_entries")
@@ -98,25 +93,7 @@ export async function reanalyzeOne(id: string): Promise<ReanalyzeOneResult> {
   const componentsBefore = componentMicroCount(entry.raw_ai_response) > 0;
 
   // Reference the user's other logs for estimate consistency.
-  const { data: histRows } = await supabase
-    .from("food_entries")
-    .select("description,serving_size,calories,protein_g,carbs_g,fat_g,edited_by_user")
-    .eq("user_id", user.id)
-    .neq("id", id)
-    .order("consumed_at", { ascending: false })
-    .limit(200);
-  const history = selectRelevantHistory(
-    text,
-    (histRows ?? []).map((r) => ({
-      description: r.description as string,
-      serving_size: (r.serving_size as string | null) ?? null,
-      calories: (r.calories as number | null) ?? null,
-      protein_g: (r.protein_g as number | null) ?? null,
-      carbs_g: (r.carbs_g as number | null) ?? null,
-      fat_g: (r.fat_g as number | null) ?? null,
-      edited_by_user: Boolean(r.edited_by_user),
-    })),
-  );
+  const history = await loadRelevantHistory(supabase, user.id, text, id);
 
   const result = await parseTextMeal(text, history);
   if (!result.ok) return { ok: false, id, error: result.error };
@@ -138,8 +115,7 @@ export async function reanalyzeOne(id: string): Promise<ReanalyzeOneResult> {
 
   const after = snapshot({ ...d });
 
-  revalidatePath("/today");
-  revalidatePath("/today/summary");
+  revalidatePaths("/today", "/today/summary");
 
   return {
     ok: true,

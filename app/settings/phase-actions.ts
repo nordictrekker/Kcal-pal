@@ -1,23 +1,20 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, revalidatePaths, type ActionResult } from "@/lib/actions";
 import {
   normalizeModifiers,
   type PhaseModifiers,
 } from "@/lib/phase-modifiers";
 
-export type PhaseUpdateResult = { ok: boolean; error?: string };
+export type PhaseUpdateResult = ActionResult;
 
 // Accept the modifiers as a JSON string so the form can post them whole.
 export async function updatePhaseModifiers(
   formData: FormData,
 ): Promise<PhaseUpdateResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const raw = String(formData.get("modifiers") ?? "");
   let parsed: unknown;
@@ -35,7 +32,6 @@ export async function updatePhaseModifiers(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/today");
-  revalidatePath("/settings");
+  revalidatePaths("/today", "/settings");
   return { ok: true };
 }

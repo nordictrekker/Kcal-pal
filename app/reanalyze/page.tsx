@@ -1,18 +1,13 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { requireUserOrRedirect } from "@/lib/actions";
 import { getReanalyzeTargets } from "./actions";
 import { ReanalyzePanel } from "./reanalyze-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReanalyzePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  await requireUserOrRedirect();
 
   const targets = await getReanalyzeTargets();
 
