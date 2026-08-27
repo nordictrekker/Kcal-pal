@@ -8,6 +8,17 @@ import { usdaMicrosForItem, parseGrams } from "@/lib/fdc";
 import { isMeal } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
+// Server actions are reachable as POST endpoints in their own right, so the
+// lookup helpers gate on the session too rather than relying on the route
+// middleware that protects /log/scan.
+async function isSignedIn(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user !== null;
+}
+
 export type LookupResult =
   | {
       ok: true;
@@ -35,6 +46,10 @@ export async function lookupBarcode(barcode: string): Promise<LookupResult> {
     return { ok: false, reason: "error", barcode: cleaned, error: "Invalid barcode." };
   }
 
+  if (!(await isSignedIn())) {
+    return { ok: false, reason: "error", barcode: cleaned, error: "Not signed in." };
+  }
+
   try {
     const off = await lookupOpenFoodFacts(cleaned);
     if (off) {
@@ -60,6 +75,8 @@ export async function runClaudeFallback(args: {
 }): Promise<FallbackResult> {
   const guess = args.productGuess.trim();
   if (!guess) return { ok: false, error: "Tell me what the product is." };
+
+  if (!(await isSignedIn())) return { ok: false, error: "Not signed in." };
 
   const result = await parseBarcodeFallback({
     barcode: args.barcode,
