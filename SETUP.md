@@ -16,14 +16,15 @@ Project → Settings → Environment Variables. Add each, then redeploy.
 | `ANTHROPIC_API_KEY` | `sk-ant-…` |
 | `USDA_FDC_API_KEY` | (optional) FoodData Central key for real micronutrients. [Free signup](https://fdc.nal.usda.gov/api-key-signup.html); leave blank for AI-only micros. |
 | `ALLOWED_EMAIL` | `juliefloodreiff@gmail.com` |
-| `VAPID_PUBLIC_KEY` | `BB8GZeGSLaoTL7spt_Cw0_ie4BJMpgZrYYv2R68fhmKI2MDRjLuc2wTBQLxnUBJ6defWAYXI13uPSVeGxK3o81o` |
-| `VAPID_PRIVATE_KEY` | `jywx9WEBu7vtbGu-c_FSey-7dlvNbc8mK_soKCFqq6Q` |
+| `VAPID_PUBLIC_KEY` | from `npx web-push generate-vapid-keys` |
+| `VAPID_PRIVATE_KEY` | from the same command — never commit it |
 | `VAPID_SUBJECT` | `mailto:juliefloodreiff@gmail.com` |
 | `OURA_PERSONAL_ACCESS_TOKEN` | (optional) Oura PAT for the Sync now button |
 | `HEALTH_INGEST_TOKEN` | Bearer token the iOS Shortcut sends to `/api/health/ingest`. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
 
-> The VAPID keypair above was generated for this project. Rotate with
-> `npx web-push generate-vapid-keys` if it's ever exposed.
+> Generate the keypair with `npx web-push generate-vapid-keys` and keep it
+> only in Vercel + Supabase secrets. Rotating it invalidates existing push
+> subscriptions; clients re-subscribe on their next visit to `/settings`.
 
 ## 1b. Auth email template — REQUIRED (code-based sign-in)
 
