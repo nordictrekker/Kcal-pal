@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { parseTextMeal } from "@/lib/anthropic";
+import { parseTextMeal, SUPPLEMENT_REF } from "@/lib/anthropic";
 import { enrichMicrosWithUsda } from "@/lib/fdc";
 import { selectRelevantHistory, nutrientColumns } from "@/lib/food";
 
@@ -121,7 +121,11 @@ export async function reanalyzeOne(id: string): Promise<ReanalyzeOneResult> {
   const result = await parseTextMeal(text, history);
   if (!result.ok) return { ok: false, id, error: result.error };
 
-  const d = await enrichMicrosWithUsda(supabase, result.data);
+  // Supplements keep their label numbers: USDA has foods, not supplement
+  // labels, and enrichment would overwrite the accurate values.
+  const d = SUPPLEMENT_REF.test(text)
+    ? result.data
+    : await enrichMicrosWithUsda(supabase, result.data);
   const { error: updErr } = await supabase
     .from("food_entries")
     .update({

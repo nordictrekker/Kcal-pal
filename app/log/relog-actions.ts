@@ -3,8 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { MEALS, defaultMeal, nutrientColumns } from "@/lib/food";
-import { parseTextMeal } from "@/lib/anthropic";
-import { enrichMicrosWithUsda } from "@/lib/fdc";
+import {
+  parseAndStoreSupplementProfile,
+  profileNutrientColumns,
+  supplementNameKey,
+} from "@/lib/supplement-profiles";
 import type { Meal } from "@/lib/types";
 
 export type RelogResult = { ok: boolean; error?: string };
@@ -81,11 +84,12 @@ export async function relogEntry(
   return { ok: true };
 }
 
-// One-tap log for a Settings-declared supplement. Fast path: copy the LATEST
-// logged entry matching the name (corrections carry over). First-ever log:
-// run the full AI parse server-side with the supplement label web-search
-// forced (declared names like "prenatal" or "NAC" don't always hit the
-// trigger regex), then insert — one tap either way.
+// One-tap log for a Settings-declared supplement, in preference order:
+// 1. your latest USER-CORRECTED matching log (corrections always win),
+// 2. the cached label profile (researched once when the supplement was added),
+// 3. any latest matching log,
+// 4. a fresh label parse — which is then cached so it never runs again.
+// FDC enrichment is never applied to supplements: labels beat food averages.
 export async function relogLatestByName(
   name: string,
   meal?: string,
@@ -102,24 +106,25 @@ export async function relogLatestByName(
 
   // Escape LIKE wildcards in the user-supplied name.
   const pattern = `%${trimmed.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
-  const { data: match } = await supabase
-    .from("food_entries")
-    .select("id")
-    .eq("user_id", user.id)
-    .ilike("description", pattern)
-    .order("consumed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const [{ data: corrected }, { data: profile }] = await Promise.all([
+    supabase
+      .from("food_entries")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("edited_by_user", true)
+      .ilike("description", pattern)
+      .order("consumed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("supplement_profiles")
+      .select("name,nutrients,raw")
+      .eq("user_id", user.id)
+      .eq("name_key", supplementNameKey(trimmed))
+      .maybeSingle(),
+  ]);
 
-  if (match) return relogEntry(match.id as string, meal, logDate);
-
-  const result = await parseTextMeal(trimmed, [], {
-    forceSupplementSearch: true,
-  });
-  if (!result.ok) {
-    return { ok: false, error: `Couldn't look that up: ${result.error}` };
-  }
-  const enriched = await enrichMicrosWithUsda(supabase, result.data);
+  if (corrected) return relogEntry(corrected.id as string, meal, logDate);
 
   const m: Meal = meal && isMeal(meal) ? meal : defaultMeal();
   const todayKey = new Date().toISOString().slice(0, 10);
@@ -128,19 +133,44 @@ export async function relogLatestByName(
       ? `${logDate}T12:00:00.000Z`
       : null;
 
-  const { error: insertErr } = await supabase.from("food_entries").insert({
-    user_id: user.id,
-    meal: m,
-    description: trimmed,
-    source: "text",
-    ...nutrientColumns(enriched),
-    raw_ai_response: (result.raw as object) ?? null,
-    edited_by_user: false,
-    ...(consumedAt ? { consumed_at: consumedAt } : {}),
-  });
-  if (insertErr) return { ok: false, error: insertErr.message };
+  async function insertFromColumns(
+    cols: Record<string, unknown>,
+    raw: unknown,
+  ): Promise<RelogResult> {
+    const { error: insertErr } = await supabase.from("food_entries").insert({
+      user_id: user!.id,
+      meal: m,
+      description: trimmed,
+      source: "text",
+      ...cols,
+      raw_ai_response: (raw as object) ?? null,
+      edited_by_user: false,
+      ...(consumedAt ? { consumed_at: consumedAt } : {}),
+    });
+    if (insertErr) return { ok: false, error: insertErr.message };
+    revalidatePath("/today");
+    revalidatePath("/log");
+    return { ok: true };
+  }
 
-  revalidatePath("/today");
-  revalidatePath("/log");
-  return { ok: true };
+  if (profile) {
+    return insertFromColumns(
+      profileNutrientColumns(profile.nutrients),
+      profile.raw,
+    );
+  }
+
+  const { data: match } = await supabase
+    .from("food_entries")
+    .select("id")
+    .eq("user_id", user.id)
+    .ilike("description", pattern)
+    .order("consumed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (match) return relogEntry(match.id as string, meal, logDate);
+
+  const parsed = await parseAndStoreSupplementProfile(supabase, user.id, trimmed);
+  if (!parsed) return { ok: false, error: "Couldn't look that supplement up." };
+  return insertFromColumns(nutrientColumns(parsed.data), parsed.raw);
 }

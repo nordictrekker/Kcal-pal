@@ -25,3 +25,25 @@ describe("web-search parse triggers", () => {
     expect(SUPPLEMENT_REF.test("two eggs and toast")).toBe(false);
   });
 });
+
+import { profileNutrientColumns, supplementNameKey } from "@/lib/supplement-profiles";
+
+describe("supplement profile cache helpers", () => {
+  it("sanitizes stored nutrients into insertable columns", () => {
+    const cols = profileNutrientColumns({
+      calories: 5, protein_g: 0, iron_mg: 27, folate_mcg: 1000,
+      choline_mg: "bad", serving_size: "1 capsule", plants: ["x"],
+    });
+    expect(cols.iron_mg).toBe(27);
+    expect(cols.folate_mcg).toBe(1000);
+    expect(cols.choline_mg).toBeNull();
+    expect(cols.serving_size).toBe("1 capsule");
+    expect(cols.plants).toEqual([]);
+  });
+
+  it("name keys normalize case and whitespace", () => {
+    expect(supplementNameKey("  Pure  Encapsulation Prenatal ")).toBe(
+      supplementNameKey("pure encapsulation prenatal"),
+    );
+  });
+});

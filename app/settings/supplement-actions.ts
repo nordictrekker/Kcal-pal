@@ -1,7 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  parseAndStoreSupplementProfile,
+  supplementNameKey,
+} from "@/lib/supplement-profiles";
 
 export type SupplementResult = { ok: boolean; error?: string };
 
@@ -31,11 +36,39 @@ export async function updateSupplements(
     if (cleaned.length >= MAX_ITEMS) break;
   }
 
+  // Which names are new? Those get their label researched once, in the
+  // background (after the response), and cached on supplement_profiles so
+  // every future one-tap log is instant — no re-analysis.
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("supplements")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const before = new Set(
+    (Array.isArray(prof?.supplements) ? (prof.supplements as string[]) : []).map(
+      supplementNameKey,
+    ),
+  );
+  const added = cleaned.filter((n) => !before.has(supplementNameKey(n)));
+
   const { error } = await supabase
     .from("profiles")
     .update({ supplements: cleaned })
     .eq("user_id", user.id);
   if (error) return { ok: false, error: error.message };
+
+  if (added.length > 0) {
+    const userId = user.id;
+    after(async () => {
+      for (const name of added) {
+        try {
+          await parseAndStoreSupplementProfile(supabase, userId, name);
+        } catch {
+          // Best-effort: the quick-add path parses on demand if this failed.
+        }
+      }
+    });
+  }
 
   revalidatePath("/settings");
   revalidatePath("/log");
