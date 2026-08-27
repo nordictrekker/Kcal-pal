@@ -6,7 +6,7 @@ import {
   mergeContributorsByLabel,
   type ContribEntry,
 } from "@/lib/contributions";
-import { detectFrequentItems, type PantryComponent } from "@/lib/pantry";
+import { detectFrequentItems, type PantryComponent, simplifyQuantity } from "@/lib/pantry";
 
 describe("contributionsForField", () => {
   const entries: ContribEntry[] = [
@@ -178,5 +178,27 @@ describe("detectFrequentItems", () => {
   it("ranks more-frequent foods first", () => {
     const items = detectFrequentItems(components);
     expect(items[0].count).toBeGreaterThanOrEqual(items[items.length - 1].count);
+  });
+});
+
+describe("simplifyQuantity", () => {
+  it("drops weight parentheticals", () => {
+    expect(simplifyQuantity("4 (~5 g)", "Almonds")).toBe("4");
+    expect(simplifyQuantity("1 half (~2 g)", "Pecan")).toBe("1/2");
+  });
+
+  it("converts word fractions to numerals", () => {
+    expect(simplifyQuantity("1 half", "Avocado")).toBe("1/2");
+    expect(simplifyQuantity("a quarter", "Melon")).toBe("1/4");
+  });
+
+  it("drops words the name already says", () => {
+    expect(simplifyQuantity("12 fries", "French fries")).toBe("12");
+    expect(simplifyQuantity("2 slices", "Bread slices")).toBe("2");
+  });
+
+  it("keeps informative units", () => {
+    expect(simplifyQuantity("150 ml", "Rosé wine")).toBe("150 ml");
+    expect(simplifyQuantity("1 small", "Carrot")).toBe("1 small");
   });
 });

@@ -1,13 +1,46 @@
-// kcal pal service worker. Handles web-push notifications and clicks.
-// Kept intentionally minimal — no offline caching (the app needs the
-// network for everything anyway).
+// kcal pal service worker. Handles web-push notifications/clicks and a
+// friendly offline fallback page. The app itself needs the network for
+// everything, so navigations stay network-first — the cache only holds the
+// offline page (without this, an offline launch of the installed app showed
+// the raw browser error page).
+
+const OFFLINE_CACHE = "kcalpal-offline-v1";
+const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(OFFLINE_CACHE).then((cache) => cache.add(OFFLINE_URL)),
+  );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      // Drop old offline caches on version bumps.
+      caches.keys().then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => k.startsWith("kcalpal-offline-") && k !== OFFLINE_CACHE)
+            .map((k) => caches.delete(k)),
+        ),
+      ),
+    ]),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  // Only page navigations get the fallback; API/data requests fail as normal
+  // so the app never sees stale data.
+  if (event.request.mode !== "navigate") return;
+  event.respondWith(
+    fetch(event.request).catch(() =>
+      caches
+        .match(OFFLINE_URL)
+        .then((cached) => cached ?? Response.error()),
+    ),
+  );
 });
 
 self.addEventListener("push", (event) => {
