@@ -1,7 +1,7 @@
 "use server";
 
 import { requireUser, revalidatePaths } from "@/lib/actions";
-import { parseTextMeal, SUPPLEMENT_REF } from "@/lib/anthropic";
+import { parseTextMeal } from "@/lib/anthropic";
 import { enrichMicrosWithUsda } from "@/lib/fdc";
 import { backdatedConsumedAt } from "@/lib/form-values";
 import { isMeal, loadRelevantHistory, nutrientColumns } from "@/lib/food";
@@ -77,11 +77,10 @@ export async function logTextMeal(
 
   // Replace the AI's micronutrient estimates with USDA FoodData Central data
   // where we can resolve the items (no-op without an API key).
-  // Supplements keep their label numbers: USDA has foods, not supplement
-  // labels, and enrichment would overwrite the accurate values.
-  const d = SUPPLEMENT_REF.test(description)
-    ? result.data
-    : await enrichMicrosWithUsda(supabase, result.data);
+  // Supplement components keep their label numbers (USDA has foods, not
+  // supplement labels); the ordinary foods in the same entry are still
+  // enriched.
+  const d = await enrichMicrosWithUsda(supabase, result.data, { description });
   const { error } = await supabase.from("food_entries").insert({
     ...base,
     ...nutrientColumns(d),

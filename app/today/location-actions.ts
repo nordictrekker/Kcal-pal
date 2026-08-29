@@ -152,6 +152,8 @@ export async function setHomeToCurrent(): Promise<{ ok: boolean }> {
 
 // Typeahead for the home-base city search (onboarding + Settings).
 export async function searchHomeCities(query: string): Promise<CityResult[]> {
+  const auth = await requireUser();
+  if (!auth.ok) return [];
   return searchCities(query);
 }
 

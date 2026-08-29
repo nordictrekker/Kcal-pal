@@ -9,6 +9,7 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/login") ||
     path.startsWith("/auth") ||
     path.startsWith("/api/health/ingest") || // token-authed inside the route
+    path.startsWith("/api/cron/") || // CRON_SECRET-authed inside the route
     path.startsWith("/_next") ||
     path === "/favicon.ico";
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
 import { configureWebPush, webpush } from "@/lib/push";
 import { localDayKey, localDayBoundsUTC } from "@/lib/timezone";
@@ -10,14 +11,27 @@ import { localDayKey, localDayBoundsUTC } from "@/lib/timezone";
 // streaks, no guilt. Runs on Vercel cron (schedule in vercel.json); the daily
 // cadence itself caps it at one nudge per day.
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+function constantTimeMatch(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
 
 // Only nudge people with a live habit: at least one entry in this window.
 const ACTIVE_WINDOW_DAYS = 14;
 
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  const auth = req.headers.get("authorization") ?? "";
+  const prefix = "Bearer ";
+  if (
+    !secret ||
+    !auth.startsWith(prefix) ||
+    !constantTimeMatch(auth.slice(prefix.length), secret)
+  ) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

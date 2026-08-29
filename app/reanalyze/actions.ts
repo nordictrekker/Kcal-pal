@@ -1,7 +1,7 @@
 "use server";
 
 import { requireUser, revalidatePaths } from "@/lib/actions";
-import { parseTextMeal, SUPPLEMENT_REF } from "@/lib/anthropic";
+import { parseTextMeal } from "@/lib/anthropic";
 import { enrichMicrosWithUsda } from "@/lib/fdc";
 import { loadRelevantHistory, nutrientColumns } from "@/lib/food";
 
@@ -98,11 +98,12 @@ export async function reanalyzeOne(id: string): Promise<ReanalyzeOneResult> {
   const result = await parseTextMeal(text, history);
   if (!result.ok) return { ok: false, id, error: result.error };
 
-  // Supplements keep their label numbers: USDA has foods, not supplement
-  // labels, and enrichment would overwrite the accurate values.
-  const d = SUPPLEMENT_REF.test(text)
-    ? result.data
-    : await enrichMicrosWithUsda(supabase, result.data);
+  // Supplement components keep their label numbers (USDA has foods, not
+  // supplement labels); the ordinary foods in the same entry are still
+  // enriched.
+  const d = await enrichMicrosWithUsda(supabase, result.data, {
+    description: text,
+  });
   const { error: updErr } = await supabase
     .from("food_entries")
     .update({
