@@ -1,26 +1,17 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { useFormStatus } from "react-dom";
 import { usePathname } from "next/navigation";
 import { MessageCircleQuestion, X } from "lucide-react";
 import { submitBugReport, type BugReportState } from "@/app/settings/bug-actions";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Textarea } from "@/components/ui/textarea";
 
 const initial: BugReportState = { ok: false };
 
 // Auth screens have no chrome to overlay.
 const HIDDEN_PREFIXES = ["/login", "/auth"];
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" size="sm" disabled={pending}>
-      {pending ? "Sending…" : "Send"}
-    </Button>
-  );
-}
 
 // A small always-present floating button for reporting bugs / issues. Captures
 // the page it was opened on + the user agent (see the server action). Intended
@@ -113,7 +104,9 @@ export function FeedbackButton() {
                   >
                     Cancel
                   </Button>
-                  <SubmitButton />
+                  <SubmitButton size="sm" pendingLabel="Sending…">
+                    Send
+                  </SubmitButton>
                 </div>
               </form>
             )}

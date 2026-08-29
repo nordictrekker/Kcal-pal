@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/actions";
 import { sumTotals, type Totals } from "@/lib/food";
 import { isoYearWeek } from "@/lib/digest";
 import {
@@ -46,11 +46,9 @@ const INSIGHT_METRICS: { key: MetricKey; aimToHit: boolean }[] = [
 ];
 
 export async function getCachedFoodInsight(): Promise<InsightState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { status: "error", error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return { status: "error", error: "Not signed in." };
+  const { supabase, user } = auth;
 
   const { data } = await supabase
     .from("food_insights")
@@ -78,11 +76,9 @@ function scaleTotals(t: Totals, factor: number): Totals {
 // Gather the last 7 days, build the standout/lagging nutrient picture, ask Opus
 // for the note, and cache it for the current ISO week.
 export async function regenerateFoodInsight(): Promise<InsightState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { status: "error", error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return { status: "error", error: "Not signed in." };
+  const { supabase, user } = auth;
 
   const { data: profile } = await supabase
     .from("profiles")

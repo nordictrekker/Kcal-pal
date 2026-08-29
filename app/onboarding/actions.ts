@@ -1,7 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, revalidatePaths, type ActionResult } from "@/lib/actions";
+import { isActivityLevel, isBodyBuild, isGoal, isSex } from "@/lib/profile";
 
 export type OnboardingPayload = {
   first_name: string;
@@ -22,28 +22,22 @@ export type OnboardingPayload = {
   home?: { label: string; tz: string; lat: number; lng: number } | null;
 };
 
-export type OnboardingResult = { ok: boolean; error?: string };
-
-const ACTIVITY = ["sedentary", "light", "moderate", "active", "very_active"];
-const GOALS = ["lose", "maintain", "gain", "muscle"];
-const SEXES = ["female", "male", "other"];
+export type OnboardingResult = ActionResult;
 
 export async function completeOnboarding(
   p: OnboardingPayload,
 ): Promise<OnboardingResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   // Validation — reject anything we'd refuse to base targets on.
   const name = p.first_name?.trim() ?? "";
   if (!name) return { ok: false, error: "Please enter your name." };
-  if (!SEXES.includes(p.sex)) return { ok: false, error: "Pick a sex." };
-  if (!ACTIVITY.includes(p.activity_level))
+  if (!isSex(p.sex)) return { ok: false, error: "Pick a sex." };
+  if (!isActivityLevel(p.activity_level))
     return { ok: false, error: "Pick an activity level." };
-  if (!GOALS.includes(p.goal)) return { ok: false, error: "Pick a goal." };
+  if (!isGoal(p.goal)) return { ok: false, error: "Pick a goal." };
 
   const dob = Date.parse(`${p.date_of_birth}T00:00:00Z`);
   if (!Number.isFinite(dob)) return { ok: false, error: "Enter your birth date." };
@@ -103,9 +97,7 @@ export async function completeOnboarding(
       goal_weight_lbs: goalWeight,
       target_mode: p.target_mode,
       track_cycle: p.sex === "male" ? false : p.track_cycle,
-      body_build: ["lean", "average", "muscular", "higher_fat"].includes(p.body_build ?? "")
-        ? p.body_build
-        : null,
+      body_build: isBodyBuild(p.body_build) ? p.body_build : null,
       last_period_start: lastPeriod,
       avg_cycle_length: cycleLen,
       avg_period_length: periodLen,
@@ -123,7 +115,6 @@ export async function completeOnboarding(
     source: "onboarding",
   });
 
-  revalidatePath("/today");
-  revalidatePath("/settings");
+  revalidatePaths("/today", "/settings");
   return { ok: true };
 }

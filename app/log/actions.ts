@@ -1,10 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, revalidatePaths } from "@/lib/actions";
 import { parseTextMeal } from "@/lib/anthropic";
 import { enrichMicrosWithUsda } from "@/lib/fdc";
-import { isMeal, selectRelevantHistory, nutrientColumns } from "@/lib/food";
+import { backdatedConsumedAt } from "@/lib/form-values";
+import { isMeal, loadRelevantHistory, nutrientColumns } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
 export type LogState = {
@@ -33,41 +33,17 @@ export async function logTextMeal(
 
   // Optional back-date (adding to a past day from the dated log view). Anchored
   // to local noon so it lands inside the chosen day regardless of timezone.
-  const dateRaw = String(formData.get("date") ?? "").trim();
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const consumedAt =
-    /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) && dateRaw <= todayKey && dateRaw !== todayKey
-      ? `${dateRaw}T12:00:00.000Z`
-      : null;
+  const consumedAt = backdatedConsumedAt(
+    String(formData.get("date") ?? "").trim(),
+  );
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { ok: false, error: "Not signed in." };
-  }
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   // Feed the AI the user's prior logs for similar items so estimates stay
   // consistent and their corrections stick.
-  const { data: histRows } = await supabase
-    .from("food_entries")
-    .select("description,serving_size,calories,protein_g,carbs_g,fat_g,edited_by_user")
-    .eq("user_id", user.id)
-    .order("consumed_at", { ascending: false })
-    .limit(200);
-  const history = selectRelevantHistory(
-    description,
-    (histRows ?? []).map((r) => ({
-      description: r.description as string,
-      serving_size: (r.serving_size as string | null) ?? null,
-      calories: (r.calories as number | null) ?? null,
-      protein_g: (r.protein_g as number | null) ?? null,
-      carbs_g: (r.carbs_g as number | null) ?? null,
-      fat_g: (r.fat_g as number | null) ?? null,
-      edited_by_user: Boolean(r.edited_by_user),
-    })),
-  );
+  const history = await loadRelevantHistory(supabase, user.id, description);
 
   const result = await parseTextMeal(description, history);
 
@@ -111,7 +87,6 @@ export async function logTextMeal(
   });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/today");
-  revalidatePath("/today/summary");
+  revalidatePaths("/today", "/today/summary");
   return { ok: true };
 }

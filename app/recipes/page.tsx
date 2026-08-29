@@ -1,17 +1,12 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireUserOrRedirect } from "@/lib/actions";
 import { ImportRecipeCard } from "./import-card";
 import { RecipeList, type RecipeRow } from "./recipe-list";
 
 export const dynamic = "force-dynamic";
 
 export default async function RecipesPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireUserOrRedirect();
 
   const { data: rows } = await supabase
     .from("recipes")

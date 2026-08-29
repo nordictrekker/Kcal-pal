@@ -1,25 +1,15 @@
 "use client";
 
 import { useActionState, useEffect, useRef, type RefObject } from "react";
-import { useFormStatus } from "react-dom";
 import { logTextMeal, type LogState } from "./actions";
 import { MEALS } from "@/lib/food";
 import type { Meal } from "@/lib/types";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 const initial: LogState = { ok: false };
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? "Analyzing…" : "Log it"}
-    </Button>
-  );
-}
 
 export function LogForm({
   defaultMeal,
@@ -101,7 +91,9 @@ export function LogForm({
         <p className="text-sm text-green-600 dark:text-green-500">Logged.</p>
       ) : null}
 
-      <SubmitButton />
+      <SubmitButton className="w-full" pendingLabel="Analyzing…">
+        Log it
+      </SubmitButton>
     </form>
   );
 }

@@ -1,8 +1,7 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
 import { sendMagicLink, verifyMagicLinkUrl } from "./actions";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,24 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-function SendButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? "Sending…" : "Send sign-in link"}
-    </Button>
-  );
-}
-
-function VerifyButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? "Verifying…" : "Sign in"}
-    </Button>
-  );
-}
 
 export function LoginForm({
   error,
@@ -66,7 +47,9 @@ export function LoginForm({
             {error ? (
               <p className="text-sm text-destructive">{error}</p>
             ) : null}
-            <SendButton />
+            <SubmitButton className="w-full" pendingLabel="Sending…">
+              Send sign-in link
+            </SubmitButton>
           </form>
         ) : (
           <>
@@ -95,7 +78,9 @@ export function LoginForm({
               {error ? (
                 <p className="text-sm text-destructive">{error}</p>
               ) : null}
-              <VerifyButton />
+              <SubmitButton className="w-full" pendingLabel="Verifying…">
+                Sign in
+              </SubmitButton>
             </form>
             <p className="text-xs text-muted-foreground">
               Sent to <span className="font-medium">{email}</span>. The code

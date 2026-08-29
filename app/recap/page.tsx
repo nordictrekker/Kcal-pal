@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireUserOrRedirect } from "@/lib/actions";
 import type { Profile } from "@/lib/types";
 import { allPeriodStarts, cycleAggregates, type FlowSample } from "@/lib/cycles";
 import type { CycleSettings } from "@/lib/cycle";
@@ -10,11 +9,7 @@ import { RecapView } from "./recap-view";
 export const dynamic = "force-dynamic";
 
 export default async function RecapPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireUserOrRedirect();
 
   const ninetyDaysAgo = new Date(Date.now() - 90 * 86_400_000).toISOString();
   const ninetyDaysAgoDate = ninetyDaysAgo.slice(0, 10);

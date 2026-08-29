@@ -1,22 +1,21 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import {
+  requireUser,
+  revalidatePaths,
+  type ActionResult,
+} from "@/lib/actions";
 import { lookupOpenFoodFacts, type OffNutrition } from "@/lib/openfoodfacts";
 import { parseBarcodeFallback } from "@/lib/anthropic";
 import { usdaMicrosForItem, parseGrams } from "@/lib/fdc";
-import { isMeal } from "@/lib/food";
+import { isMeal, nutrientColumnsFromForm } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
 // Server actions are reachable as POST endpoints in their own right, so the
 // lookup helpers gate on the session too rather than relying on the route
 // middleware that protects /log/scan.
 async function isSignedIn(): Promise<boolean> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user !== null;
+  return (await requireUser()).ok;
 }
 
 export type LookupResult =
@@ -116,25 +115,15 @@ export async function runClaudeFallback(args: {
   };
 }
 
-function readNumberOrNull(v: FormDataEntryValue | null): number | null {
-  if (v === null) return null;
-  const s = String(v).trim();
-  if (s === "") return null;
-  const n = Number(s);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-}
-
-export type SaveState = { ok: boolean; error?: string };
+export type SaveState = ActionResult;
 
 export async function saveBarcodeEntry(
   _prev: SaveState,
   formData: FormData,
 ): Promise<SaveState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const barcode = String(formData.get("barcode") ?? "").trim();
   if (!barcode) return { ok: false, error: "Missing barcode." };
@@ -160,11 +149,7 @@ export async function saveBarcodeEntry(
     source: "barcode",
     barcode,
     serving_size: serving,
-    calories: readNumberOrNull(formData.get("calories")),
-    protein_g: readNumberOrNull(formData.get("protein_g")),
-    carbs_g: readNumberOrNull(formData.get("carbs_g")),
-    fat_g: readNumberOrNull(formData.get("fat_g")),
-    fiber_g: readNumberOrNull(formData.get("fiber_g")),
+    ...nutrientColumnsFromForm(formData),
     ...(micros ?? {}),
     // The form values may have been edited from the original lookup, so
     // we don't try to round-trip the raw response here.
@@ -173,6 +158,6 @@ export async function saveBarcodeEntry(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/today");
+  revalidatePaths("/today");
   return { ok: true };
 }

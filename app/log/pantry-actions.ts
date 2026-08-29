@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, type ActionResult } from "@/lib/actions";
 import { isMeal, defaultMeal } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
-export type PantryActionResult = { ok: boolean; error?: string };
+export type PantryActionResult = ActionResult;
 
 export type QuickLogPayload = {
   description: string;
@@ -32,11 +32,9 @@ export async function quickLogFrequent(
   const desc = (payload.description ?? "").trim();
   if (!desc) return { ok: false, error: "Missing item." };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const m: Meal =
     payload.meal && isMeal(payload.meal) ? payload.meal : defaultMeal();

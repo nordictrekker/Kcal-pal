@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/actions";
 import { parseHealthExport, type HealthPoint } from "@/lib/apple-health";
 
 export type ImportResult =
@@ -22,11 +22,9 @@ function kgToLb(v: number): number {
 export async function importHealthFile(
   formData: FormData,
 ): Promise<ImportResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {

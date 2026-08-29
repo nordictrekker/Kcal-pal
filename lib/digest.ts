@@ -6,6 +6,7 @@
 import { getAnthropic, NUTRITION_MODEL } from "./anthropic";
 import type { Trends } from "./trends";
 import type { Phase } from "./cycle";
+import { mlToOz } from "./hydration";
 
 export type DigestInput = {
   weekLabel: string; // "Jun 8 – Jun 14"
@@ -47,7 +48,7 @@ function fmtNum(n: number | null, digits = 0): string {
 
 function ozFromMl(ml: number | null): string {
   if (ml === null) return "n/a";
-  return `${Math.round(ml / 29.5735)} oz`;
+  return `${mlToOz(ml)} oz`;
 }
 
 function buildUserMessage(input: DigestInput): string {

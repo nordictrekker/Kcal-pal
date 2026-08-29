@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, type ActionResult } from "@/lib/actions";
 import { configureWebPush, webpush } from "@/lib/push";
 
 type SubscriptionJson = {
@@ -8,16 +8,12 @@ type SubscriptionJson = {
   keys: { p256dh: string; auth: string };
 };
 
-export type ActionResult = { ok: boolean; error?: string };
-
 export async function saveSubscription(
   sub: SubscriptionJson,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
     return { ok: false, error: "Invalid subscription." };
@@ -40,11 +36,9 @@ export async function saveSubscription(
 export async function removeSubscription(
   endpoint: string,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const { error } = await supabase
     .from("push_subscriptions")
@@ -64,11 +58,9 @@ export async function sendTestPush(): Promise<ActionResult> {
     };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const { data: subs, error } = await supabase
     .from("push_subscriptions")

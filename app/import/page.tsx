@@ -1,16 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireUserOrRedirect } from "@/lib/actions";
 import Link from "next/link";
 import { ImportForm } from "./import-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function ImportPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireUserOrRedirect();
 
   const { data: imports } = await supabase
     .from("apple_health_imports")

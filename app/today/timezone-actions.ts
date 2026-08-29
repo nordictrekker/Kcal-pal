@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/actions";
 import { isValidTimeZone } from "@/lib/timezone";
 
 // Record the device's timezone, used only for local time-of-day display
@@ -10,11 +10,9 @@ import { isValidTimeZone } from "@/lib/timezone";
 export async function reportTimezone(tz: string): Promise<{ ok: boolean }> {
   if (!isValidTimeZone(tz)) return { ok: false };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false };
+  const auth = await requireUser();
+  if (!auth.ok) return { ok: false };
+  const { supabase, user } = auth;
 
   const { data: profile } = await supabase
     .from("profiles")

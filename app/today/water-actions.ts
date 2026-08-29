@@ -1,17 +1,21 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import { hydrationFactor, isBeverageKind, OZ_TO_ML } from "@/lib/hydration";
+import {
+  requireUser,
+  revalidatePaths,
+  undoLastLogToday,
+  type ActionResult,
+} from "@/lib/actions";
+import { dayBounds } from "@/lib/food";
+import { parseNumber } from "@/lib/form-values";
+import { hydrationFactor, isBeverageKind, ozToMl } from "@/lib/hydration";
 
-export type WaterResult = { ok: boolean; error?: string };
+export type WaterResult = ActionResult;
 
 export async function logWater(formData: FormData): Promise<WaterResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const ozRaw = String(formData.get("oz") ?? "").trim();
   const mlRaw = String(formData.get("ml") ?? "").trim();
@@ -21,16 +25,13 @@ export async function logWater(formData: FormData): Promise<WaterResult> {
 
   let ml: number | null = null;
   if (ozRaw) {
-    const oz = Number(ozRaw);
-    if (!Number.isFinite(oz) || oz <= 0 || oz > 170) {
-      return { ok: false, error: "Enter ounces between 1 and 170." };
-    }
-    ml = Math.round(oz * OZ_TO_ML);
+    const oz = parseNumber(ozRaw, { min: 0, max: 170, exclusiveMin: true });
+    if (!oz.ok) return { ok: false, error: "Enter ounces between 1 and 170." };
+    ml = ozToMl(oz.value);
   } else if (mlRaw) {
-    ml = Number(mlRaw);
-    if (!Number.isFinite(ml) || ml <= 0 || ml > 5000) {
-      return { ok: false, error: "Enter ml between 1 and 5000." };
-    }
+    const parsed = parseNumber(mlRaw, { min: 0, max: 5000, exclusiveMin: true });
+    if (!parsed.ok) return { ok: false, error: "Enter ml between 1 and 5000." };
+    ml = parsed.value;
   } else {
     return { ok: false, error: "Pick an amount." };
   }
@@ -40,12 +41,11 @@ export async function logWater(formData: FormData): Promise<WaterResult> {
   // before midnight.
   let loggedAt: string | undefined;
   if (when === "earlier") {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
-    loggedAt = (
-      threeHoursAgo > startOfDay ? threeHoursAgo : startOfDay
+    const startOfDay = dayBounds().start;
+    const threeHoursAgo = new Date(
+      Date.now() - 3 * 60 * 60 * 1000,
     ).toISOString();
+    loggedAt = threeHoursAgo > startOfDay ? threeHoursAgo : startOfDay;
   }
 
   const { error } = await supabase.from("water_logs").insert({
@@ -58,36 +58,17 @@ export async function logWater(formData: FormData): Promise<WaterResult> {
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/today");
-  revalidatePath("/weekly");
+  revalidatePaths("/today", "/weekly");
   return { ok: true };
 }
 
 export async function undoLastWater(): Promise<WaterResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const result = await undoLastLogToday(auth.supabase, "water_logs", auth.user.id);
+  if (!result.ok) return result;
 
-  const { data: latest } = await supabase
-    .from("water_logs")
-    .select("id")
-    .eq("user_id", user.id)
-    .gte("logged_at", startOfDay.toISOString())
-    .order("logged_at", { ascending: false })
-    .limit(1);
-
-  const id = latest?.[0]?.id;
-  if (!id) return { ok: false, error: "Nothing to undo today." };
-
-  const { error } = await supabase.from("water_logs").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/today");
-  revalidatePath("/weekly");
+  revalidatePaths("/today", "/weekly");
   return { ok: true };
 }

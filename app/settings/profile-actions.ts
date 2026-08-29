@@ -1,127 +1,103 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, revalidatePaths, type ActionResult } from "@/lib/actions";
+import { parseNumber, type NumberRange } from "@/lib/form-values";
+import {
+  isActivityLevel,
+  isBodyBuild,
+  isCalendarDate,
+  isGoal,
+  isSex,
+  isTargetMode,
+} from "@/lib/profile";
 
-export type ProfileResult = { ok: boolean; error?: string };
+export type ProfileResult = ActionResult;
 
-const ACTIVITY = ["sedentary", "light", "moderate", "active", "very_active"];
-const GOALS = ["lose", "maintain", "gain", "muscle"];
-const SEXES = ["female", "male", "other"];
+// Numeric fields and the range each accepts, with the message shown when the
+// posted value falls outside it.
+const NUMERIC_FIELDS: Array<[string, NumberRange, string]> = [
+  ["height_in", { min: 36, max: 90 }, "Height out of range."],
+  ["protein_per_kg", { min: 1, max: 3 }, "Protein per kg must be 1.0–3.0."],
+  [
+    "goal_weight_lbs",
+    { min: 50, max: 600 },
+    "Goal weight must be between 50 and 600 lb.",
+  ],
+  [
+    "avg_cycle_length",
+    { min: 21, max: 45, integer: true },
+    "Cycle length must be 21–45 days.",
+  ],
+  [
+    "avg_period_length",
+    { min: 2, max: 10, integer: true },
+    "Period length must be 2–10 days.",
+  ],
+];
+
+// Enumerated fields, validated against the shared profile field lists.
+const ENUM_FIELDS: Array<[string, (v: string) => boolean, string]> = [
+  ["sex", isSex, "Invalid sex."],
+  ["activity_level", isActivityLevel, "Invalid activity level."],
+  ["goal", isGoal, "Invalid goal."],
+  ["target_mode", isTargetMode, "Invalid target mode."],
+];
 
 // Update the body + goal + cycle fields that drive smarter targets and
 // cycle automation. All fields optional — only present keys are written.
 export async function updateProfileSettings(
   formData: FormData,
 ): Promise<ProfileResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const patch: Record<string, unknown> = {};
 
   const firstName = String(formData.get("first_name") ?? "").trim();
   if (firstName) patch.first_name = firstName;
 
-  const dob = String(formData.get("date_of_birth") ?? "").trim();
-  if (dob) {
-    const t = Date.parse(`${dob}T00:00:00Z`);
-    if (!Number.isFinite(t)) return { ok: false, error: "Invalid birth date." };
-    patch.date_of_birth = dob;
+  for (const [name, check, message] of ENUM_FIELDS) {
+    const value = String(formData.get(name) ?? "").trim();
+    if (!value) continue;
+    if (!check(value)) return { ok: false, error: message };
+    patch[name] = value;
   }
 
-  const sex = String(formData.get("sex") ?? "").trim();
-  if (sex) {
-    if (!SEXES.includes(sex)) return { ok: false, error: "Invalid sex." };
-    patch.sex = sex;
+  for (const [name, range, message] of NUMERIC_FIELDS) {
+    const parsed = parseNumber(formData.get(name), range);
+    if (!parsed.ok) {
+      if (parsed.empty) continue;
+      return { ok: false, error: message };
+    }
+    patch[name] = parsed.value;
   }
 
-  const heightRaw = String(formData.get("height_in") ?? "").trim();
-  if (heightRaw) {
-    const h = Number(heightRaw);
-    if (!Number.isFinite(h) || h < 36 || h > 90)
-      return { ok: false, error: "Height out of range." };
-    patch.height_in = h;
-  }
-
-  const activity = String(formData.get("activity_level") ?? "").trim();
-  if (activity) {
-    if (!ACTIVITY.includes(activity))
-      return { ok: false, error: "Invalid activity level." };
-    patch.activity_level = activity;
-  }
-
-  const goal = String(formData.get("goal") ?? "").trim();
-  if (goal) {
-    if (!GOALS.includes(goal)) return { ok: false, error: "Invalid goal." };
-    patch.goal = goal;
-  }
-
-  const targetMode = String(formData.get("target_mode") ?? "").trim();
-  if (targetMode) {
-    if (targetMode !== "auto" && targetMode !== "manual")
-      return { ok: false, error: "Invalid target mode." };
-    patch.target_mode = targetMode;
-  }
-
-  const proteinPerKg = String(formData.get("protein_per_kg") ?? "").trim();
-  if (proteinPerKg) {
-    const v = Number(proteinPerKg);
-    if (!Number.isFinite(v) || v < 1 || v > 3)
-      return { ok: false, error: "Protein per kg must be 1.0–3.0." };
-    patch.protein_per_kg = v;
-  }
-
-  const goalWeight = String(formData.get("goal_weight_lbs") ?? "").trim();
-  if (goalWeight) {
-    const v = Number(goalWeight);
-    if (!Number.isFinite(v) || v < 50 || v > 600)
-      return { ok: false, error: "Goal weight must be between 50 and 600 lb." };
-    patch.goal_weight_lbs = v;
+  for (const [name, message] of [
+    ["date_of_birth", "Invalid birth date."],
+    ["last_period_start", "Invalid period start date."],
+  ] as const) {
+    const value = String(formData.get(name) ?? "").trim();
+    if (!value) continue;
+    if (!isCalendarDate(value)) return { ok: false, error: message };
+    patch[name] = value;
   }
 
   // Cycle settings.
   const trackCycle = formData.get("track_cycle");
-  if (trackCycle !== null) patch.track_cycle = trackCycle === "on" || trackCycle === "true";
+  if (trackCycle !== null)
+    patch.track_cycle = trackCycle === "on" || trackCycle === "true";
   const bodyBuild = formData.get("body_build");
   if (bodyBuild !== null) {
     const v = String(bodyBuild);
-    patch.body_build = ["lean", "average", "muscular", "higher_fat"].includes(v)
-      ? v
-      : null;
+    patch.body_build = isBodyBuild(v) ? v : null;
   }
 
-// Male profiles never track a cycle — enforce server-side so every consumer
+  // Male profiles never track a cycle — enforce server-side so every consumer
   // (today, summary, recap, insights) sees cycle features off.
   if (patch.sex === "male") {
     patch.track_cycle = false;
     patch.last_period_start = null;
-  }
-
-  const periodStart = String(formData.get("last_period_start") ?? "").trim();
-  if (periodStart) {
-    const t = Date.parse(`${periodStart}T00:00:00Z`);
-    if (!Number.isFinite(t))
-      return { ok: false, error: "Invalid period start date." };
-    patch.last_period_start = periodStart;
-  }
-
-  const cycleLen = String(formData.get("avg_cycle_length") ?? "").trim();
-  if (cycleLen) {
-    const v = Number(cycleLen);
-    if (!Number.isInteger(v) || v < 21 || v > 45)
-      return { ok: false, error: "Cycle length must be 21–45 days." };
-    patch.avg_cycle_length = v;
-  }
-
-  const periodLen = String(formData.get("avg_period_length") ?? "").trim();
-  if (periodLen) {
-    const v = Number(periodLen);
-    if (!Number.isInteger(v) || v < 2 || v > 10)
-      return { ok: false, error: "Period length must be 2–10 days." };
-    patch.avg_period_length = v;
   }
 
   if (Object.keys(patch).length === 0) {
@@ -135,7 +111,6 @@ export async function updateProfileSettings(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/today");
-  revalidatePath("/settings");
+  revalidatePaths("/today", "/settings");
   return { ok: true };
 }

@@ -1,5 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireUserOrRedirect } from "@/lib/actions";
 import Link from "next/link";
 import { Camera, ImagePlus, BookOpen } from "lucide-react";
 import { defaultMeal } from "@/lib/food";
@@ -20,11 +19,7 @@ export default async function LogPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireUserOrRedirect();
 
   const { date } = await searchParams;
   const todayKey = new Date().toISOString().slice(0, 10);

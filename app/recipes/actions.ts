@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/actions";
 import { parseRecipe } from "@/lib/anthropic";
 import { defaultMeal, type Totals } from "@/lib/food";
 
@@ -52,11 +52,9 @@ export async function importRecipeFromUrl(
     return { ok: false, error: "That doesn't look like a valid URL." };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   let body: string;
   try {
@@ -115,11 +113,9 @@ export async function logRecipeServing(
     return { ok: false, error: "Servings must be 0–20." };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const { data: recipe, error: getErr } = await supabase
     .from("recipes")
@@ -179,11 +175,9 @@ export async function deleteRecipe(
 ): Promise<{ ok: boolean; error?: string }> {
   const id = String(formData.get("id") ?? "");
   if (!id) return { ok: false, error: "Missing recipe id." };
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
   const { error } = await supabase
     .from("recipes")
     .delete()

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useFormStatus } from "react-dom";
 import { useActionState } from "react";
 import Link from "next/link";
 import { Camera, Loader2 } from "lucide-react";
@@ -17,6 +16,7 @@ import type { OffNutrition } from "@/lib/openfoodfacts";
 import type { Meal } from "@/lib/types";
 import { defaultMeal, MEALS } from "@/lib/food";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -382,15 +382,6 @@ function trimNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
-function SaveButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? "Saving…" : "Save entry"}
-    </Button>
-  );
-}
-
 const saveInitial: SaveState = { ok: false };
 
 type Unit = "g" | "serving";
@@ -606,7 +597,9 @@ function ConfirmForm({
       ) : null}
 
       <div className="flex gap-2">
-        <SaveButton />
+        <SubmitButton className="w-full" pendingLabel="Saving…">
+          Save entry
+        </SubmitButton>
         <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>

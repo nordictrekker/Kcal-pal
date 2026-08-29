@@ -1,9 +1,9 @@
 "use server";
 
 import { headers } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, type ActionResult } from "@/lib/actions";
 
-export type BugReportState = { ok: boolean; error?: string };
+export type BugReportState = ActionResult;
 
 // Store an in-app bug / feedback report. RLS lets a signed-in user insert their
 // own; an operator reviews all reports out-of-band (service role).
@@ -11,11 +11,9 @@ export async function submitBugReport(
   _prev: BugReportState,
   formData: FormData,
 ): Promise<BugReportState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const message = String(formData.get("message") ?? "").trim();
   const context = String(formData.get("context") ?? "").trim();

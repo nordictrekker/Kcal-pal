@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, type ActionResult } from "@/lib/actions";
 import { MEALS, defaultMeal } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
-export type SavedMealActionResult = { ok: boolean; error?: string };
+export type SavedMealActionResult = ActionResult;
 
 function isMeal(v: string): v is Meal {
   return (MEALS as string[]).includes(v);
@@ -21,11 +21,9 @@ export async function saveEntryAsTemplate(
   if (trimmed.length > 80)
     return { ok: false, error: "Label too long (max 80)." };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const { data: entry, error: readErr } = await supabase
     .from("food_entries")
@@ -61,11 +59,9 @@ export async function quickAddSavedMeal(
   savedMealId: string,
   meal?: string,
 ): Promise<SavedMealActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const m: Meal = meal && isMeal(meal) ? meal : defaultMeal();
 
@@ -111,11 +107,9 @@ export async function quickAddSavedMeal(
 export async function deleteSavedMeal(
   savedMealId: string,
 ): Promise<SavedMealActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const { error } = await supabase
     .from("saved_meals")

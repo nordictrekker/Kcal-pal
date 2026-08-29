@@ -1,14 +1,13 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser, revalidatePaths, type ActionResult } from "@/lib/actions";
 import {
   parseAndStoreSupplementProfile,
   supplementNameKey,
 } from "@/lib/supplement-profiles";
 
-export type SupplementResult = { ok: boolean; error?: string };
+export type SupplementResult = ActionResult;
 
 const MAX_ITEMS = 20;
 const MAX_LEN = 80;
@@ -18,11 +17,9 @@ const MAX_LEN = 80;
 export async function updateSupplements(
   items: string[],
 ): Promise<SupplementResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { supabase, user } = auth;
 
   const cleaned: string[] = [];
   const seen = new Set<string>();
@@ -70,7 +67,6 @@ export async function updateSupplements(
     });
   }
 
-  revalidatePath("/settings");
-  revalidatePath("/log");
+  revalidatePaths("/settings", "/log");
   return { ok: true };
 }

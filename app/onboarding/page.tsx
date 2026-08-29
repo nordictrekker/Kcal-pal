@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireUserOrRedirect } from "@/lib/actions";
 import { redirect } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import { OnboardingWizard, type WizardPrefill } from "./wizard";
@@ -6,11 +6,7 @@ import { OnboardingWizard, type WizardPrefill } from "./wizard";
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireUserOrRedirect();
 
   const [{ data: profile }, { data: weights }] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user.id).single(),

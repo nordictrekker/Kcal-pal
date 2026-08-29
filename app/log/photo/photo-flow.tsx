@@ -8,7 +8,6 @@ import {
   useState,
   useTransition,
 } from "react";
-import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Camera, ImagePlus, Loader2 } from "lucide-react";
@@ -20,6 +19,7 @@ import {
 import type { Meal, ParsedNutrition } from "@/lib/types";
 import { defaultMeal, MEALS } from "@/lib/food";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -92,15 +92,6 @@ function MacroField({
         className="h-9"
       />
     </div>
-  );
-}
-
-function SaveButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="flex-1" disabled={pending}>
-      {pending ? "Saving…" : "Save entry"}
-    </Button>
   );
 }
 
@@ -238,7 +229,9 @@ function ConfirmForm({
       ) : null}
 
       <div className="flex gap-2">
-        <SaveButton />
+        <SubmitButton className="flex-1" pendingLabel="Saving…">
+          Save entry
+        </SubmitButton>
         <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>

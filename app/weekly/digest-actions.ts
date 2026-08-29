@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/actions";
 import { buildTrends } from "@/lib/trends";
 import {
   generateDigest,
@@ -31,11 +31,9 @@ export type DigestState =
 // Pull cached digest for the current week; null if none stored or it's
 // older than STALE_MS (so a same-day re-visit reuses; tomorrow re-renders).
 export async function getCachedDigest(): Promise<DigestState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { status: "error", error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return { status: "error", error: "Not signed in." };
+  const { supabase, user } = auth;
 
   const yw = isoYearWeek();
   const { data } = await supabase
@@ -59,11 +57,9 @@ export async function getCachedDigest(): Promise<DigestState> {
 // Generate (and cache) the digest for the current week. Idempotent at
 // the table level via upsert on the (user_id, year_week) primary key.
 export async function regenerateDigest(): Promise<DigestState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { status: "error", error: "Not signed in." };
+  const auth = await requireUser();
+  if (!auth.ok) return { status: "error", error: "Not signed in." };
+  const { supabase, user } = auth;
 
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
