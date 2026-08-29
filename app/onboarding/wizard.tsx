@@ -391,8 +391,11 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
   // phase-aware nutrition don't apply.
   const visibleSteps =
     sex === "male" ? steps.filter((st) => st.title !== "Cycle") : steps;
-  const current = visibleSteps[Math.min(step, visibleSteps.length - 1)];
-  const isLast = step >= visibleSteps.length - 1;
+  // Choosing male mid-wizard shrinks the list, so clamp rather than trusting
+  // `step` — the dots and the rendered step must agree.
+  const currentIndex = Math.min(step, visibleSteps.length - 1);
+  const current = visibleSteps[currentIndex];
+  const isLast = currentIndex >= visibleSteps.length - 1;
 
   function next() {
     setError(null);
@@ -400,13 +403,13 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
     if (isLast) {
       finish();
     } else {
-      setStep((s) => s + 1);
+      setStep(currentIndex + 1);
     }
   }
 
   function back() {
     setError(null);
-    setStep((s) => Math.max(0, s - 1));
+    setStep(Math.max(0, currentIndex - 1));
   }
 
   function finish() {
@@ -449,12 +452,12 @@ export function OnboardingWizard({ prefill }: { prefill: WizardPrefill }) {
     <div className="space-y-6">
       {/* Progress dots */}
       <div className="flex justify-center gap-1.5">
-        {steps.map((_, i) => (
+        {visibleSteps.map((_, i) => (
           <span
             key={i}
             className={cn(
               "h-1.5 rounded-full transition-all",
-              i === step ? "w-6 bg-primary" : "w-1.5 bg-muted",
+              i === currentIndex ? "w-6 bg-primary" : "w-1.5 bg-muted",
             )}
           />
         ))}
