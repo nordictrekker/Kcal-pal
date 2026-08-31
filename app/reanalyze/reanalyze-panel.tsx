@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  reanalyzeOne,
+  reanalyzeGroup,
   type ReanalyzeTarget,
-  type ReanalyzeOneResult,
+  type ReanalyzeGroupResult,
 } from "./actions";
 
 const MICRO_LABELS: Record<string, string> = {
@@ -29,7 +29,7 @@ function round(n: number | null): string {
 }
 
 // How many micros went from "nothing" to a real value.
-function filledCount(r: Extract<ReanalyzeOneResult, { ok: true }>): number {
+function filledCount(r: Extract<ReanalyzeGroupResult, { ok: true }>): number {
   return Object.keys(MICRO_LABELS).filter(
     (f) => (r.before[f] == null || r.before[f] === 0) && (r.after[f] ?? 0) > 0,
   ).length;
@@ -38,43 +38,47 @@ function filledCount(r: Extract<ReanalyzeOneResult, { ok: true }>): number {
 export function ReanalyzePanel({ targets }: { targets: ReanalyzeTarget[] }) {
   const [status, setStatus] = useState<"idle" | "running" | "done">("idle");
   const [done, setDone] = useState(0);
-  const [results, setResults] = useState<ReanalyzeOneResult[]>([]);
+  const [results, setResults] = useState<ReanalyzeGroupResult[]>([]);
 
   async function run() {
     setStatus("running");
     setResults([]);
     setDone(0);
     for (const t of targets) {
-      // Sequential so each is its own request (no long-running function) and the
-      // estimates stay consistent with the user's other logs.
-      const r = await reanalyzeOne(t.id);
+      // One parse per DISTINCT food, applied to every entry that shares it —
+      // a daily repeat costs one AI call, not one per day. Sequential so each
+      // group is its own request.
+      const r = await reanalyzeGroup(t.ids);
       setResults((prev) => [...prev, r]);
-      setDone((d) => d + 1);
+      setDone((d) => d + (r.ok ? r.applied : t.count));
     }
     setStatus("done");
   }
 
   const ok = results.filter(
-    (r): r is Extract<ReanalyzeOneResult, { ok: true }> => r.ok,
+    (r): r is Extract<ReanalyzeGroupResult, { ok: true }> => r.ok,
   );
   const gainedMicros = ok.filter((r) => filledCount(r) > 0).length;
   const gainedComponents = ok.filter(
     (r) => !r.componentsBefore && r.componentsAfter > 0,
   ).length;
-  const pct = targets.length ? Math.round((done / targets.length) * 100) : 0;
+  const totalEntries = targets.reduce((n, t) => n + t.count, 0);
+  const pct = totalEntries ? Math.round((done / totalEntries) * 100) : 0;
 
   return (
     <div className="space-y-4">
       <div className="rounded-lg border p-4">
         <p className="text-sm">
-          Reprocesses each of your{" "}
-          <span className="font-medium">{targets.length}</span> logs through the
-          current pipeline (Claude + USDA), filling in micronutrients and giving
-          every component its own breakdown. Your totals may shift slightly.
+          Reprocesses <span className="font-medium">{targets.length}</span>{" "}
+          distinct foods across{" "}
+          <span className="font-medium">{totalEntries}</span> logs through the
+          current pipeline (Claude + USDA). Repeated foods — a daily coffee —
+          are analyzed once and applied to every matching entry. Your manually
+          corrected entries are left untouched.
         </p>
         {status === "idle" ? (
           <Button className="mt-3 w-full" onClick={run} disabled={targets.length === 0}>
-            Re-analyze all {targets.length} logs
+            Re-analyze {targets.length} foods ({totalEntries} logs)
           </Button>
         ) : null}
 
@@ -88,8 +92,8 @@ export function ReanalyzePanel({ targets }: { targets: ReanalyzeTarget[] }) {
                   <Check className="size-4 text-[var(--macro-fiber)]" />
                 )}
                 {status === "running"
-                  ? `Re-analyzing… ${done}/${targets.length}`
-                  : `Done — ${done} logs re-analyzed`}
+                  ? `Re-analyzing… ${done}/${totalEntries} logs`
+                  : `Done — ${done} logs updated`}
               </span>
               <span className="tabular-nums text-muted-foreground">{pct}%</span>
             </div>
@@ -128,6 +132,11 @@ export function ReanalyzePanel({ targets }: { targets: ReanalyzeTarget[] }) {
                 <>
                   <p className="truncate font-medium">
                     {r.description.split("\n")[0]}
+                    {r.applied > 1 ? (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        ×{r.applied} entries
+                      </span>
+                    ) : null}
                   </p>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                     {Object.entries(MICRO_LABELS).map(([f, label]) => {

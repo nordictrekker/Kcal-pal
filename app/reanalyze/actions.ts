@@ -12,7 +12,14 @@ const MICRO_FIELDS = [
   "folate_mcg", "choline_mg", "iodine_mcg",
 ] as const;
 
-export type ReanalyzeTarget = { id: string; description: string };
+// One distinct food (normalized description) with every entry that shares it.
+// The whole group is parsed ONCE and the result applied to all its entries —
+// a daily "cup of coffee with 2% milk" costs one AI call, not one per day.
+export type ReanalyzeTarget = { ids: string[]; description: string; count: number };
+
+function descKey(d: string): string {
+  return d.trim().toLowerCase().replace(/\s+/g, " ");
+}
 
 // Snapshot of the micros that matter for the before/after report.
 type MicroSnapshot = Record<string, number | null>;
@@ -48,10 +55,19 @@ export async function getReanalyzeTargets(): Promise<ReanalyzeTarget[]> {
     .eq("edited_by_user", false)
     .order("consumed_at", { ascending: true });
 
-  return (data ?? []).map((r) => ({
-    id: r.id as string,
-    description: r.description as string,
-  }));
+  const groups = new Map<string, ReanalyzeTarget>();
+  for (const r of data ?? []) {
+    const description = r.description as string;
+    const key = descKey(description);
+    const g = groups.get(key);
+    if (g) {
+      g.ids.push(r.id as string);
+      g.count += 1;
+    } else {
+      groups.set(key, { ids: [r.id as string], description, count: 1 });
+    }
+  }
+  return Array.from(groups.values());
 }
 
 function snapshot(row: Record<string, unknown>): MicroSnapshot {
@@ -166,5 +182,123 @@ export async function reanalyzeOne(id: string): Promise<ReanalyzeOneResult> {
     after,
     componentsBefore,
     componentsAfter: componentMicroCount(result.raw),
+  };
+}
+
+export type ReanalyzeGroupResult =
+  | {
+      ok: true;
+      description: string;
+      applied: number; // entries updated with the single parse
+      before: MicroSnapshot;
+      after: MicroSnapshot;
+      componentsBefore: boolean;
+      componentsAfter: number;
+    }
+  | { ok: false; description: string; error: string };
+
+// Re-analyze one DISTINCT food: a single Claude parse + USDA enrichment,
+// applied to every entry sharing the (normalized) description. Text entries
+// get the full nutrient refresh; barcode entries keep their label macros and
+// refresh only the estimated micro fields. User-corrected entries are never
+// touched.
+export async function reanalyzeGroup(
+  ids: string[],
+): Promise<ReanalyzeGroupResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, description: "", error: "Not signed in." };
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { ok: false, description: "", error: "No entries given." };
+  }
+
+  const { data: rows, error: readErr } = await supabase
+    .from("food_entries")
+    .select("*")
+    .in("id", ids.slice(0, 200))
+    .eq("user_id", user.id)
+    .eq("edited_by_user", false);
+  if (readErr || !rows || rows.length === 0) {
+    return { ok: false, description: "", error: "Entries not found." };
+  }
+
+  const rep = rows[0];
+  const text = (rep.description as string).trim();
+  const key = descKey(text);
+  // Only apply the shared parse to entries that genuinely share the food.
+  const members = rows.filter((r) => descKey(r.description as string) === key);
+  const before = snapshot(rep);
+  const componentsBefore = componentMicroCount(rep.raw_ai_response) > 0;
+
+  const { data: histRows } = await supabase
+    .from("food_entries")
+    .select("description,serving_size,calories,protein_g,carbs_g,fat_g,edited_by_user")
+    .eq("user_id", user.id)
+    .not("id", "in", `(${members.map((m) => m.id).join(",")})`)
+    .order("consumed_at", { ascending: false })
+    .limit(200);
+  const history = selectRelevantHistory(
+    text,
+    (histRows ?? []).map((r) => ({
+      description: r.description as string,
+      serving_size: (r.serving_size as string | null) ?? null,
+      calories: (r.calories as number | null) ?? null,
+      protein_g: (r.protein_g as number | null) ?? null,
+      carbs_g: (r.carbs_g as number | null) ?? null,
+      fat_g: (r.fat_g as number | null) ?? null,
+      edited_by_user: Boolean(r.edited_by_user),
+    })),
+  );
+
+  const result = await parseTextMeal(text, history);
+  if (!result.ok) return { ok: false, description: text, error: result.error };
+  const d = await enrichMicrosWithUsda(supabase, result.data, {
+    description: text,
+  });
+
+  const fullCols = nutrientColumns(d) as Record<string, unknown>;
+  const microCols: Record<string, unknown> = {};
+  for (const f of ["fiber_g", "iron_mg", "calcium_mg", "magnesium_mg", "vitamin_d_mcg", "omega3_mg", "folate_mcg", "choline_mg", "iodine_mcg"]) {
+    microCols[f] = fullCols[f];
+  }
+  const raw = (result.raw as object) ?? null;
+
+  const textIds = members.filter((m) => m.source === "text").map((m) => m.id as string);
+  const barcodeIds = members.filter((m) => m.source === "barcode").map((m) => m.id as string);
+  let applied = 0;
+  if (textIds.length > 0) {
+    const { error } = await supabase
+      .from("food_entries")
+      .update({ ...fullCols, raw_ai_response: raw })
+      .in("id", textIds)
+      .eq("user_id", user.id)
+      .eq("edited_by_user", false);
+    if (error) return { ok: false, description: text, error: error.message };
+    applied += textIds.length;
+  }
+  if (barcodeIds.length > 0) {
+    const { error } = await supabase
+      .from("food_entries")
+      .update({ ...microCols, raw_ai_response: raw })
+      .in("id", barcodeIds)
+      .eq("user_id", user.id)
+      .eq("edited_by_user", false);
+    if (error) return { ok: false, description: text, error: error.message };
+    applied += barcodeIds.length;
+  }
+
+  revalidatePath("/today");
+  revalidatePath("/today/summary");
+
+  return {
+    ok: true,
+    description: text,
+    applied,
+    before,
+    after: snapshot({ ...d }),
+    componentsBefore,
+    componentsAfter: componentMicroCount(raw),
   };
 }
