@@ -147,11 +147,33 @@ export async function saveBarcodeEntry(
 
   const serving = String(formData.get("serving_size") ?? "").trim() || null;
 
-  // Barcode lookups carry no micronutrients (OpenFoodFacts omits them, and the
-  // Claude fallback is reshaped to macros only). Enrich from USDA FoodData
-  // Central using the product name + serving grams. Misses leave micros null,
-  // exactly as before. No-op without USDA_FDC_API_KEY.
-  const micros = await usdaMicrosForItem(supabase, description, parseGrams(serving));
+  // Micronutrient hierarchy, best-effort at every level: USDA database values
+  // for the fields its record actually reports, then an AI estimate of the
+  // product for everything still missing — no field is left null. Labeled
+  // products (supplements/bars) force the label web-search for the estimate.
+  const MICRO_KEYS = [
+    "saturated_fat_g", "cholesterol_mg", "iron_mg", "calcium_mg",
+    "magnesium_mg", "vitamin_d_mcg", "omega3_mg", "folate_mcg",
+    "choline_mg", "iodine_mcg",
+  ] as const;
+  const micros: Record<string, number | null> = {
+    ...((await usdaMicrosForItem(supabase, description, parseGrams(serving))) ??
+      {}),
+  };
+  const missing = MICRO_KEYS.filter((k) => micros[k] == null);
+  if (missing.length > 0) {
+    const estimate = await parseTextMeal(
+      serving ? `${description} (${serving})` : description,
+      [],
+      { forceSupplementSearch: isLabeledProduct(description) },
+    );
+    if (estimate.ok) {
+      for (const k of missing) {
+        const v = estimate.data[k];
+        if (typeof v === "number" && Number.isFinite(v)) micros[k] = v;
+      }
+    }
+  }
 
   const { error } = await supabase.from("food_entries").insert({
     user_id: user.id,
@@ -165,7 +187,7 @@ export async function saveBarcodeEntry(
     carbs_g: readNumberOrNull(formData.get("carbs_g")),
     fat_g: readNumberOrNull(formData.get("fat_g")),
     fiber_g: readNumberOrNull(formData.get("fiber_g")),
-    ...(micros ?? {}),
+    ...micros,
     // The form values may have been edited from the original lookup, so
     // we don't try to round-trip the raw response here.
     edited_by_user: false,
