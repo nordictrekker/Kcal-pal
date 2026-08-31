@@ -259,3 +259,49 @@ describe("usdaMicrosForItem (barcode path)", () => {
     expect(await usdaMicrosForItem(client, "mystery bar", 45)).toBeNull();
   });
 });
+
+import { pickFdcCandidate, clampImplausible } from "@/lib/fdc";
+
+describe("pickFdcCandidate", () => {
+  it("rejects concentrated forms the query never mentioned", () => {
+    const foods = [
+      { description: "Nutritional powder mix, high protein (dry)" },
+      { description: "Nutritional shake, high protein, ready-to-drink" },
+    ];
+    const pick = pickFdcCandidate("kate farms high protein nutrition shake", foods);
+    expect(pick?.description).toMatch(/ready-to-drink/);
+  });
+
+  it("accepts a dry form when the query asks for it", () => {
+    const foods = [{ description: "Milk, dry, powdered" }];
+    expect(pickFdcCandidate("powdered milk", foods)?.description).toMatch(/dry/);
+  });
+
+  it("rejects candidates sharing no meaningful token", () => {
+    const foods = [{ description: "Beef, ground, cooked" }];
+    expect(pickFdcCandidate("dragonfruit smoothie", foods)).toBeNull();
+  });
+});
+
+describe("clampImplausible", () => {
+  it("reverts a multi-field inflated wrong match to the AI estimates", () => {
+    // The Kate Farms case: many nutrients simultaneously ~7-17x the AI.
+    const acc = { saturated_fat_g: 2, cholesterol_mg: 60, iron_mg: 78.9, calcium_mg: 2663, magnesium_mg: 90, vitamin_d_mcg: 40.6, omega3_mg: 200, folate_mcg: 3433, choline_mg: 300, iodine_mcg: 0 };
+    const ai = { saturated_fat_g: 2, cholesterol_mg: 60, iron_mg: 5, calcium_mg: 300, magnesium_mg: 80, vitamin_d_mcg: 6, omega3_mg: 200, folate_mcg: 250, choline_mg: 250, iodine_mcg: 0 };
+    clampImplausible(acc, ai);
+    expect(acc.iron_mg).toBe(5);
+    expect(acc.calcium_mg).toBe(300);
+    expect(acc.vitamin_d_mcg).toBe(6);
+    expect(acc.folate_mcg).toBe(250);
+    // sane fields untouched
+    expect(acc.magnesium_mg).toBe(90);
+    expect(acc.choline_mg).toBe(300);
+  });
+
+  it("a single-field disagreement survives (legit corrections like salmon omega-3)", () => {
+    const acc = { saturated_fat_g: 3, cholesterol_mg: 110, iron_mg: 1.6, calcium_mg: 24, magnesium_mg: 58, vitamin_d_mcg: 22, omega3_mg: 3000, folate_mcg: 50, choline_mg: 200, iodine_mcg: 0 };
+    const ai = { saturated_fat_g: 3, cholesterol_mg: 100, iron_mg: 2, calcium_mg: 30, magnesium_mg: 60, vitamin_d_mcg: 20, omega3_mg: 99, folate_mcg: 60, choline_mg: 180, iodine_mcg: 0 };
+    clampImplausible(acc, ai);
+    expect(acc.omega3_mg).toBe(3000);
+  });
+});

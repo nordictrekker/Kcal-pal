@@ -88,6 +88,36 @@ function extractPer100g(foodNutrients: FdcNutrient[]): MicroSet {
   return m;
 }
 
+// Words that mark a concentrated/dry form. A match containing one is only
+// acceptable when the query itself mentions it — otherwise per-100 g values
+// of a powder get multiplied by a liquid/prepared weight (the "nutrition
+// shake matched a fortified powder" bug: 17x iron).
+const FORM_WORDS = /\b(powder|powdered|dry|dried|dehydrated|concentrate|concentrated|mix|instant|unprepared|meal supplement)\b/i;
+const STOPWORDS = new Set([
+  "with", "and", "the", "from", "food", "fresh", "raw", "plain", "style",
+]);
+
+// Pick the first search candidate that (a) shares at least one meaningful
+// token with the query and (b) doesn't introduce a concentrated form the
+// query never mentioned. Exported for tests.
+export function pickFdcCandidate<T extends { description?: string }>(
+  query: string,
+  foods: T[],
+): T | null {
+  const q = query.toLowerCase();
+  const qTokens = q
+    .split(/[^a-zà-ÿ0-9]+/i)
+    .filter((t) => t.length >= 4 && !STOPWORDS.has(t));
+  for (const f of foods) {
+    const d = (f.description ?? "").toLowerCase();
+    if (!d) continue;
+    if (FORM_WORDS.test(d) && !FORM_WORDS.test(q)) continue;
+    if (qTokens.length > 0 && !qTokens.some((t) => d.includes(t))) continue;
+    return f;
+  }
+  return null;
+}
+
 type FdcResult = {
   matched: boolean;
   fdcId?: number;
@@ -106,7 +136,7 @@ async function fetchFdc(query: string): Promise<FdcResult> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query,
-        pageSize: 1,
+        pageSize: 5,
         // Whole/prepared foods with complete micronutrient profiles. Branded is
         // excluded: it needs exact matches and its micro coverage is sparse.
         dataType: ["Foundation", "SR Legacy", "Survey (FNDDS)"],
@@ -122,7 +152,7 @@ async function fetchFdc(query: string): Promise<FdcResult> {
         foodNutrients?: FdcNutrient[];
       }>;
     };
-    const food = json.foods?.[0];
+    const food = pickFdcCandidate(query, json.foods ?? []);
     if (!food) return { matched: false };
     return {
       matched: true,
@@ -145,11 +175,14 @@ async function lookupCached(
 ): Promise<{ matched: boolean; per100g?: MicroSet }> {
   const query = name.trim().toLowerCase();
   if (!query) return { matched: false };
+  // Cache key is versioned (v2: candidate guards) so stale pre-guard matches
+  // aren't served forever; the search itself uses the clean query.
+  const cacheKey = `v2:${query}`;
 
   const { data: cached } = await supabase
     .from("fdc_cache")
     .select("matched, per100g")
-    .eq("query", query)
+    .eq("query", cacheKey)
     .maybeSingle();
   if (cached) {
     return {
@@ -161,7 +194,7 @@ async function lookupCached(
   const fresh = await fetchFdc(query);
   // Best-effort cache write — never let a cache failure break logging.
   await supabase.from("fdc_cache").upsert({
-    query,
+    query: cacheKey,
     fdc_id: fresh.fdcId ?? null,
     description: fresh.description ?? null,
     per100g: fresh.per100g ?? null,
@@ -172,6 +205,40 @@ async function lookupCached(
 }
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
+
+// Field → the absolute amount that must ALSO be exceeded before a field
+// counts as suspect — keeps tiny disagreements (1 vs 5 mg calcium) untouched.
+const CLAMP_FLOOR: Record<keyof MicroSet, number> = {
+  saturated_fat_g: 8,
+  cholesterol_mg: 150,
+  iron_mg: 8,
+  calcium_mg: 400,
+  magnesium_mg: 150,
+  vitamin_d_mcg: 8,
+  omega3_mg: 800,
+  folate_mcg: 300,
+  choline_mg: 200,
+  iodine_mcg: 80,
+};
+
+// Exported for tests. A WRONG food match (e.g. fortified powder for a liquid
+// shake) inflates many nutrients at once; legitimate enrichment usually moves
+// one (the AI lowballs salmon's omega-3 — that correction must survive). So:
+// only when 3+ fields are each >6x the AI estimate AND material do we call
+// the match implausible, and revert those fields to the AI values.
+export function clampImplausible(
+  acc: MicroSet,
+  ai: Pick<ParsedNutrition, keyof MicroSet>,
+): void {
+  const suspect = (Object.keys(CLAMP_FLOOR) as Array<keyof MicroSet>).filter(
+    (key) => {
+      const aiVal = ai[key] ?? 0;
+      return aiVal > 0 && acc[key] > 6 * aiVal && acc[key] > CLAMP_FLOOR[key];
+    },
+  );
+  if (suspect.length < 3) return;
+  for (const key of suspect) acc[key] = ai[key] ?? 0;
+}
 
 function scaleMicros(per100g: MicroSet, grams: number): MicroSet {
   const f = grams / 100;
@@ -291,6 +358,11 @@ export async function enrichMicrosWithUsda(
 
   // Nothing improved — keep the AI aggregate exactly as-is.
   if (!anyResolved) return data;
+
+  // Plausibility guard: when USDA lands far above the AI's own estimate for a
+  // nutrient (a wrong food/form match slipping through), trust the AI number.
+  // Triggers only on material disagreement, so honest corrections survive.
+  clampImplausible(acc, data);
 
   const note = anyFallback
     ? "Some micronutrients sourced from USDA FoodData Central; the rest estimated."
