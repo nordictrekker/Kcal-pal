@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ParsedNutrition } from "./types";
+import { enforceNutrientConsistency } from "./nutrition-sanity";
 import { isLabeledProduct, SUPPLEMENT_REF } from "./labeled-products";
 
 // USDA FoodData Central micronutrient enrichment.
@@ -368,7 +369,7 @@ export async function enrichMicrosWithUsda(
     ? "Some micronutrients sourced from USDA FoodData Central; the rest estimated."
     : "Micronutrients sourced from USDA FoodData Central.";
 
-  return {
+  return enforceNutrientConsistency({
     ...data,
     saturated_fat_g: round1(acc.saturated_fat_g),
     cholesterol_mg: round1(acc.cholesterol_mg),
@@ -381,5 +382,5 @@ export async function enrichMicrosWithUsda(
     choline_mg: round1(acc.choline_mg),
     iodine_mcg: round1(acc.iodine_mcg),
     assumptions: [...data.assumptions, note],
-  };
+  });
 }

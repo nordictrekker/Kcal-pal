@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ParsedNutrition } from "./types";
 import { cleanPlants } from "./plants";
+import { enforceNutrientConsistency } from "./nutrition-sanity";
 import { SUPPLEMENT_REF } from "./labeled-products";
 
 export { SUPPLEMENT_REF };
@@ -127,7 +128,7 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
     ? cleanPlants(obj.plants as unknown[] as string[])
     : [];
 
-  return {
+  return enforceNutrientConsistency({
     calories: coerceNumberOrNull(obj.calories) ?? 0,
     protein_g: coerceNumberOrNull(obj.protein_g) ?? 0,
     carbs_g: coerceNumberOrNull(obj.carbs_g) ?? 0,
@@ -152,7 +153,7 @@ function normalize(obj: Record<string, unknown>): ParsedNutrition {
       ? obj.assumptions.filter((a): a is string => typeof a === "string")
       : [],
     confidence: coerceNumberOrNull(obj.confidence) ?? undefined,
-  };
+  });
 }
 
 type UserContent = string | Anthropic.Messages.ContentBlockParam[];
