@@ -7,6 +7,7 @@ import { enrichMicrosWithUsda } from "@/lib/fdc";
 import { selectRelevantHistory, nutrientColumns } from "@/lib/food";
 
 const MICRO_FIELDS = [
+  "saturated_fat_g", "trans_fat_g", "cholesterol_mg",
   "fiber_g", "iron_mg", "calcium_mg", "magnesium_mg", "vitamin_d_mcg", "omega3_mg",
   "folate_mcg", "choline_mg", "iodine_mcg",
 ] as const;
@@ -36,11 +37,15 @@ export async function getReanalyzeTargets(): Promise<ReanalyzeTarget[]> {
   } = await supabase.auth.getUser();
   if (!user) return [];
 
+  // Skip user-corrected entries entirely — corrections are authoritative.
+  // Barcode scans are included: their label MACROS are kept (see reanalyzeOne)
+  // but their micros came from the old enrichment and deserve a refresh.
   const { data } = await supabase
     .from("food_entries")
     .select("id,description")
     .eq("user_id", user.id)
-    .eq("source", "text")
+    .in("source", ["text", "barcode"])
+    .eq("edited_by_user", false)
     .order("consumed_at", { ascending: true });
 
   return (data ?? []).map((r) => ({
@@ -92,6 +97,9 @@ export async function reanalyzeOne(id: string): Promise<ReanalyzeOneResult> {
     .eq("user_id", user.id)
     .single();
   if (readErr || !entry) return { ok: false, id, error: "Entry not found." };
+  if (entry.edited_by_user) {
+    return { ok: false, id, error: "Skipped — this entry has your manual corrections." };
+  }
 
   const text = (entry.description as string).trim();
   const before = snapshot(entry);
@@ -127,10 +135,18 @@ export async function reanalyzeOne(id: string): Promise<ReanalyzeOneResult> {
   const d = await enrichMicrosWithUsda(supabase, result.data, {
     description: text,
   });
+  // Barcode entries keep their label macros (calories/protein/carbs/fat and
+  // label sat-fat/cholesterol); only the estimated micro fields refresh.
+  const isBarcode = entry.source === "barcode";
+  const fullCols = nutrientColumns(d) as Record<string, unknown>;
+  const barcodeCols: Record<string, unknown> = {};
+  for (const f of ["fiber_g", "iron_mg", "calcium_mg", "magnesium_mg", "vitamin_d_mcg", "omega3_mg", "folate_mcg", "choline_mg", "iodine_mcg"]) {
+    barcodeCols[f] = fullCols[f];
+  }
   const { error: updErr } = await supabase
     .from("food_entries")
     .update({
-      ...nutrientColumns(d),
+      ...(isBarcode ? barcodeCols : fullCols),
       raw_ai_response: (result.raw as object) ?? null,
     })
     .eq("id", id)
