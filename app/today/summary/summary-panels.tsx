@@ -122,7 +122,7 @@ export function SummaryPanels({
         })}
         <p className="text-[11px] text-muted-foreground">
           {isWeek ? "Averaged over the last 7 days. " : ""}Estimated from your
-          logs against general daily references for women.{" "}
+          logs against your daily reference targets.{" "}
           <Link href="/reanalyze" className="underline underline-offset-2">
             Re-analyze logs
           </Link>
