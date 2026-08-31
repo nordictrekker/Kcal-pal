@@ -305,3 +305,50 @@ describe("clampImplausible", () => {
     expect(acc.omega3_mg).toBe(3000);
   });
 });
+
+describe("partial FDC records (the lasagna bug)", () => {
+  // A record reporting ONLY minerals — no saturated fat, cholesterol,
+  // omega-3, or choline. Those must keep the AI estimates, not become 0.
+  const LASAGNA_FOOD = {
+    fdcId: 7,
+    description: "Lasagna with meat, homemade",
+    foodNutrients: [
+      { nutrientNumber: "303", value: 1.1 }, // iron
+      { nutrientNumber: "301", value: 90 }, // calcium
+      { nutrientNumber: "304", value: 20 }, // magnesium
+      { nutrientNumber: "417", value: 12 }, // folate total
+    ],
+  };
+
+  it("absent nutrients keep the AI estimate instead of zeroing", async () => {
+    process.env.USDA_FDC_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ foods: [LASAGNA_FOOD] }) })),
+    );
+    const { client } = fakeSupabase();
+    const lasagna: ParsedNutrition = {
+      ...base,
+      saturated_fat_g: 13.2,
+      cholesterol_mg: 110,
+      omega3_mg: 13,
+      choline_mg: 85.3,
+      fat_g: 26,
+      items: [
+        { name: "homemade beef lasagna", quantity: "1 serving", grams: 300, calories: 400, protein_g: 25, carbs_g: 30, fat_g: 26 },
+      ],
+    };
+    const out = await enrichMicrosWithUsda(client, lasagna);
+    // Reported fields take FDC values (×3 for 300 g).
+    expect(out.iron_mg).toBeCloseTo(3.3, 5);
+    expect(out.calcium_mg).toBeCloseTo(270, 5);
+    expect(out.folate_mcg).toBeCloseTo(36, 5);
+    // Unreported fields keep the AI's numbers — never zeroed.
+    expect(out.saturated_fat_g).toBeCloseTo(13.2, 5);
+    expect(out.cholesterol_mg).toBeCloseTo(110, 5);
+    expect(out.omega3_mg).toBe(13);
+    expect(out.choline_mg).toBeCloseTo(85.3, 5);
+    vi.unstubAllGlobals();
+    delete process.env.USDA_FDC_API_KEY;
+  });
+});

@@ -70,23 +70,41 @@ const OMEGA3 = new Set(["851", "629", "621", "631"]); // ALA, EPA, DHA, DPA
 
 type FdcNutrient = { nutrientNumber?: string; value?: number };
 
-function extractPer100g(foodNutrients: FdcNutrient[]): MicroSet {
+// A record's per-100 g values PLUS which fields it actually reports. Many FDC
+// records have partial nutrient panels; an absent field means "not measured",
+// never "zero" — treating it as zero silently erased real saturated fat and
+// cholesterol from a beef-lasagna entry.
+export type Per100g = { values: MicroSet; present: Array<keyof MicroSet> };
+
+export function extractPer100g(foodNutrients: FdcNutrient[]): Per100g {
   const m: MicroSet = { ...ZERO };
+  const present = new Set<keyof MicroSet>();
   let omega3g = 0;
-  let folateTotal = 0;
-  let folateDfe = 0;
+  let sawOmega = false;
+  let folateTotal: number | null = null;
+  let folateDfe: number | null = null;
   for (const n of foodNutrients ?? []) {
     const num = String(n.nutrientNumber ?? "");
     const val = typeof n.value === "number" ? n.value : Number(n.value);
     if (!Number.isFinite(val)) continue;
-    if (DIRECT[num]) m[DIRECT[num]] = val;
-    else if (OMEGA3.has(num)) omega3g += val;
-    else if (num === FOLATE_DFE) folateDfe = val;
+    if (DIRECT[num]) {
+      m[DIRECT[num]] = val;
+      present.add(DIRECT[num]);
+    } else if (OMEGA3.has(num)) {
+      omega3g += val;
+      sawOmega = true;
+    } else if (num === FOLATE_DFE) folateDfe = val;
     else if (num === FOLATE_TOTAL) folateTotal = val;
   }
-  m.omega3_mg = omega3g * 1000;
-  m.folate_mcg = folateDfe > 0 ? folateDfe : folateTotal;
-  return m;
+  if (sawOmega) {
+    m.omega3_mg = omega3g * 1000;
+    present.add("omega3_mg");
+  }
+  if (folateDfe != null || folateTotal != null) {
+    m.folate_mcg = folateDfe != null && folateDfe > 0 ? folateDfe : (folateTotal ?? 0);
+    present.add("folate_mcg");
+  }
+  return { values: m, present: Array.from(present) };
 }
 
 // Words that mark a concentrated/dry form. A match containing one is only
@@ -123,7 +141,7 @@ type FdcResult = {
   matched: boolean;
   fdcId?: number;
   description?: string;
-  per100g?: MicroSet;
+  per100g?: Per100g;
 };
 
 async function fetchFdc(query: string): Promise<FdcResult> {
@@ -173,12 +191,12 @@ async function fetchFdc(query: string): Promise<FdcResult> {
 async function lookupCached(
   supabase: SupabaseClient,
   name: string,
-): Promise<{ matched: boolean; per100g?: MicroSet }> {
+): Promise<{ matched: boolean; per100g?: Per100g }> {
   const query = name.trim().toLowerCase();
   if (!query) return { matched: false };
-  // Cache key is versioned (v2: candidate guards) so stale pre-guard matches
-  // aren't served forever; the search itself uses the clean query.
-  const cacheKey = `v2:${query}`;
+  // Cache key is versioned (v3: presence-aware payload shape) so stale
+  // entries from earlier logic aren't served; search uses the clean query.
+  const cacheKey = `v3:${query}`;
 
   const { data: cached } = await supabase
     .from("fdc_cache")
@@ -186,10 +204,11 @@ async function lookupCached(
     .eq("query", cacheKey)
     .maybeSingle();
   if (cached) {
-    return {
-      matched: Boolean(cached.matched),
-      per100g: (cached.per100g as MicroSet | null) ?? undefined,
-    };
+    const p = cached.per100g as Per100g | null;
+    // Only trust the v3 shape; anything else is treated as a miss.
+    if (!cached.matched || (p && Array.isArray(p.present) && p.values)) {
+      return { matched: Boolean(cached.matched), per100g: p ?? undefined };
+    }
   }
 
   const fresh = await fetchFdc(query);
@@ -241,20 +260,16 @@ export function clampImplausible(
   for (const key of suspect) acc[key] = ai[key] ?? 0;
 }
 
-function scaleMicros(per100g: MicroSet, grams: number): MicroSet {
+// Scale ONLY the fields the record reports; absent fields are omitted so the
+// caller stores null ("unknown"), never a fabricated zero.
+function scalePresent(p: Per100g, grams: number): Partial<MicroSet> {
   const f = grams / 100;
-  return {
-    saturated_fat_g: round1(per100g.saturated_fat_g * f),
-    cholesterol_mg: round1(per100g.cholesterol_mg * f),
-    iron_mg: round1(per100g.iron_mg * f),
-    calcium_mg: round1(per100g.calcium_mg * f),
-    magnesium_mg: round1(per100g.magnesium_mg * f),
-    vitamin_d_mcg: round1(per100g.vitamin_d_mcg * f),
-    omega3_mg: Math.round(per100g.omega3_mg * f),
-    folate_mcg: round1(per100g.folate_mcg * f),
-    choline_mg: round1(per100g.choline_mg * f),
-    iodine_mcg: round1(per100g.iodine_mcg * f),
-  };
+  const out: Partial<MicroSet> = {};
+  for (const key of p.present) {
+    const v = p.values[key] * f;
+    out[key] = key === "omega3_mg" ? Math.round(v) : round1(v);
+  }
+  return out;
 }
 
 // Pull a gram weight out of a free-text serving size ("45 g", "1 bar (45g)").
@@ -275,12 +290,12 @@ export async function usdaMicrosForItem(
   supabase: SupabaseClient,
   name: string,
   grams: number | null,
-): Promise<MicroSet | null> {
+): Promise<Partial<MicroSet> | null> {
   if (!process.env.USDA_FDC_API_KEY) return null;
   if (!grams || grams <= 0) return null;
   const { matched, per100g } = await lookupCached(supabase, name);
   if (!matched || !per100g) return null;
-  return scaleMicros(per100g, grams);
+  return scalePresent(per100g, grams);
 }
 
 
@@ -321,16 +336,21 @@ export async function enrichMicrosWithUsda(
       const { matched, per100g } = await lookupCached(supabase, item.name);
       if (matched && per100g) {
         const f = item.grams / 100;
-        acc.saturated_fat_g += per100g.saturated_fat_g * f;
-        acc.cholesterol_mg += per100g.cholesterol_mg * f;
-        acc.iron_mg += per100g.iron_mg * f;
-        acc.calcium_mg += per100g.calcium_mg * f;
-        acc.magnesium_mg += per100g.magnesium_mg * f;
-        acc.vitamin_d_mcg += per100g.vitamin_d_mcg * f;
-        acc.omega3_mg += per100g.omega3_mg * f;
-        acc.folate_mcg += per100g.folate_mcg * f;
-        acc.choline_mg += per100g.choline_mg * f;
-        acc.iodine_mcg += per100g.iodine_mcg * f;
+        const share =
+          totalCalories > 0 ? (item.calories || 0) / totalCalories : 0;
+        const present = new Set(per100g.present);
+        for (const key of Object.keys(ZERO) as Array<keyof MicroSet>) {
+          if (present.has(key)) {
+            // The record reports this nutrient — use the database value.
+            acc[key] += per100g.values[key] * f;
+          } else {
+            // The record does NOT report it. Absent means "not measured",
+            // never zero — keep the AI's estimate for this item's share
+            // (this zeroed a beef lasagna's saturated fat & cholesterol).
+            anyFallback = true;
+            acc[key] += (data[key] ?? 0) * share;
+          }
+        }
         resolved = true;
       }
     }
@@ -343,16 +363,9 @@ export async function enrichMicrosWithUsda(
       anyFallback = true;
       if (totalCalories > 0) {
         const share = (item.calories || 0) / totalCalories;
-        acc.saturated_fat_g += data.saturated_fat_g * share;
-        acc.cholesterol_mg += data.cholesterol_mg * share;
-        acc.iron_mg += data.iron_mg * share;
-        acc.calcium_mg += data.calcium_mg * share;
-        acc.magnesium_mg += data.magnesium_mg * share;
-        acc.vitamin_d_mcg += data.vitamin_d_mcg * share;
-        acc.omega3_mg += data.omega3_mg * share;
-        acc.folate_mcg += data.folate_mcg * share;
-        acc.choline_mg += data.choline_mg * share;
-        acc.iodine_mcg += data.iodine_mcg * share;
+        for (const key of Object.keys(ZERO) as Array<keyof MicroSet>) {
+          acc[key] += (data[key] ?? 0) * share;
+        }
       }
     }
   }
