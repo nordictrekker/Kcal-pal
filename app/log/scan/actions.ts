@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { lookupOpenFoodFacts, type OffNutrition } from "@/lib/openfoodfacts";
 import { parseBarcodeFallback } from "@/lib/anthropic";
 import { usdaMicrosForItem, parseGrams } from "@/lib/fdc";
+import { parseTextMeal } from "@/lib/anthropic";
+import { isLabeledProduct } from "@/lib/labeled-products";
 import { isMeal } from "@/lib/food";
 import type { Meal } from "@/lib/types";
 
