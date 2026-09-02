@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthedUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SupplementsCard } from "./supplements-card";
@@ -19,9 +19,7 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthedUser(supabase);
   if (!user) redirect("/login");
 
   const vapidPublicKey = process.env.VAPID_PUBLIC_KEY ?? "";

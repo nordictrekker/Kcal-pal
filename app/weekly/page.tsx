@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthedUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import {
   lastNDays,
@@ -41,9 +41,7 @@ export default async function WeeklyPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthedUser(supabase);
   if (!user) redirect("/login");
 
   const params = await searchParams;

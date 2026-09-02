@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthedUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { sumTotals } from "@/lib/food";
 import type { FoodEntry, Meal, Profile } from "@/lib/types";
@@ -61,9 +61,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TodayPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthedUser(supabase);
   if (!user) redirect("/login");
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
