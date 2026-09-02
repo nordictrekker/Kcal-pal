@@ -58,3 +58,39 @@ describe("proteinDistributionNote", () => {
     expect(proteinDistributionNote({ goal: "muscle", entries: [{ meal: "dinner", protein_g: 20 }], proteinTargetG: 160 })).toBeNull();
   });
 });
+
+import { filterByScope, SCOPE_OPTIONS } from "@/lib/reanalyze-scope";
+
+describe("reanalyze scope filter", () => {
+  const now = new Date("2026-09-01T12:00:00Z");
+  const targets = [
+    { lastAt: "2026-08-31T09:00:00Z", label: "yesterday" },
+    { lastAt: "2026-08-26T09:00:00Z", label: "6 days ago" },
+    { lastAt: "2026-08-20T09:00:00Z", label: "12 days ago" },
+    { lastAt: "2026-08-10T09:00:00Z", label: "22 days ago" },
+    { lastAt: "2026-06-01T09:00:00Z", label: "3 months ago" },
+  ];
+
+  it("scopes to the selected window by most recent entry", () => {
+    expect(filterByScope(targets, "7", now).map((t) => t.label)).toEqual([
+      "yesterday",
+      "6 days ago",
+    ]);
+    expect(filterByScope(targets, "14", now).map((t) => t.label)).toEqual([
+      "yesterday",
+      "6 days ago",
+      "12 days ago",
+    ]);
+    expect(filterByScope(targets, "30", now)).toHaveLength(4);
+  });
+
+  it("all-time returns everything, and offers four choices", () => {
+    expect(filterByScope(targets, "all", now)).toHaveLength(5);
+    expect(SCOPE_OPTIONS.map((o) => o.key)).toEqual(["7", "14", "30", "all"]);
+  });
+
+  it("ignores unparseable dates rather than including them blindly", () => {
+    const bad = [{ lastAt: "not-a-date", label: "x" }];
+    expect(filterByScope(bad, "7", now)).toHaveLength(0);
+  });
+});
