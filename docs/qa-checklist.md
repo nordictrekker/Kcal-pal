@@ -11,6 +11,18 @@ Surfaces:
 
 _Pass 1 (2026-07-26, reported by Julie): Auth, Today, Nav, Log (text), and Summary verified ✓ on all three surfaces. Remaining: Log (scan) rows 3–4 (barcode lookup, camera-error path) and later sections. Log (photo): ✓ on Chrome; on S/P the confirm page rendered a blank photo (object-URL revocation bug — fixed, ↻ = re-test) and offline PWA launch showed the raw browser error (offline fallback added, re-test the PWA offline row)._
 
+_A caution from 2026-09-02: the old "saved meals one-tap log" row was ticked ✓
+on all three surfaces while the feature was silently dropping every
+micronutrient. The check asked whether an entry appeared, not whether it was
+**right**. Where a row can pass on appearance alone, say what the correct
+result looks like — the split rows below are the pattern._
+
+**What CI already covers, so don't spend device time on it:** Chromium and
+WebKit (Safari's engine), desktop + iPhone/Pixel viewports, signed in — page
+renders, nav, the text-log form, summary toggle, settings, and per-route TTFB.
+This checklist is for what those engines can't reach: real iOS Safari, the
+home-screen PWA, camera, push, and offline.
+
 | Area | Check | S | C | P |
 |---|---|---|---|---|
 | **Auth** | Request code → email arrives with a 6-digit code (no link) | ✓ | ✓ | ✓ |
@@ -23,7 +35,9 @@ _Pass 1 (2026-07-26, reported by Julie): Auth, Today, Nav, Log (text), and Summa
 | **Nav** | Each page shows the loading spinner briefly, never a blank flash | ✓ | ✓ | ✓ |
 | **Log (text)** | Meal first → description box auto-grows as you type | ✓ | ✓ | ✓ |
 | | Submit → entry parsed, macros + micros populated | ✓ | ✓ | ✓ |
-| | Saved meals one-tap log; pantry chip fills box / ＋ logs instantly | ✓ | ✓ | ✓ |
+| | Pantry chip fills box / ＋ logs instantly | ✓ | ✓ | ✓ |
+| | Saved meal: expand shows contents + portion; pencil renames | ☐ | ☐ | ☐ |
+| | Saved meal ＋ Log → new entry keeps **micros and portion**, not just macros | ↻ | ↻ | ↻ |
 | **Log (photo)** | Pick/take photo → parsed entry to confirm | ↻ | ✓ | ↻ |
 | **Log (scan)** | Tab → **Start camera** tap prompts for camera (PWA) | ✓ | ✓ | ✓ |
 | | Camera auto-starts in a Safari tab / Chrome (no extra tap) | ✓ | ✓ | ✓ |
