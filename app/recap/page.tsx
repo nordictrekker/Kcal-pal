@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthedUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import { allPeriodStarts, cycleAggregates, type FlowSample } from "@/lib/cycles";
@@ -11,9 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function RecapPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthedUser(supabase);
   if (!user) redirect("/login");
 
   const ninetyDaysAgo = new Date(Date.now() - 90 * 86_400_000).toISOString();

@@ -182,6 +182,17 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium">
               {entry.description}
+              {/* Barcode scans and saved meals carry the portion in
+                  serving_size rather than in the description, so without this
+                  the amount eaten is invisible on the log. */}
+              {entry.serving_size &&
+              !entry.description
+                .toLowerCase()
+                .includes(entry.serving_size.toLowerCase()) ? (
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  · {entry.serving_size}
+                </span>
+              ) : null}
               {entry.edited_by_user ? (
                 <span className="ml-1 text-xs text-muted-foreground">
                   (edited)

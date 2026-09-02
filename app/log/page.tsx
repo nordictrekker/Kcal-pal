@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthedUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Camera, ImagePlus, BookOpen } from "lucide-react";
@@ -21,9 +21,7 @@ export default async function LogPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthedUser(supabase);
   if (!user) redirect("/login");
 
   const { date } = await searchParams;
@@ -44,7 +42,9 @@ export default async function LogPage({
   const [{ data: savedRaw }, { data: recentRaw }, { data: profileRow }] = await Promise.all([
     supabase
       .from("saved_meals")
-      .select("id,label,description,calories,protein_g,last_used_at,use_count")
+      .select(
+        "id,label,description,serving_size,calories,protein_g,carbs_g,fat_g,fiber_g,saturated_fat_g,trans_fat_g,cholesterol_mg,iron_mg,calcium_mg,magnesium_mg,vitamin_d_mcg,omega3_mg,folate_mcg,choline_mg,iodine_mcg,plants,last_used_at,use_count",
+      )
       .eq("user_id", user.id)
       .order("last_used_at", { ascending: false, nullsFirst: false })
       .order("use_count", { ascending: false })
@@ -69,13 +69,31 @@ export default async function LogPage({
   const supplements: string[] = Array.isArray(profileRow?.supplements)
     ? (profileRow.supplements as string[])
     : [];
-  const saved: SavedMealItem[] = (savedRaw ?? []).map((s) => ({
-    id: s.id as string,
-    label: s.label as string,
-    description: s.description as string,
-    calories: s.calories as number | null,
-    protein_g: s.protein_g as number | null,
-  }));
+  // Columns a saved meal carries beyond its label/description — surfaced in the
+  // expandable "what's in it" panel so a template is inspectable before logging.
+  const SAVED_NUTRIENT_COLUMNS = [
+    "protein_g", "carbs_g", "fat_g", "fiber_g", "saturated_fat_g", "trans_fat_g",
+    "cholesterol_mg", "iron_mg", "calcium_mg", "magnesium_mg", "vitamin_d_mcg",
+    "omega3_mg", "folate_mcg", "choline_mg", "iodine_mcg",
+  ];
+  const saved: SavedMealItem[] = (savedRaw ?? []).map((s) => {
+    const row = s as Record<string, unknown>;
+    const nutrients: Record<string, number | null> = {};
+    for (const col of SAVED_NUTRIENT_COLUMNS) {
+      const v = row[col];
+      const n = typeof v === "number" ? v : v == null ? NaN : Number(v);
+      nutrients[col] = Number.isFinite(n) ? n : null;
+    }
+    return {
+      id: s.id as string,
+      label: s.label as string,
+      description: s.description as string,
+      serving_size: (row.serving_size as string | null) ?? null,
+      calories: s.calories as number | null,
+      nutrients,
+      plants: Array.isArray(row.plants) ? (row.plants as string[]) : [],
+    };
+  });
   const components: PantryComponent[] = (recentRaw ?? []).flatMap((r) =>
     extractComponents(r.raw_ai_response).map((c) => ({
       name: c.name,

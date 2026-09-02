@@ -11,6 +11,11 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/api/health/ingest") || // token-authed inside the route
     path.startsWith("/api/cron/") || // CRON_SECRET-authed inside the route
     path.startsWith("/_next") ||
+    // The offline fallback must never redirect: the service worker precaches
+    // it with cache.add(), which rejects on a redirect. Belt-and-braces with
+    // the matcher exclusion in middleware.ts.
+    path === "/offline.html" ||
+    path === "/sw.js" ||
     path === "/favicon.ico";
 
   // Public paths don't need the signed-in user, so skip the Supabase auth
@@ -39,11 +44,14 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() verifies the JWT locally (WebCrypto against the cached JWKS)
+  // instead of asking the auth server on every request, while still going
+  // through getSession() so an expired token is refreshed and the rotated
+  // cookies are written by the setAll adapter above. On a symmetric-secret
+  // project it falls back to the same getUser() call this used to make.
+  const { data } = await supabase.auth.getClaims();
 
-  if (!user) {
+  if (!data?.claims?.sub) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
