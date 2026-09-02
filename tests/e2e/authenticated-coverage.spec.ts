@@ -56,7 +56,9 @@ test.describe("signed-in surface", () => {
       const res = await page.goto(path, { waitUntil: "domcontentloaded" });
       // A 307 here means the session lapsed and we'd be asserting about /login.
       expect(res?.status(), `${path} should render signed in`).toBe(200);
-      await expect(page.locator("main, body")).toBeVisible();
+      // `body` alone — "main, body" matches two elements and trips Playwright's
+      // strict mode, which fails the test before the error assertion below runs.
+      await expect(page.locator("body")).toBeVisible();
       expect(errors, `${path} produced:\n${errors.join("\n")}`).toEqual([]);
     });
 
@@ -150,8 +152,17 @@ test.describe("home-screen (standalone) app", () => {
   test("the offline fallback page is precached and self-contained", async ({ request }) => {
     // The PWA showed a raw browser error offline until /offline.html was added;
     // it must stay served and must not depend on network assets to render.
-    const res = await request.get("/offline.html");
-    expect(res.ok(), "/offline.html should be served").toBeTruthy();
+    //
+    // It must also be reachable WITHOUT a session and without redirecting.
+    // This caught a live bug: /offline.html was not excluded from the auth
+    // middleware, so it answered 307 to /login, and the service worker's
+    // `cache.add()` rejects on a redirected response — the offline page was
+    // never actually precached, defeating the whole feature.
+    const res = await request.get("/offline.html", { maxRedirects: 0 });
+    expect(
+      res.status(),
+      "/offline.html must be served directly — a redirect makes cache.add() reject",
+    ).toBe(200);
     const html = await res.text();
     expect(html).toMatch(/offline|connection/i);
     expect(html, "offline page must not fetch external assets").not.toMatch(
