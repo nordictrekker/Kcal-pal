@@ -8,7 +8,8 @@ import { usdaMicrosForItem, parseGrams } from "@/lib/fdc";
 import { parseTextMeal } from "@/lib/anthropic";
 import { isLabeledProduct } from "@/lib/labeled-products";
 import { isMeal } from "@/lib/food";
-import type { Meal } from "@/lib/types";
+import { enforceNutrientConsistency } from "@/lib/nutrition-sanity";
+import type { Meal, ParsedNutrition } from "@/lib/types";
 
 // Server actions are reachable as POST endpoints in their own right, so the
 // lookup helpers gate on the session too rather than relying on the route
@@ -177,6 +178,27 @@ export async function saveBarcodeEntry(
     }
   }
 
+  // Macros come from the scanned label (via the portion editor) and micros from
+  // USDA/AI — two independent sources that nothing was reconciling, so a
+  // product could be stored with more saturated fat than total fat (a scanned
+  // turkey stick landed at 1.1 g fat / 1.3 g saturated). Run the same
+  // consistency guard the text and photo parses use before storing.
+  const macros = {
+    calories: readNumberOrNull(formData.get("calories")),
+    protein_g: readNumberOrNull(formData.get("protein_g")),
+    carbs_g: readNumberOrNull(formData.get("carbs_g")),
+    fat_g: readNumberOrNull(formData.get("fat_g")),
+    fiber_g: readNumberOrNull(formData.get("fiber_g")),
+  };
+  const checked = enforceNutrientConsistency({
+    ...(macros as unknown as ParsedNutrition),
+    ...micros,
+    plants: [],
+    serving_size: serving ?? description,
+    items: [],
+    assumptions: [],
+  } as ParsedNutrition);
+
   const { error } = await supabase.from("food_entries").insert({
     user_id: user.id,
     meal,
@@ -184,12 +206,22 @@ export async function saveBarcodeEntry(
     source: "barcode",
     barcode,
     serving_size: serving,
-    calories: readNumberOrNull(formData.get("calories")),
-    protein_g: readNumberOrNull(formData.get("protein_g")),
-    carbs_g: readNumberOrNull(formData.get("carbs_g")),
-    fat_g: readNumberOrNull(formData.get("fat_g")),
-    fiber_g: readNumberOrNull(formData.get("fiber_g")),
-    ...micros,
+    calories: checked.calories,
+    protein_g: checked.protein_g,
+    carbs_g: checked.carbs_g,
+    fat_g: checked.fat_g,
+    fiber_g: checked.fiber_g,
+    saturated_fat_g: checked.saturated_fat_g,
+    trans_fat_g: checked.trans_fat_g,
+    cholesterol_mg: checked.cholesterol_mg,
+    iron_mg: checked.iron_mg,
+    calcium_mg: checked.calcium_mg,
+    magnesium_mg: checked.magnesium_mg,
+    vitamin_d_mcg: checked.vitamin_d_mcg,
+    omega3_mg: checked.omega3_mg,
+    folate_mcg: checked.folate_mcg,
+    choline_mg: checked.choline_mg,
+    iodine_mcg: checked.iodine_mcg,
     // The form values may have been edited from the original lookup, so
     // we don't try to round-trip the raw response here.
     edited_by_user: false,

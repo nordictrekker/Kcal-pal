@@ -48,6 +48,9 @@ export async function updateEntry(
 
   const patch: Record<string, number | string | boolean | null> = {
     edited_by_user: true,
+    // In-app correction by the person who logged it — distinct from an
+    // operator repair, so the hand-edit rate stays a readable metric (0031).
+    corrected_by: "user",
   };
 
   for (const field of EDITABLE_FIELDS) {
@@ -141,6 +144,7 @@ export async function reanalyzeEntry(
       ...nutrientColumns(d),
       raw_ai_response: (result.raw as object) ?? null,
       edited_by_user: true,
+      corrected_by: "user",
     })
     .eq("id", id)
     .eq("user_id", user.id);
