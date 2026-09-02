@@ -247,13 +247,28 @@ function formatHistory(history: MealHistoryItem[]): string {
 
 // When the entry names a specific restaurant + dish, let the model look it up.
 // Exported for tests.
-export const RESTAURANT_REF = /\brestaurant\b|\bmenu item\b|\bmenu:|\bcafé(?![a-z])|\bcafe\b|\bbrasserie\b|\bbistro\b/i;
+export const RESTAURANT_REF =
+  /\brestaurant\b|\bmenu item\b|\bmenu:|\bcafé(?![a-z])|\bcafe\b|\bbrasserie\b|\bbistro\b|\bkitchen\b|\bbar\b|\bgrill\b|\bdiner\b|\btaverna?\b|\bosteria\b|\btrattoria\b|\bpizzeria\b|\bsteakhouse\b|\beatery\b|\bcanteen\b|\bbakery\b|\bdeli\b|\bpub\b|\bfrom [A-Z][\w'’-]*(?: [A-Z][\w'’-]*)*\b|\bat [A-Z][\w'’-]*(?: [A-Z][\w'’-]*)*\b|\b(?:in|à) (?:paris|miami|london|new york|nyc|lyon|marseille)\b/i;
+
+// A venue-shaped entry that the regex above missed still deserves a lookup:
+// two or more of the entry's first-line words are Capitalized proper nouns
+// (a venue name) AND the entry mentions a dish or portion. Exported for tests.
+export function looksLikeVenue(description: string): boolean {
+  if (RESTAURANT_REF.test(description)) return true;
+  const firstLine = description.split(/[\n\r]/)[0] ?? "";
+  // Ignore ALL-CAPS shouting and pure ingredient lists.
+  const words = firstLine.split(/\s+/).filter(Boolean);
+  const proper = words.filter(
+    (w) => /^[A-Z][a-zà-ÿ'’-]{2,}$/.test(w) && w !== w.toUpperCase(),
+  );
+  return proper.length >= 2 && words.length <= 12;
+}
 
 const SUPPLEMENT_SEARCH_GUIDANCE =
   " The entry names a branded/labeled product (supplement, bar, powder, or similar). Use web search to find THAT product's official nutrition/supplement facts label, matching any region or language cues in the entry (a French product name means the French formulation, not another market's). Scale every value to the amount actually taken (e.g. 1/3 tablet = one third of the per-tablet label values). In `assumptions`, note which product/label you used and its per-serving values. If you cannot find the exact product, say so in `assumptions` and estimate from the closest variant. Your FINAL output must still be ONLY the JSON object — no prose after it.";
 
 const RESTAURANT_SEARCH_GUIDANCE =
-  " The entry names a specific restaurant and/or menu item. Use web search to find that restaurant's menu and the dish's description/typical ingredients, and base your component breakdown on what you actually find rather than a generic guess. In `assumptions`, briefly note what the menu/search told you (e.g. the dish's listed components) and that it informed the estimate. Apply any portion notes the user gave (e.g. \"ate ~40%\"). Your FINAL output must still be ONLY the JSON object — no prose after it.";
+  " The entry names a specific restaurant/venue and/or menu item. Use web search to find that venue's menu and the dish's description and typical ingredients, and base your component breakdown on what you actually find rather than a generic guess. Use the venue's CUISINE and style to inform the cooking fats and preparation (a French bistro or steakhouse means butter and cream; a Mediterranean/health-focused kitchen means olive oil; a sushi bar means little added fat; an Indian restaurant means ghee/cream in curries) — this drives saturated fat and cholesterol, so infer it from what the search actually shows rather than assuming a rich preparation by default. Do NOT inflate portions or add ingredients the dish description doesn't support: count only the eggs, cheese, butter and oil the menu actually indicates, and respect the user's stated portion (e.g. \"half portion\", \"ate ~40%\", \"1 poached egg\"). In `assumptions`, briefly note what the menu/search told you (the dish's listed components and the fat used) and that it informed the estimate. Your FINAL output must still be ONLY the JSON object — no prose after it.";
 
 export async function parseTextMeal(
   description: string,
@@ -277,7 +292,7 @@ export async function parseTextMeal(
       { webSearch: true },
     );
     if (searched.ok) return searched;
-  } else if (RESTAURANT_REF.test(description)) {
+  } else if (looksLikeVenue(description)) {
     const searched = await callAndParse(
       userContent,
       TEXT_SYSTEM_PROMPT + RESTAURANT_SEARCH_GUIDANCE,

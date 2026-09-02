@@ -47,3 +47,27 @@ describe("supplement profile cache helpers", () => {
     );
   });
 });
+
+import { looksLikeVenue } from "@/lib/anthropic";
+
+describe("venue detection (restaurant menu lookup)", () => {
+  it("catches the real-world venue entries the old regex missed", () => {
+    // Every one of these silently skipped the menu lookup before.
+    expect(looksLikeVenue("River oyster bar Miami - Mahi mahi blackened (half portion), 4 oysters")).toBe(true);
+    expect(looksLikeVenue("Vale healthy kitchen\nByo small bowl with Mediterranean chicken thigh")).toBe(true);
+    expect(looksLikeVenue("flourless viking bread with smashed avocado, a poched egg (from madam olivia in midtown miami)")).toBe(true);
+    expect(looksLikeVenue("Small Duck leg confit from à la tour Eiffel in Paris (15th district)")).toBe(true);
+    expect(looksLikeVenue("carrot express turkey burger with a green goddess side salad")).toBe(false);
+  });
+
+  it("still catches the explicit wording", () => {
+    expect(looksLikeVenue("PASTA Miami restaurant on 124 NW 28th st")).toBe(true);
+    expect(looksLikeVenue("lunch at a café in Lyon")).toBe(true);
+  });
+
+  it("does not fire on plain home-cooked ingredient lists", () => {
+    expect(looksLikeVenue("1 cup chicken thigh\n1 cup broccoli\n1/2 medium carrot")).toBe(false);
+    expect(looksLikeVenue("1/3 cup non fat greek yoghurt, 1/2 banana, 1 brazil nut")).toBe(false);
+    expect(looksLikeVenue("two eggs and toast")).toBe(false);
+  });
+});
