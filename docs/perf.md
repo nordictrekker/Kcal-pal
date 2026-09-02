@@ -146,17 +146,27 @@ rotation are unchanged; on a symmetric-secret project it falls back to the old
 
 | Route | Before | After |
 |---|---|---|
-| `/today` | 106 ms | **34 ms** |
-| `/today/summary` | 106 ms | **40 ms** |
-| `/log` | 105 ms | **25 ms** |
-| `/log/scan` | 112 ms | **26 ms** |
-| `/weekly` | 102 ms | **25 ms** |
-| `/recap` | 111 ms | **27 ms** |
-| `/settings` | 100 ms | **28 ms** |
-| `/reanalyze` | 110 ms | **25 ms** |
-| `/import` | 117 ms | **18 ms** |
-| `/login` (public) | 10 ms | 10 ms |
-| `/manifest.webmanifest` | 3 ms | 3 ms |
+| `/today` | 106 ms | **38 ms** |
+| `/today/summary` | 106 ms | **26 ms** |
+| `/log` | 105 ms | **28 ms** |
+| `/log/scan` | 112 ms | **31 ms** |
+| `/weekly` | 102 ms | **28 ms** |
+| `/recap` | 111 ms | **31 ms** |
+| `/settings` | 100 ms | **31 ms** |
+| `/reanalyze` | 110 ms | **30 ms** |
+| `/import` | 117 ms | **16 ms** |
+| `/login` (public) | 10 ms | 9 ms |
+| `/manifest.webmanifest` | 3 ms | 5 ms |
+
+*A second measurement bug, found and fixed after the first numbers were
+recorded:* the suite claimed to be a single-engine run but filtered on
+`browserName !== "chromium"`, and BOTH the desktop `chrome` and mobile
+`mobile-chrome` projects report "chromium". So the timing run executed twice,
+concurrently, against the same server — measuring under self-inflicted
+contention. It now filters on project name. The figures above are from the
+corrected single-project run; they came back within a few ms of the contended
+ones, so the contention turned out not to distort the result, but the earlier
+numbers were taken wrongly and these are the ones to trust.
 
 **Every page is now under the 50 ms target**, measured on the CI runner against
 the production build. Note the shape change: `/today` and `/today/summary` are
