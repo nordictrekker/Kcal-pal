@@ -20,11 +20,14 @@ test("a signed-out user is redirected from a gated route to /login", async ({ pa
   await expect(page).toHaveURL(/\/login/);
 });
 
-for (const path of ["/login", "/today", "/log", "/weekly"]) {
+// Only genuinely public pages belong here. This list used to include /today,
+// /log and /weekly, which all redirect to /login when signed out — so it
+// asserted the same login page four times while appearing to cover the app.
+// The signed-in pages are measured in authenticated-coverage.spec.ts.
+for (const path of ["/login"]) {
   test(`no horizontal overflow at mobile width: ${path}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 }); // iPhone-ish
     await page.goto(path);
-    // gated routes land on /login; either way assert the rendered page fits.
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
