@@ -15,7 +15,14 @@ const MICRO_FIELDS = [
 // One distinct food (normalized description) with every entry that shares it.
 // The whole group is parsed ONCE and the result applied to all its entries —
 // a daily "cup of coffee with 2% milk" costs one AI call, not one per day.
-export type ReanalyzeTarget = { ids: string[]; description: string; count: number };
+export type ReanalyzeTarget = {
+  ids: string[];
+  description: string;
+  count: number;
+  // ISO timestamp of the most recent entry in this group — lets the client
+  // scope a run to "last week / 2 weeks / 30 days" without another query.
+  lastAt: string;
+};
 
 function descKey(d: string): string {
   return d.trim().toLowerCase().replace(/\s+/g, " ");
@@ -49,7 +56,7 @@ export async function getReanalyzeTargets(): Promise<ReanalyzeTarget[]> {
   // but their micros came from the old enrichment and deserve a refresh.
   const { data } = await supabase
     .from("food_entries")
-    .select("id,description")
+    .select("id,description,consumed_at")
     .eq("user_id", user.id)
     .in("source", ["text", "barcode"])
     .eq("edited_by_user", false)
@@ -58,13 +65,20 @@ export async function getReanalyzeTargets(): Promise<ReanalyzeTarget[]> {
   const groups = new Map<string, ReanalyzeTarget>();
   for (const r of data ?? []) {
     const description = r.description as string;
+    const at = r.consumed_at as string;
     const key = descKey(description);
     const g = groups.get(key);
     if (g) {
       g.ids.push(r.id as string);
       g.count += 1;
+      if (at > g.lastAt) g.lastAt = at;
     } else {
-      groups.set(key, { ids: [r.id as string], description, count: 1 });
+      groups.set(key, {
+        ids: [r.id as string],
+        description,
+        count: 1,
+        lastAt: at,
+      });
     }
   }
   return Array.from(groups.values());

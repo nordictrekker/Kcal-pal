@@ -3,11 +3,17 @@
 import { useState } from "react";
 import { Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   reanalyzeGroup,
   type ReanalyzeTarget,
   type ReanalyzeGroupResult,
 } from "./actions";
+import {
+  SCOPE_OPTIONS,
+  filterByScope,
+  type ScopeKey,
+} from "@/lib/reanalyze-scope";
 
 const MICRO_LABELS: Record<string, string> = {
   fiber_g: "Fiber",
@@ -35,10 +41,14 @@ function filledCount(r: Extract<ReanalyzeGroupResult, { ok: true }>): number {
   ).length;
 }
 
-export function ReanalyzePanel({ targets }: { targets: ReanalyzeTarget[] }) {
+export function ReanalyzePanel({ targets: allTargets }: { targets: ReanalyzeTarget[] }) {
   const [status, setStatus] = useState<"idle" | "running" | "done">("idle");
   const [done, setDone] = useState(0);
   const [results, setResults] = useState<ReanalyzeGroupResult[]>([]);
+  // Default to the last 7 days: the common case is refreshing recent logs
+  // after a fix, not reprocessing the whole history.
+  const [scope, setScope] = useState<ScopeKey>("7");
+  const targets = filterByScope(allTargets, scope);
 
   async function run() {
     setStatus("running");
@@ -68,6 +78,49 @@ export function ReanalyzePanel({ targets }: { targets: ReanalyzeTarget[] }) {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border p-4">
+        <div className="mb-3 space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">
+            Which logs?
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {SCOPE_OPTIONS.map((o) => {
+              const n = filterByScope(allTargets, o.key).reduce(
+                (sum, t) => sum + t.count,
+                0,
+              );
+              const active = scope === o.key;
+              return (
+                <button
+                  key={o.key}
+                  type="button"
+                  disabled={status === "running"}
+                  onClick={() => {
+                    setScope(o.key);
+                    setResults([]);
+                    setDone(0);
+                    setStatus("idle");
+                  }}
+                  className={cn(
+                    "rounded-md border px-3 py-2 text-left text-sm disabled:opacity-50",
+                    active
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "hover:bg-accent",
+                  )}
+                >
+                  <span className="block">{o.label}</span>
+                  <span
+                    className={cn(
+                      "block text-[11px] tabular-nums",
+                      active ? "opacity-80" : "text-muted-foreground",
+                    )}
+                  >
+                    {n} {n === 1 ? "log" : "logs"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <p className="text-sm">
           Reprocesses <span className="font-medium">{targets.length}</span>{" "}
           distinct foods across{" "}
@@ -78,7 +131,9 @@ export function ReanalyzePanel({ targets }: { targets: ReanalyzeTarget[] }) {
         </p>
         {status === "idle" ? (
           <Button className="mt-3 w-full" onClick={run} disabled={targets.length === 0}>
-            Re-analyze {targets.length} foods ({totalEntries} logs)
+            {totalEntries === 0
+              ? "No logs in this range"
+              : `Re-analyze ${targets.length} foods (${totalEntries} logs)`}
           </Button>
         ) : null}
 
