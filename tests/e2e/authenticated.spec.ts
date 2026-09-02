@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import { AUTH_STATE } from "./global-setup";
+import { E2E_REPORT_PREFIX } from "./global-teardown";
 
 // Signed-in feature flows. The global-setup seeds e2e-auth.json when
 // E2E_TEST_EMAIL/PASSWORD are provided (CI secrets); otherwise this group skips
@@ -38,9 +39,12 @@ test.describe("authenticated flows", () => {
     await page.goto("/today");
     await page.getByRole("button", { name: /report a bug or get help/i }).click();
     await expect(page.getByRole("dialog", { name: /report a bug/i })).toBeVisible();
+    // Shares the prefix with global-teardown, which purges these rows after the
+    // run — the submission is real, so without that it piles up in the table
+    // alongside genuine user reports.
     await page
       .getByPlaceholder(/what went wrong/i)
-      .fill("E2E smoke: testing the report button");
+      .fill(`${E2E_REPORT_PREFIX} testing the report button`);
     await page.getByRole("button", { name: /^Send$/ }).click();
     await expect(page.getByText(/your report was sent/i)).toBeVisible();
   });

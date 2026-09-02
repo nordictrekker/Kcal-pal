@@ -13,6 +13,9 @@ export default defineConfig({
   // Seeds a signed-in session into e2e-auth.json when E2E_TEST_EMAIL/PASSWORD
   // are set, so the authenticated specs run; a no-op otherwise.
   globalSetup: "./tests/e2e/global-setup.ts",
+  // Removes the bug reports the smoke test writes to the real table, so CI
+  // runs don't accumulate test rows on top of genuine user reports.
+  globalTeardown: "./tests/e2e/global-teardown.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
