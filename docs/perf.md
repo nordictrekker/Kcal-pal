@@ -120,8 +120,55 @@ Note: the Next.js `preferredRegion` route-config did **not** take effect on this
 plan (deploys stayed in `iad1`); the `vercel.json` `regions` field did. It
 applies to production once this lands on the production branch — confirm with
 `get_deployment` that the production deployment reports `regions: ["pdx1"]`.
-2. **Reduce duplicate auth revalidation.** Authenticated pages call
-   `getUser()` in middleware *and* in the page. Switching the per-request gate
-   to `getClaims()` (local JWT verification) would drop one network round trip
-   per navigation. Auth-sensitive — verify on the authenticated path / real
-   devices before shipping.
+## Duplicate auth revalidation (done — measured 2026-09-02)
+
+Previously listed here as the next lever, now shipped and measured.
+
+**First, the measurement was wrong.** The TTFB suite ran signed out, so every
+gated route answered `307` to `/login` in ~3 ms. The numbers looked excellent
+while timing a redirect. The suite now runs against the seeded session and
+asserts `200`, so that cannot recur, and samples each route 5x reporting the
+median.
+
+**The real baseline**, once it measured pages instead of redirects: every
+authenticated route sat at **95–117 ms**, and barely moved between a heavy
+dashboard (`/today`, 106 ms) and a near-static camera page (`/log/scan`,
+112 ms). That uniformity is the tell — a fixed per-request cost, not per-page
+work: two sequential `getUser()` calls (middleware, then the page), each a
+network validation of the same token before any data query starts.
+
+**The fix:** both now use `getClaims()`, which verifies the JWT signature
+locally with WebCrypto against the project's JWKS. The JWKS cache is
+module-level (`GLOBAL_JWKS`, keyed by storage key), so a fresh client per
+request still reuses it. It goes through `getSession()`, so refresh and cookie
+rotation are unchanged; on a symmetric-secret project it falls back to the old
+`getUser()` call. It is not `getSession()` — the signature is really verified.
+
+| Route | Before | After |
+|---|---|---|
+| `/today` | 106 ms | **34 ms** |
+| `/today/summary` | 106 ms | **40 ms** |
+| `/log` | 105 ms | **25 ms** |
+| `/log/scan` | 112 ms | **26 ms** |
+| `/weekly` | 102 ms | **25 ms** |
+| `/recap` | 111 ms | **27 ms** |
+| `/settings` | 100 ms | **28 ms** |
+| `/reanalyze` | 110 ms | **25 ms** |
+| `/import` | 117 ms | **18 ms** |
+| `/login` (public) | 10 ms | 10 ms |
+| `/manifest.webmanifest` | 3 ms | 3 ms |
+
+**Every page is now under the 50 ms target**, measured on the CI runner against
+the production build. Note the shape change: `/today` and `/today/summary` are
+now the two slowest, at ~34–40 ms against a ~20 ms floor. With the fixed cost
+gone, what remains is genuine per-page work — so those two are where any
+further optimization belongs.
+
+**Tradeoff, recorded deliberately:** `getUser()` asks the auth server on every
+request, so a deleted or banned account loses access immediately. Local
+verification trusts a validly-signed token until it expires (1 h by default).
+For a single-user personal app that window is acceptable, and it is Supabase's
+own recommended SSR approach. If it ever stops being acceptable, the
+alternative that keeps one server-side validation per request is to have
+middleware pass its verified user id downstream on a request header it always
+overwrites, removing the *duplicate* rather than the network call.
