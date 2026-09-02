@@ -32,7 +32,15 @@ const AUTHED_ROUTES = [
 const PUBLIC_ROUTES = ["/login", "/manifest.webmanifest"];
 
 async function ttfb(page: import("@playwright/test").Page, path: string) {
-  const res = await page.goto(path, { waitUntil: "commit" });
+  // Five rapid navigations per route occasionally trip net::ERR_ABORTED when
+  // one commit races the next. Retry once so a sample is dropped rather than
+  // the whole measurement failing; a second abort is a real problem.
+  let res;
+  try {
+    res = await page.goto(path, { waitUntil: "commit" });
+  } catch {
+    res = await page.goto(path, { waitUntil: "commit" });
+  }
   const status = res?.status() ?? 0;
   const value = await page.evaluate(() => {
     const e = performance.getEntriesByType(
@@ -48,12 +56,18 @@ function median(xs: number[]): number {
   return s[Math.floor(s.length / 2)];
 }
 
-// Only run this measurement on one engine to keep the numbers comparable.
+// Only run this measurement on ONE project, so the numbers stay comparable
+// run to run.
+//
+// This used to filter on `browserName !== "chromium"`, which does not do that:
+// both the desktop `chrome` and mobile `mobile-chrome` projects report
+// "chromium", so the timing run executed twice, concurrently, against the same
+// server. The two contended for it — skewing the very numbers being measured,
+// and aborting a navigation outright. Filter on the project name instead.
 test.describe("page-load timing (server TTFB)", () => {
-  test.skip(
-    ({ browserName }) => browserName !== "chromium",
-    "single-engine timing run",
-  );
+  test.beforeEach(async ({}, testInfo) => {
+    test.skip(testInfo.project.name !== "chrome", "single-project timing run");
+  });
 
   for (const path of PUBLIC_ROUTES) {
     test(`TTFB ${path} (public)`, async ({ page }) => {
