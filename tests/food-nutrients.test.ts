@@ -121,3 +121,65 @@ describe("evidenceFor", () => {
     expect(evidenceFor("weekend_permission")).toBeUndefined();
   });
 });
+
+import { extractAssumptions } from "@/lib/food-items";
+
+describe("extractAssumptions", () => {
+  it("reads assumptions from a plain parsed object", () => {
+    expect(
+      extractAssumptions({ assumptions: ["assumed one platter", "dark meat"] }),
+    ).toEqual(["assumed one platter", "dark meat"]);
+  });
+
+  it("reads them out of the Anthropic message envelope", () => {
+    // The real shape stored for a text parse: JSON inside a text block.
+    const raw = {
+      content: [
+        { type: "text", text: 'prose first\n{"calories":10,"assumptions":["Jaffa menu lists rice and tabbouleh"]}' },
+      ],
+    };
+    expect(extractAssumptions(raw)).toEqual([
+      "Jaffa menu lists rice and tabbouleh",
+    ]);
+  });
+
+  it("returns nothing rather than throwing on junk", () => {
+    expect(extractAssumptions(null)).toEqual([]);
+    expect(extractAssumptions({ content: [{ type: "text", text: "assumptions but not json" }] })).toEqual([]);
+    expect(extractAssumptions({ assumptions: [1, "", "ok"] })).toEqual(["ok"]);
+  });
+});
+
+describe("component extraction when the model narrates before answering", () => {
+  // 27 of 126 stored entries had prose before the JSON — a web-lookup parse
+  // explains itself first. JSON.parse failed on all of them, so those entries
+  // had no breakdown on Today and were invisible to the pantry.
+  const withProse = {
+    content: [
+      {
+        type: "text",
+        text:
+          "Based on Jaffa Miami's actual menu, the platter is served with hummus and pita.\n\n" +
+          '{"calories":855,"items":[{"name":"Hummus","quantity":"175 g","calories":290,"protein_g":8,"carbs_g":24,"fat_g":17}]}',
+      },
+    ],
+  };
+
+  it("finds the components despite the preamble", () => {
+    const items = extractComponents(withProse);
+    expect(items).toHaveLength(1);
+    expect(items[0].name).toBe("Hummus");
+    expect(items[0].calories).toBe(290);
+  });
+
+  it("still handles a fenced block and a bare object", () => {
+    expect(
+      extractComponents({
+        content: [{ type: "text", text: '```json\n{"items":[{"name":"Pita","calories":180,"protein_g":6,"carbs_g":33,"fat_g":1}]}\n```' }],
+      })[0].name,
+    ).toBe("Pita");
+    expect(
+      extractComponents({ items: [{ name: "Salad", calories: 55, protein_g: 1, carbs_g: 5, fat_g: 3.5 }] })[0].name,
+    ).toBe("Salad");
+  });
+});
