@@ -154,6 +154,19 @@ export async function savePhotoEntry(
     plants = [];
   }
 
+  // Component breakdown from the confirm screen, already scaled to the
+  // portions the user settled on. Shaped as { items, assumptions, confidence }
+  // — the same shape extractComponents() reads.
+  let itemsPayload: object | null = null;
+  try {
+    const raw = JSON.parse(String(formData.get("items") ?? "null"));
+    if (raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)) {
+      itemsPayload = raw as object;
+    }
+  } catch {
+    itemsPayload = null;
+  }
+
   const { error } = await supabase.from("food_entries").insert({
     user_id: user.id,
     meal,
@@ -177,6 +190,11 @@ export async function savePhotoEntry(
     choline_mg: readNumberOrNull(formData.get("choline_mg")),
     iodine_mcg: readNumberOrNull(formData.get("iodine_mcg")),
     plants,
+    // The component breakdown at the portions actually confirmed. This was
+    // never stored for photo entries, so their breakdown was lost the moment
+    // they were saved — Today couldn't expand them, the pantry couldn't mine
+    // them, and re-analyze had nothing to work from.
+    raw_ai_response: itemsPayload,
     edited_by_user: false,
   });
 

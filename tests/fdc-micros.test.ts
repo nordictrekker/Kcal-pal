@@ -352,3 +352,26 @@ describe("partial FDC records (the lasagna bug)", () => {
     delete process.env.USDA_FDC_API_KEY;
   });
 });
+
+import { statesAnExclusion } from "@/lib/fdc";
+
+describe("components described by what was left out", () => {
+  it("recognises exclusions USDA cannot represent", () => {
+    // The shakshuka case: the model handled "no egg yolks" correctly and
+    // enrichment matched the whole-egg record over the top of it.
+    expect(statesAnExclusion("Egg whites, poached (yolks removed)")).toBe(true);
+    expect(statesAnExclusion("classic shakshuka (no egg yolks)")).toBe(true);
+    expect(statesAnExclusion("chicken breast, skinless")).toBe(true);
+    expect(statesAnExclusion("salad without cheese")).toBe(true);
+    expect(statesAnExclusion("egg whites only")).toBe(true);
+    expect(statesAnExclusion("burger, hold the mayo")).toBe(true);
+  });
+
+  it("leaves ordinary component names alone", () => {
+    expect(statesAnExclusion("white rice")).toBe(false);
+    expect(statesAnExclusion("grilled salmon")).toBe(false);
+    expect(statesAnExclusion("challah bread")).toBe(false);
+    expect(statesAnExclusion("kalamata olives")).toBe(false);
+    expect(statesAnExclusion("")).toBe(false);
+  });
+});

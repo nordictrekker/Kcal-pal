@@ -241,11 +241,41 @@ const CLAMP_FLOOR: Record<keyof MicroSet, number> = {
   iodine_mcg: 80,
 };
 
+// A component the user described by what was LEFT OUT. USDA has no record for
+// "shakshuka without the yolks" or "chicken, skin removed and discarded", so
+// matching such a name lands on the unmodified food and silently puts back
+// exactly what the user said they didn't eat.
+//
+// Real case: "Madame Olivia — classic shakshuka (no egg yolks), with challah"
+// parsed correctly (the model reasoned "the user requested no egg yolks, so
+// I'll use egg whites only" and returned 30 mg cholesterol), and enrichment
+// then matched the whole-egg record and stored 468.6 mg. Cholesterol, choline
+// and vitamin D are all yolk-borne — the three that moved most.
+//
+// When a name states an exclusion the AI's own figure stands: it is the only
+// source that knows about the modification.
+const EXCLUSION_REF =
+  /\b(?:no|without|sans|minus|hold\s+the|free\s+of|-free)\b[\s\w]{0,20}|\b(?:removed|discarded|omitted)\b|\b(?:white|whites)\s+only\b|\bskinless\b|\byolk[- ]?free\b/i;
+
+export function statesAnExclusion(name: string): boolean {
+  if (!name) return false;
+  // "no" as a bare word is common in product names ("Nº 7"); require it to be
+  // followed by something food-like rather than punctuation.
+  return EXCLUSION_REF.test(name);
+}
+
 // Exported for tests. A WRONG food match (e.g. fortified powder for a liquid
 // shake) inflates many nutrients at once; legitimate enrichment usually moves
 // one (the AI lowballs salmon's omega-3 — that correction must survive). So:
 // only when 3+ fields are each >6x the AI estimate AND material do we call
 // the match implausible, and revert those fields to the AI values.
+//
+// Note: a single egregiously-inflated field is deliberately NOT enough. That
+// was tried after the shakshuka case below cleared the 3+ bar only on
+// cholesterol, and it broke the salmon omega-3 correction, which is legitimate
+// at ~30x. The ratio cannot separate the two — a wrongly matched food is the
+// wrong thing to detect here. Exclusions are handled at the match step
+// instead, by statesAnExclusion() above, which is where that bug actually is.
 export function clampImplausible(
   acc: MicroSet,
   ai: Pick<ParsedNutrition, keyof MicroSet>,
@@ -331,7 +361,8 @@ export async function enrichMicrosWithUsda(
     if (
       typeof item.grams === "number" &&
       item.grams > 0 &&
-      !isLabeledProduct(item.name)
+      !isLabeledProduct(item.name) &&
+      !statesAnExclusion(item.name)
     ) {
       const { matched, per100g } = await lookupCached(supabase, item.name);
       if (matched && per100g) {

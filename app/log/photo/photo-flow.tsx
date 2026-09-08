@@ -19,6 +19,15 @@ import {
 } from "./actions";
 import type { Meal, ParsedNutrition } from "@/lib/types";
 import { defaultMeal, MEALS } from "@/lib/food";
+import { ItemEditor } from "./item-editor";
+import {
+  descriptionFromItems,
+  plantsFromItems,
+  scaleItem,
+  toEditableItems,
+  totalsFromItems,
+  type EditableItem,
+} from "@/lib/photo-items";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,15 +74,19 @@ function MealPicker({ defaultMeal: dm }: { defaultMeal: Meal }) {
   );
 }
 
+// Controlled, so adjusting a component's portion can update the totals live.
+// Typing in the field still overrides them.
 function MacroField({
   name,
   label,
   value,
+  onChange,
   step = "any",
 }: {
   name: string;
   label: string;
   value: number | null;
+  onChange: (v: number | null) => void;
   step?: string;
 }) {
   return (
@@ -88,7 +101,11 @@ function MacroField({
         inputMode="decimal"
         step={step}
         min="0"
-        defaultValue={value ?? ""}
+        value={value ?? ""}
+        onChange={(e) => {
+          const raw = e.target.value;
+          onChange(raw === "" ? null : Number(raw));
+        }}
         className="h-9"
       />
     </div>
@@ -126,21 +143,58 @@ function ConfirmForm({
     if (state.ok) router.push("/today");
   }, [state.ok, router]);
 
-  // Default description from items if Claude returned them, else empty.
-  const defaultDescription = useMemo(() => {
-    if (!parsed) return "";
-    if (parsed.items.length > 0) {
-      return parsed.items
-        .map((i) => (i.quantity ? `${i.quantity} ${i.name}` : i.name))
-        .join(", ");
-    }
-    return "";
-  }, [parsed]);
+  // Editable component list. The model is usually right about WHAT is on the
+  // plate and wrong about HOW MUCH, so portion is what you adjust — and the
+  // meal totals are recomputed from the parts rather than retyped.
+  const [items, setItems] = useState<EditableItem[]>(() =>
+    toEditableItems(parsed?.items ?? []),
+  );
+  const hasItems = items.length > 0;
+
+  // Whole-meal numbers. Seeded from the parse, then driven by the components
+  // whenever one is adjusted; typing in a field still wins until the next
+  // portion change.
+  const [macros, setMacros] = useState<Record<string, number | null>>(() => ({
+    calories: parsed?.calories ?? null,
+    protein_g: parsed?.protein_g ?? null,
+    carbs_g: parsed?.carbs_g ?? null,
+    fat_g: parsed?.fat_g ?? null,
+    fiber_g: parsed?.fiber_g ?? null,
+    saturated_fat_g: parsed?.saturated_fat_g ?? null,
+    trans_fat_g: parsed?.trans_fat_g ?? null,
+    cholesterol_mg: parsed?.cholesterol_mg ?? null,
+    iron_mg: parsed?.iron_mg ?? null,
+    calcium_mg: parsed?.calcium_mg ?? null,
+    magnesium_mg: parsed?.magnesium_mg ?? null,
+    vitamin_d_mcg: parsed?.vitamin_d_mcg ?? null,
+    omega3_mg: parsed?.omega3_mg ?? null,
+    folate_mcg: parsed?.folate_mcg ?? null,
+    choline_mg: parsed?.choline_mg ?? null,
+    iodine_mcg: parsed?.iodine_mcg ?? null,
+  }));
+
+  const [description, setDescription] = useState(() =>
+    parsed?.items?.length ? descriptionFromItems(toEditableItems(parsed.items)) : "",
+  );
+  // Once the description is hand-edited, component changes stop rewriting it.
+  const descTouched = useRef(false);
+
+  function applyItems(next: EditableItem[]) {
+    setItems(next);
+    setMacros((prev) => ({ ...prev, ...totalsFromItems(next) }));
+    if (!descTouched.current) setDescription(descriptionFromItems(next));
+  }
 
   const confidencePct =
     parsed && typeof parsed.confidence === "number"
       ? Math.round(parsed.confidence * 100)
       : null;
+
+  const keptItems = items.filter((i) => !i.removed);
+  const plants = useMemo(
+    () => plantsFromItems(items, parsed?.plants ?? []),
+    [items, parsed],
+  );
 
   return (
     <form action={formAction} className="space-y-4">
@@ -166,11 +220,23 @@ function ConfirmForm({
       ) : null}
 
       {confidencePct !== null ? (
-        <p className="text-xs text-muted-foreground">
-          Claude confidence: <span className="tabular-nums">{confidencePct}%</span>
-          {confidencePct < 50 ? " — check carefully" : null}
+        <p
+          className={cn(
+            "rounded-md border px-3 py-2 text-xs",
+            confidencePct < 50
+              ? "border-destructive/40 bg-destructive/10 text-destructive"
+              : "text-muted-foreground",
+          )}
+        >
+          Portion confidence:{" "}
+          <span className="tabular-nums font-medium">{confidencePct}%</span>
+          {confidencePct < 50
+            ? " — the amounts are a guess. Adjust them below."
+            : " — check the portions below before saving."}
         </p>
       ) : null}
+
+      <ItemEditor items={items} onChange={applyItems} />
 
       <div className="space-y-2">
         <Label htmlFor="description">What is it?</Label>
@@ -179,7 +245,11 @@ function ConfirmForm({
           name="description"
           required
           rows={2}
-          defaultValue={defaultDescription}
+          value={description}
+          onChange={(e) => {
+            descTouched.current = true;
+            setDescription(e.target.value);
+          }}
           placeholder="Describe the meal"
         />
       </div>
@@ -194,41 +264,71 @@ function ConfirmForm({
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <MacroField name="calories" label="kcal" value={parsed?.calories ?? null} step="1" />
-        <MacroField name="protein_g" label="Protein" value={parsed?.protein_g ?? null} />
-        <MacroField name="carbs_g" label="Carbs" value={parsed?.carbs_g ?? null} />
-        <MacroField name="fat_g" label="Fat" value={parsed?.fat_g ?? null} />
-        <MacroField name="fiber_g" label="Fiber" value={parsed?.fiber_g ?? null} />
+      <div className="space-y-1">
+        {hasItems ? (
+          <p className="text-xs text-muted-foreground">
+            Totals for the {keptItems.length} item
+            {keptItems.length === 1 ? "" : "s"} above.
+          </p>
+        ) : null}
+        <div className="grid grid-cols-3 gap-2">
+          {(
+            [
+              ["calories", "kcal", "1"],
+              ["protein_g", "Protein", "any"],
+              ["carbs_g", "Carbs", "any"],
+              ["fat_g", "Fat", "any"],
+              ["fiber_g", "Fiber", "any"],
+            ] as const
+          ).map(([name, label, step]) => (
+            <MacroField
+              key={name}
+              name={name}
+              label={label}
+              step={step}
+              value={macros[name] ?? null}
+              onChange={(v) => setMacros((m) => ({ ...m, [name]: v }))}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* Extended nutrients + plant list carried through from the parse so they
-          aren't lost; not surfaced as editable fields to keep the form light. */}
+      {/* Extended nutrients carried through, rescaled with the components so a
+          halved portion halves its micronutrients too — they used to be sent
+          as the model's original whole-meal figures regardless of any edit. */}
       {parsed
         ? (
             [
-              ["saturated_fat_g", parsed.saturated_fat_g],
-              ["cholesterol_mg", parsed.cholesterol_mg],
-              ["iron_mg", parsed.iron_mg],
-              ["calcium_mg", parsed.calcium_mg],
-              ["magnesium_mg", parsed.magnesium_mg],
-              ["vitamin_d_mcg", parsed.vitamin_d_mcg],
-              ["omega3_mg", parsed.omega3_mg],
-              ["folate_mcg", parsed.folate_mcg],
-              ["choline_mg", parsed.choline_mg],
-              ["iodine_mcg", parsed.iodine_mcg],
+              "saturated_fat_g", "trans_fat_g", "cholesterol_mg", "iron_mg",
+              "calcium_mg", "magnesium_mg", "vitamin_d_mcg", "omega3_mg",
+              "folate_mcg", "choline_mg", "iodine_mcg",
             ] as const
-          ).map(([name, value]) => (
+          ).map((name) => (
             <input
               key={name}
               type="hidden"
               name={name}
-              value={value ?? 0}
+              value={macros[name] ?? 0}
             />
           ))
         : null}
       {parsed ? (
-        <input type="hidden" name="plants" value={JSON.stringify(parsed.plants ?? [])} />
+        <input type="hidden" name="plants" value={JSON.stringify(plants)} />
+      ) : null}
+      {/* The kept components at their adjusted portions, so the breakdown is
+          stored with the entry (it was being discarded entirely) and Today can
+          show it, the pantry can mine it, and re-analyze has something to work
+          from. */}
+      {parsed ? (
+        <input
+          type="hidden"
+          name="items"
+          value={JSON.stringify({
+            items: keptItems.map(scaleItem),
+            assumptions: parsed.assumptions ?? [],
+            confidence: parsed.confidence,
+          })}
+        />
       ) : null}
 
       <MealPicker defaultMeal={defaultMeal()} />

@@ -54,11 +54,16 @@ export async function getReanalyzeTargets(): Promise<ReanalyzeTarget[]> {
   // Skip user-corrected entries entirely — corrections are authoritative.
   // Barcode scans are included: their label MACROS are kept (see reanalyzeOne)
   // but their micros came from the old enrichment and deserve a refresh.
+  // Photo entries are included too, re-parsed from the description the user
+  // confirmed. They were excluded, which meant the one modality with a 100%
+  // correction rate was also the only one that could never be improved — and
+  // it left photo entries permanently missing the micronutrient columns added
+  // after they were logged.
   const { data } = await supabase
     .from("food_entries")
     .select("id,description,consumed_at")
     .eq("user_id", user.id)
-    .in("source", ["text", "barcode"])
+    .in("source", ["text", "barcode", "photo"])
     .eq("edited_by_user", false)
     .order("consumed_at", { ascending: true });
 
@@ -279,7 +284,11 @@ export async function reanalyzeGroup(
   }
   const raw = (result.raw as object) ?? null;
 
-  const textIds = members.filter((m) => m.source === "text").map((m) => m.id as string);
+  // Photo entries take the full column set like text: the description they
+  // carry is the confirmed component list, so re-parsing it is meaningful.
+  const textIds = members
+    .filter((m) => m.source === "text" || m.source === "photo")
+    .map((m) => m.id as string);
   const barcodeIds = members.filter((m) => m.source === "barcode").map((m) => m.id as string);
   let applied = 0;
   if (textIds.length > 0) {

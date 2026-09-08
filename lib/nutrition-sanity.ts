@@ -53,6 +53,85 @@ export function capSaturatedShare(
   return saturated > ceiling ? Math.round(ceiling * 10) / 10 : saturated;
 }
 
+// Cholesterol is synthesised only by animals — no plant food contains any.
+// A logged "1 banana" came back with 9.4 mg and a plate of broccoli, carrot
+// and celery with 5 mg; both are physically impossible, not estimates.
+//
+// This is deliberately an ALLOW-list of unambiguous plant foods rather than a
+// deny-list of animal ones: the rule may only fire when we are certain, so an
+// unrecognised or mixed dish keeps whatever was estimated. Anything naming an
+// animal product is excluded outright as a second guard, which also covers
+// compound names like "banana milkshake" or "broccoli cheddar soup".
+const ANIMAL_REF =
+  /\b(egg|chicken|beef|pork|fish|salmon|tuna|shrimp|prawn|meat|turkey|lamb|duck|bacon|ham|sausage|cheese|butter|ghee|cream|creme|crème|yogh?urt|yoghourt|milk|whey|casein|lard|tallow|gelatin|honey|anchov|sardin|crab|lobster|oyster|squid|octopus|caviar|custard|mayo|aioli|pancetta|prosciutto|chorizo|salami|broth|stock|bone|liver|pate|pâté|kefir|skyr|quark|ricotta|mozzarella|parmesan|feta|halloumi)/i;
+
+const PLANT_ONLY_REF =
+  /\b(banana|apple|orange|pear|peach|plum|grape|berry|berries|strawberr|blueberr|raspberr|blackberr|melon|watermelon|mango|pineapple|kiwi|papaya|apricot|cherry|cherries|fig|date|prune|raisin|broccoli|carrot|celery|cucumber|lettuce|spinach|kale|cabbage|cauliflower|courgette|zucchini|aubergine|eggplant|pepper|tomato|onion|garlic|leek|asparagus|artichoke|beet|beetroot|radish|turnip|parsnip|squash|pumpkin|sweet potato|potato|corn|pea|peas|bean|beans|lentil|chickpea|hummus|tofu|tempeh|edamame|almond|walnut|pecan|cashew|pistachio|hazelnut|macadamia|peanut|brazil nut|nut|seed|oat|oats|rice|quinoa|barley|buckwheat|couscous|bulgur|avocado|olive|coconut|mushroom|coffee|espresso|americano|tea|water|juice|kombucha)/i;
+
+// Quantities, units and neutral descriptors that say nothing about whether a
+// food is animal-derived. Anything left over must be a recognised plant.
+const NEUTRAL_TOKEN =
+  /^(?:\d+(?:[./]\d+)?|[½¼¾⅓⅔]|cup|cups|tbsp|tbs|tablespoon|tablespoons|tsp|teaspoon|teaspoons|g|kg|ml|l|oz|lb|slice|slices|stick|sticks|piece|pieces|serving|servings|handful|bowl|plate|glass|can|cans|bunch|clove|cloves|head|sprig|leaf|leaves|half|whole|medium|large|small|mini|baby|double|single|raw|fresh|frozen|dried|roasted|steamed|grilled|boiled|baked|chopped|sliced|diced|shredded|organic|plain|ripe|unsweetened|red|green|purple|yellow|white|black|orange|and|with|of|a|an|the)$/i;
+
+// True only when EVERY significant word in the name is a recognised plant food
+// or a neutral descriptor. An unrecognised word means unknown composition, so
+// the rule stands down — "broccoli cheddar soup" must not be treated as plant
+// food just because "broccoli" appears in it.
+export function isPlantOnly(name: string): boolean {
+  if (!name || !name.trim()) return false;
+  if (ANIMAL_REF.test(name)) return false;
+
+  const tokens = name
+    .toLowerCase()
+    .split(/[\s,()\[\]/\\\r\n.+—–-]+/)
+    .map((t) => t.replace(/[^a-z0-9½¼¾⅓⅔]/g, ""))
+    .filter((t) => t.length > 0);
+  if (tokens.length === 0) return false;
+
+  let sawPlant = false;
+  for (const t of tokens) {
+    if (NEUTRAL_TOKEN.test(t)) continue;
+    if (PLANT_ONLY_REF.test(t)) {
+      sawPlant = true;
+      continue;
+    }
+    return false; // an unrecognised word — composition unknown
+  }
+  return sawPlant;
+}
+
+// Energy implied by the macros (Atwater: 4 kcal/g protein and carb, 9 kcal/g
+// fat). Used to detect a record whose calories and macros cannot both be right
+// — see `energyDisagreesWithMacros`.
+export function atwaterCalories(d: {
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+}): number {
+  const p = typeof d.protein_g === "number" ? d.protein_g : 0;
+  const c = typeof d.carbs_g === "number" ? d.carbs_g : 0;
+  const f = typeof d.fat_g === "number" ? d.fat_g : 0;
+  return 4 * p + 4 * c + 9 * f;
+}
+
+// True when stated calories and the macro breakdown are too far apart to both
+// be correct. Tolerance is generous — fibre, sugar alcohols, alcohol itself and
+// label rounding all move the number legitimately — so this only fires on a
+// genuine contradiction, e.g. a scanned oats record stating 180 kcal whose
+// macros account for 83.
+export function energyDisagreesWithMacros(d: {
+  calories?: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+}): boolean {
+  if (typeof d.calories !== "number" || d.calories <= 0) return false;
+  const implied = atwaterCalories(d);
+  // Alcohol carries 7 kcal/g and is not in the macro breakdown, so a drink can
+  // legitimately read high. Only flag when the gap is large in both directions.
+  return Math.abs(d.calories - implied) > Math.max(60, 0.35 * d.calories);
+}
+
 export function enforceNutrientConsistency(d: ParsedNutrition): ParsedNutrition {
   const numericKeys = [
     "calories", "protein_g", "carbs_g", "fat_g", "fiber_g",
@@ -84,6 +163,10 @@ export function enforceNutrientConsistency(d: ParsedNutrition): ParsedNutrition 
       (capSaturatedShare(item.saturated_fat_g, item.fat_g, item.name) as
         | number
         | undefined) ?? item.saturated_fat_g;
+    // A plant component cannot carry cholesterol.
+    if (typeof item.cholesterol_mg === "number" && isPlantOnly(item.name)) {
+      item.cholesterol_mg = 0;
+    }
     return item;
   });
 
@@ -106,6 +189,19 @@ export function enforceNutrientConsistency(d: ParsedNutrition): ParsedNutrition 
       out.fat_g,
       out.items.map((i) => i.name).join(" "),
     ) as number) ?? out.saturated_fat_g;
+
+  // Entry-level cholesterol: zero only when EVERY component is a recognised
+  // plant food (or there are no components and the serving text itself is
+  // unambiguously plant). One unrecognised component is enough to leave the
+  // estimate alone — the rule fires only on certainty.
+  if (typeof out.cholesterol_mg === "number" && out.cholesterol_mg > 0) {
+    const names = out.items.map((i) => i.name).filter((n) => n && n.trim());
+    const allPlant =
+      names.length > 0
+        ? names.every((n) => isPlantOnly(n))
+        : isPlantOnly(out.serving_size ?? "");
+    if (allPlant) out.cholesterol_mg = 0;
+  }
 
   return out;
 }

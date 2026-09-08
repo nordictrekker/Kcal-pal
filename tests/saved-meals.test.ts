@@ -71,3 +71,75 @@ describe("saved meal templates carry full nutrition", () => {
     expect(missingMicros({ iron_mg: 2.1 })).toBe(false);
   });
 });
+
+import {
+  isPlantOnly,
+  energyDisagreesWithMacros,
+  atwaterCalories,
+} from "@/lib/nutrition-sanity";
+
+describe("cholesterol cannot come from plants", () => {
+  it("recognises unambiguous plant foods", () => {
+    // Both from the live audit: a logged banana carried 9.4 mg cholesterol and
+    // a plate of vegetables 5 mg. Neither is possible.
+    expect(isPlantOnly("banana")).toBe(true);
+    expect(isPlantOnly("broccoli")).toBe(true);
+    expect(isPlantOnly("1/2 purple medium carrot")).toBe(true);
+    expect(isPlantOnly("double espresso")).toBe(true);
+  });
+
+  it("never fires on animal or mixed foods", () => {
+    expect(isPlantOnly("chicken breast")).toBe(false);
+    expect(isPlantOnly("greek yoghurt")).toBe(false);
+    // Compound names containing a plant must still be excluded by the animal
+    // term — this is the case that would silently zero a real value.
+    expect(isPlantOnly("banana milkshake")).toBe(false);
+    expect(isPlantOnly("broccoli cheddar soup")).toBe(false);
+    expect(isPlantOnly("egg fried rice")).toBe(false);
+  });
+
+  it("stays silent on anything it does not recognise", () => {
+    expect(isPlantOnly("seduction loaf")).toBe(false);
+    expect(isPlantOnly("")).toBe(false);
+  });
+});
+
+describe("energy vs macro cross-check", () => {
+  it("flags the scanned oats record from the audit", () => {
+    // 180 kcal stated; protein 3.6 + carbs 13.1 + fat 1.8 accounts for 83.
+    expect(
+      energyDisagreesWithMacros({
+        calories: 180, protein_g: 3.6, carbs_g: 13.1, fat_g: 1.8,
+      }),
+    ).toBe(true);
+    expect(Math.round(atwaterCalories({ protein_g: 3.6, carbs_g: 13.1, fat_g: 1.8 }))).toBe(83);
+  });
+
+  it("leaves ordinary label rounding and fibre alone", () => {
+    expect(
+      energyDisagreesWithMacros({
+        calories: 180, protein_g: 6.5, carbs_g: 30, fat_g: 3.5,
+      }),
+    ).toBe(false);
+    // A small entry where a few kcal of slack is normal.
+    expect(
+      energyDisagreesWithMacros({ calories: 45, protein_g: 11, carbs_g: 0, fat_g: 0 }),
+    ).toBe(false);
+    expect(energyDisagreesWithMacros({ calories: 0 })).toBe(false);
+  });
+});
+
+describe("plant-only detection stands down on anything unrecognised", () => {
+  it("accepts the real audit entries", () => {
+    expect(isPlantOnly("1/2 cup broccoli \r\n1/2 purple medium carrot\r\n1 celery stick")).toBe(true);
+    expect(isPlantOnly("1 banana")).toBe(true);
+  });
+  it("rejects a dish with any unrecognised word", () => {
+    // "cheddar" is not in the animal list; the rule must still stand down
+    // because it is not a recognised plant either.
+    expect(isPlantOnly("broccoli cheddar soup")).toBe(false);
+    expect(isPlantOnly("banana bread pudding")).toBe(false);
+    expect(isPlantOnly("carrot cake")).toBe(false);
+    expect(isPlantOnly("potato gratin")).toBe(false);
+  });
+});

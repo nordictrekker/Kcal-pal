@@ -1,5 +1,7 @@
 // OpenFoodFacts v2 API client. Free, no key. Single-call lookup by barcode.
 
+import { energyDisagreesWithMacros } from "./nutrition-sanity";
+
 // Nutrition per single gram of product — the base the portion editor scales.
 export type PerGram = {
   calories: number | null;
@@ -137,13 +139,48 @@ export async function lookupOpenFoodFacts(
     };
   }
 
-  return {
-    description: name,
+  // Values at the chosen basis. Open Food Facts is contributor-maintained and
+  // its per-serving fields are not always entered against the same serving as
+  // the per-serving energy: a scanned oats record read 180 kcal with macros
+  // accounting for only 83. When the two contradict each other, fall back to
+  // the per-100g figures scaled to the serving weight — one internally
+  // consistent basis beats a mix of two inconsistent ones.
+  let macros = {
     calories: readEnergy(n, basis),
     protein_g: numeric(n[`proteins_${basis}`]),
     carbs_g: numeric(n[`carbohydrates_${basis}`]),
     fat_g: numeric(n[`fat_${basis}`]),
     fiber_g: numeric(n[`fiber_${basis}`]),
+  };
+  if (
+    basis === "serving" &&
+    servingGrams &&
+    perGram &&
+    energyDisagreesWithMacros(macros)
+  ) {
+    const scaled = {
+      calories: perGram.calories === null ? null : perGram.calories * servingGrams,
+      protein_g: perGram.protein_g === null ? null : perGram.protein_g * servingGrams,
+      carbs_g: perGram.carbs_g === null ? null : perGram.carbs_g * servingGrams,
+      fat_g: perGram.fat_g === null ? null : perGram.fat_g * servingGrams,
+      fiber_g: perGram.fiber_g === null ? null : perGram.fiber_g * servingGrams,
+    };
+    // Only swap if the per-100g basis is actually self-consistent; otherwise
+    // the source is simply unreliable and we keep what the label stated.
+    if (scaled.calories !== null && !energyDisagreesWithMacros(scaled)) {
+      macros = {
+        calories: round1(scaled.calories),
+        protein_g: round1(scaled.protein_g),
+        carbs_g: round1(scaled.carbs_g),
+        fat_g: round1(scaled.fat_g),
+        fiber_g: round1(scaled.fiber_g),
+      };
+    }
+  }
+
+  return {
+    description: name,
+    ...macros,
     serving_size:
       basis === "serving"
         ? p.serving_size?.trim() || `${p.serving_quantity}g`
@@ -152,6 +189,10 @@ export async function lookupOpenFoodFacts(
     perGram,
     servingGrams,
   };
+}
+
+function round1(v: number | null): number | null {
+  return v === null ? null : Math.round(v * 10) / 10;
 }
 
 function perGramFrom(v: unknown, per: number): number | null {
