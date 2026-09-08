@@ -375,3 +375,41 @@ describe("components described by what was left out", () => {
     expect(statesAnExclusion("")).toBe(false);
   });
 });
+
+describe("absolute per-meal ceilings", () => {
+  const zero = {
+    saturated_fat_g: 0, cholesterol_mg: 0, iron_mg: 0, calcium_mg: 0,
+    magnesium_mg: 0, vitamin_d_mcg: 0, omega3_mg: 0, folate_mcg: 0,
+    choline_mg: 0, iodine_mcg: 0,
+  };
+
+  it("reverts an impossible iron value even as the only disagreement", () => {
+    // The Jaffa shawarma platter: enrichment produced 105.9 mg of iron
+    // against the model's 6.2. The adult UL is 45 mg. Only one field was
+    // suspect, so the 3+ rule alone let it through.
+    const acc = { ...zero, iron_mg: 105.9, magnesium_mg: 575.4, calcium_mg: 425 };
+    clampImplausible(acc, { ...zero, iron_mg: 6.2, magnesium_mg: 135, calcium_mg: 180 });
+    expect(acc.iron_mg).toBe(6.2);
+  });
+
+  it("leaves a legitimate large single-nutrient correction alone", () => {
+    // Salmon omega-3: the model lowballs it and USDA is right. 3000 mg is a
+    // real fillet, well under the ceiling — a ratio rule would wrongly revert
+    // this, which is why the ceiling is absolute rather than relative.
+    const acc = { ...zero, omega3_mg: 3000 };
+    clampImplausible(acc, { ...zero, omega3_mg: 99 });
+    expect(acc.omega3_mg).toBe(3000);
+  });
+
+  it("does not touch a high but achievable fortified calcium value", () => {
+    const acc = { ...zero, calcium_mg: 1022 };
+    clampImplausible(acc, { ...zero, calcium_mg: 300 });
+    expect(acc.calcium_mg).toBe(1022);
+  });
+
+  it("never raises a value toward the ceiling", () => {
+    const acc = { ...zero, iron_mg: 3 };
+    clampImplausible(acc, { ...zero, iron_mg: 90 });
+    expect(acc.iron_mg).toBe(3);
+  });
+});
