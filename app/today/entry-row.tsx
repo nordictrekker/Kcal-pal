@@ -7,7 +7,7 @@ import { updateEntry, deleteEntry, reanalyzeEntry, type EditState } from "./acti
 import { saveEntryAsTemplate } from "../log/saved-actions";
 import { SaveEntryButton } from "../log/saved-meals";
 import type { FoodEntry } from "@/lib/types";
-import { extractComponents } from "@/lib/food-items";
+import { extractComponents, extractAssumptions } from "@/lib/food-items";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,7 +64,10 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
   const [reError, setReError] = useState<string | null>(null);
   const [state, formAction] = useActionState(updateEntry, initial);
   const items = extractComponents(entry.raw_ai_response);
-  const canExpand = items.length > 0;
+  const assumptions = extractAssumptions(entry.raw_ai_response);
+  // Assumptions alone are worth expanding for: an entry can have a wrong
+  // venue assumption without a component breakdown.
+  const canExpand = items.length > 0 || assumptions.length > 0;
 
   useEffect(() => {
     if (state.ok) setEditing(false);
@@ -239,7 +242,26 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
       </div>
 
       {canExpand && expanded ? (
-        <ul className="space-y-1.5 border-t bg-muted/30 px-3 py-2.5 pl-9">
+        <div className="border-t bg-muted/30">
+        {assumptions.length > 0 ? (
+          /* What the estimate ASSUMED — which menu, what portion, thigh vs
+             breast. A wrong assumption yields a confidently wrong breakdown
+             that looks perfectly normal, so this is the only place it can be
+             caught. */
+          <div className="px-3 py-2.5 pl-9">
+            <p className="text-xs font-medium text-muted-foreground">
+              What this assumed
+            </p>
+            <ul className="mt-1 space-y-1">
+              {assumptions.map((a, i) => (
+                <li key={i} className="text-xs leading-snug text-muted-foreground">
+                  · {a}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <ul className="space-y-1.5 px-3 py-2.5 pl-9">
           {items.map((it, idx) => (
             <li key={idx} className="flex items-baseline justify-between gap-3">
               <span className="min-w-0 flex-1 truncate text-xs">
@@ -255,6 +277,7 @@ export function EntryRow({ entry }: { entry: FoodEntry }) {
             </li>
           ))}
         </ul>
+        </div>
       ) : null}
     </div>
   );

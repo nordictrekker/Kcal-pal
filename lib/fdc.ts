@@ -276,18 +276,59 @@ export function statesAnExclusion(name: string): boolean {
 // at ~30x. The ratio cannot separate the two — a wrongly matched food is the
 // wrong thing to detect here. Exclusions are handled at the match step
 // instead, by statesAnExclusion() above, which is where that bug actually is.
+// Amounts a single meal of FOOD cannot deliver, whatever it is. Set well above
+// the richest real dish (and above each nutrient's tolerable upper limit where
+// one exists), so crossing one is an arithmetic or matching failure rather than
+// an unusual meal — the same kind of fact as "saturated fat cannot exceed total
+// fat", not a judgement about the diet.
+//
+// This exists because the ratio test cannot do the job alone. A chicken
+// shawarma platter enriched to 105.9 mg of iron against the model's 6.2 mg
+// (17x): the adult RDA is 18 mg and the upper limit 45 mg, so the value is
+// impossible on its face — yet it cleared the 3+ rule below with only one
+// suspect field, exactly as the shakshuka's cholesterol had a week earlier.
+// A ratio trigger was tried for those and reverted: salmon's omega-3 is a
+// legitimate ~30x correction, so ratio cannot separate the two. An absolute
+// ceiling can — 3000 mg of omega-3 is a real fillet and passes here untouched.
+const IMPLAUSIBLE_CEILING: Record<keyof MicroSet, number> = {
+  saturated_fat_g: 70,
+  cholesterol_mg: 1200,
+  iron_mg: 45, // tolerable upper limit; fortified cereal tops out near 18
+  calcium_mg: 2500, // UL; a fortified meal-replacement legitimately hits ~1000
+  magnesium_mg: 700,
+  vitamin_d_mcg: 100, // UL
+  omega3_mg: 8000, // a large oily-fish portion is ~4000
+  folate_mcg: 1500,
+  choline_mg: 1500,
+  iodine_mcg: 1100, // UL; seaweed is the one food that can exceed it
+};
+
 export function clampImplausible(
   acc: MicroSet,
   ai: Pick<ParsedNutrition, keyof MicroSet>,
 ): void {
+  // The multi-field test reads the ORIGINAL values: a wrong match is evidenced
+  // by many nutrients moving together, so the ceiling pass must not run first
+  // and remove that evidence (doing so dropped the Kate Farms case from four
+  // suspect fields to one, and its inflated vitamin D then survived).
   const suspect = (Object.keys(CLAMP_FLOOR) as Array<keyof MicroSet>).filter(
     (key) => {
       const aiVal = ai[key] ?? 0;
       return aiVal > 0 && acc[key] > 6 * aiVal && acc[key] > CLAMP_FLOOR[key];
     },
   );
-  if (suspect.length < 3) return;
-  for (const key of suspect) acc[key] = ai[key] ?? 0;
+  if (suspect.length >= 3) {
+    for (const key of suspect) acc[key] = ai[key] ?? 0;
+  }
+
+  // Then the absolute ceilings, which revert on their own however few fields
+  // disagree. The model's figure is grounded in the actual dish; a value above
+  // these ceilings is grounded in nothing.
+  for (const key of Object.keys(IMPLAUSIBLE_CEILING) as Array<keyof MicroSet>) {
+    if (acc[key] > IMPLAUSIBLE_CEILING[key] && acc[key] > (ai[key] ?? 0)) {
+      acc[key] = ai[key] ?? 0;
+    }
+  }
 }
 
 // Scale ONLY the fields the record reports; absent fields are omitted so the
