@@ -394,10 +394,18 @@ export async function enrichMicrosWithUsda(
 
   const totalCalories = items.reduce((s, i) => s + (i.calories || 0), 0);
   const acc: MicroSet = { ...ZERO };
+  // What each component ends up contributing, so the stored breakdown can be
+  // rewritten to match the totals. Without this the two drift apart: the
+  // totals were replaced with USDA values while `items` kept the model's
+  // original estimates, so expanding an entry showed components that did not
+  // add up to its own headline (a salmon lunch read 3406 mg of omega-3 while
+  // its four components summed to 1805).
+  const perItem: MicroSet[] = [];
   let anyResolved = false;
   let anyFallback = false;
 
   for (const item of items) {
+    const mine: MicroSet = { ...ZERO };
     let resolved = false;
     if (
       typeof item.grams === "number" &&
@@ -414,13 +422,15 @@ export async function enrichMicrosWithUsda(
         for (const key of Object.keys(ZERO) as Array<keyof MicroSet>) {
           if (present.has(key)) {
             // The record reports this nutrient — use the database value.
-            acc[key] += per100g.values[key] * f;
+            mine[key] = per100g.values[key] * f;
+            acc[key] += mine[key];
           } else {
             // The record does NOT report it. Absent means "not measured",
             // never zero — keep the AI's estimate for this item's share
             // (this zeroed a beef lasagna's saturated fat & cholesterol).
             anyFallback = true;
-            acc[key] += (data[key] ?? 0) * share;
+            mine[key] = (data[key] ?? 0) * share;
+            acc[key] += mine[key];
           }
         }
         resolved = true;
@@ -436,10 +446,12 @@ export async function enrichMicrosWithUsda(
       if (totalCalories > 0) {
         const share = (item.calories || 0) / totalCalories;
         for (const key of Object.keys(ZERO) as Array<keyof MicroSet>) {
-          acc[key] += (data[key] ?? 0) * share;
+          mine[key] = (data[key] ?? 0) * share;
+          acc[key] += mine[key];
         }
       }
     }
+    perItem.push(mine);
   }
 
   // Nothing improved — keep the AI aggregate exactly as-is.
@@ -454,8 +466,26 @@ export async function enrichMicrosWithUsda(
     ? "Some micronutrients sourced from USDA FoodData Central; the rest estimated."
     : "Micronutrients sourced from USDA FoodData Central.";
 
+  // Rewrite the components with what they actually contributed, so the stored
+  // breakdown sums to the stored totals and an entry can be audited by
+  // expanding it. clampImplausible may have reverted a field at entry level;
+  // rescale that field across the components proportionally so the invariant
+  // survives it.
+  const enrichedItems = items.map((item, i) => {
+    const mine = perItem[i] ?? { ...ZERO };
+    const out = { ...item } as Record<string, unknown>;
+    for (const key of Object.keys(ZERO) as Array<keyof MicroSet>) {
+      const summed = perItem.reduce((t, m) => t + m[key], 0);
+      // Proportional share of the (possibly clamped) entry total.
+      const scaled = summed > 0 ? (mine[key] / summed) * acc[key] : 0;
+      out[key] = key === "omega3_mg" ? Math.round(scaled) : round1(scaled);
+    }
+    return out as unknown as (typeof items)[number];
+  });
+
   return enforceNutrientConsistency({
     ...data,
+    items: enrichedItems,
     saturated_fat_g: round1(acc.saturated_fat_g),
     cholesterol_mg: round1(acc.cholesterol_mg),
     iron_mg: round1(acc.iron_mg),

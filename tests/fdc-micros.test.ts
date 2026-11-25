@@ -413,3 +413,44 @@ describe("absolute per-meal ceilings", () => {
     expect(acc.iron_mg).toBe(3);
   });
 });
+
+describe("the stored breakdown must sum to the stored totals", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.USDA_FDC_API_KEY;
+  });
+
+  // A salmon lunch showed 3406 mg of omega-3 while its own four components
+  // summed to 1805. Enrichment replaced the entry totals with USDA values and
+  // left `items` holding the model's pre-enrichment estimates, so expanding an
+  // entry showed numbers that contradicted its headline -- and made any figure
+  // the user doubted impossible to check.
+  it("components reconcile with the entry after enrichment", async () => {
+    process.env.USDA_FDC_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ foods: [SALMON_FOOD] }) })),
+    );
+    const { client } = fakeSupabase();
+    const out = await enrichMicrosWithUsda(client, {
+      ...base,
+      items: [
+        { name: "salmon", quantity: "140 g", grams: 140, calories: 290, protein_g: 30, carbs_g: 0, fat_g: 18 },
+        { name: "basmati rice", quantity: "180 g", grams: 180, calories: 215, protein_g: 4, carbs_g: 48, fat_g: 2 },
+      ],
+    });
+
+    for (const key of ["omega3_mg", "iron_mg", "calcium_mg"] as const) {
+      const summed = (out.items ?? []).reduce(
+        (t, i) => t + (typeof i[key] === "number" ? (i[key] as number) : 0),
+        0,
+      );
+      const total = out[key] as number;
+      // Per-item rounding gives a little slack; a 2x divergence is the bug.
+      expect(
+        Math.abs(summed - total),
+        `${key}: components summed to ${summed}, entry says ${total}`,
+      ).toBeLessThanOrEqual(Math.max(5, total * 0.03));
+    }
+  });
+});
