@@ -10,7 +10,7 @@ export type OnboardingPayload = {
   height_in: number;
   weight_lbs: number;
   activity_level: string;
-  goal: "lose" | "maintain" | "gain" | "muscle";
+  goal: "lose" | "lose_slow" | "maintain" | "gain" | "muscle";
   goal_weight_lbs: number | null;
   target_mode: "auto" | "manual";
   track_cycle: boolean;
@@ -25,7 +25,7 @@ export type OnboardingPayload = {
 export type OnboardingResult = { ok: boolean; error?: string };
 
 const ACTIVITY = ["sedentary", "light", "moderate", "active", "very_active"];
-const GOALS = ["lose", "maintain", "gain", "muscle"];
+const GOALS = ["lose", "lose_slow", "maintain", "gain", "muscle"];
 const SEXES = ["female", "male", "other"];
 
 export async function completeOnboarding(

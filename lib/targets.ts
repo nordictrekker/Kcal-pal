@@ -29,6 +29,11 @@ const ACTIVITY_MULTIPLIER: Record<string, number> = {
 // Goal → daily calorie offset and default protein (g per kg bodyweight).
 const GOAL_OFFSET: Record<string, number> = {
   lose: -500,
+  // A gentler deficit: ~0.5 lb/week instead of ~1. The -500 setting is a lot
+  // for someone already lean — at a BMI near 19-20 it can mean eating below
+  // what training and hormones need, and lean mass is the first thing a steep
+  // deficit costs. This keeps the direction without the severity.
+  lose_slow: -250,
   maintain: 0,
   gain: 300,
   // Build muscle: a lean surplus — enough to fuel muscle protein synthesis
@@ -37,6 +42,7 @@ const GOAL_OFFSET: Record<string, number> = {
 };
 const GOAL_PROTEIN_PER_KG: Record<string, number> = {
   lose: 2.0, // preserve lean mass in a deficit
+  lose_slow: 2.0, // same reason: a deficit of any size needs the protein
   maintain: 1.6,
   gain: 1.8,
   muscle: 2.2, // top of the muscle-protein-synthesis range

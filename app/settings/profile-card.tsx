@@ -151,6 +151,7 @@ export function ProfileCard({ initial }: { initial: ProfileSettings }) {
                 defaultValue={initial.goal}
                 options={[
                   ["lose", "Lose"],
+                  ["lose_slow", "Lose slowly"],
                   ["maintain", "Maintain"],
                   ["gain", "Gain"],
                   ["muscle", "Build muscle"],

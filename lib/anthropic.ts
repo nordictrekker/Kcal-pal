@@ -7,7 +7,11 @@ import { SUPPLEMENT_REF } from "./labeled-products";
 export { SUPPLEMENT_REF };
 
 // Pinned by the project spec.
-export const NUTRITION_MODEL = "claude-opus-4-8";
+// Claude Opus 5.5: newer than the 4.8 this ran on, and cheaper with it
+// ($4/$20 per MTok vs $5/$25). The app uses none of what 5.5 removed — no
+// forced tool_choice, no assistant prefill, no thinking config, no sampling
+// parameters — so the swap needs no other change.
+export const NUTRITION_MODEL = "claude-opus-5-5";
 
 const NUTRIENT_FIELDS =
   "calories: number, protein_g: number, carbs_g: number, fat_g: number, fiber_g: number, saturated_fat_g: number, trans_fat_g: number, cholesterol_mg: number, iron_mg: number, calcium_mg: number, magnesium_mg: number, vitamin_d_mcg: number, omega3_mg: number, folate_mcg: number, choline_mg: number, iodine_mcg: number, plants: string[]";
@@ -168,7 +172,11 @@ async function callAndParse(
     // Web search (server tool, runs inside the one call) makes the request take
     // longer, so give it a wider timeout than the plain 30s parse.
     const tools = opts.webSearch
-      ? ([{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] as
+      // The 2026-02-09 search tool adds dynamic filtering, which is aimed at
+      // exactly the failure that logged a Jaffa Miami shawarma platter against
+      // a different restaurant's menu. The older web_search_20250305 variant
+      // is for models predating Opus 4.6.
+      ? ([{ type: "web_search_20260209", name: "web_search", max_uses: 3 }] as
           Anthropic.Messages.ToolUnion[])
       : undefined;
     const resp = await getAnthropic().messages.create(
