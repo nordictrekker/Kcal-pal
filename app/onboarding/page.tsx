@@ -30,10 +30,13 @@ export default async function OnboardingPage() {
     | "male"
     | "other";
   const goal = (
-    p?.goal === "lose" || p?.goal === "gain" || p?.goal === "muscle"
+    p?.goal === "lose" ||
+    p?.goal === "lose_slow" ||
+    p?.goal === "gain" ||
+    p?.goal === "muscle"
       ? p.goal
       : "maintain"
-  ) as "lose" | "maintain" | "gain" | "muscle";
+  ) as "lose" | "lose_slow" | "maintain" | "gain" | "muscle";
 
   const prefill: WizardPrefill = {
     first_name: p?.first_name ?? "",

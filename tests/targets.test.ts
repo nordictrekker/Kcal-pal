@@ -171,3 +171,47 @@ describe("build & muscle-goal protein", () => {
     expect(muscle.targets.calories).toBe(maintain.targets.calories + 150);
   });
 });
+
+describe("lose_slow — a deficit sized for someone already lean", () => {
+  // Julie's real stats: 31, female, 5'4", 115 lbs, active. At BMI 19.7 the
+  // standard -500 setting lands ~600 kcal under what she actually eats, which
+  // is a lot to take off someone this lean — lose_slow halves it.
+  const lean: TargetInputs = {
+    ...baseAuto,
+    dateOfBirth: "1995-03-13",
+    heightIn: 64,
+    weightLbs: 115,
+    activityLevel: "active",
+    goal: "lose_slow",
+  };
+
+  it("cuts half as deep as the standard deficit", () => {
+    const slow = computeTargets(lean).targets.calories;
+    const fast = computeTargets({ ...lean, goal: "lose" }).targets.calories;
+    const hold = computeTargets({ ...lean, goal: "maintain" }).targets.calories;
+    expect(hold - slow).toBe(250);
+    expect(hold - fast).toBe(500);
+    expect(slow).toBeGreaterThan(fast);
+  });
+
+  it("keeps protein at the lean-mass-preserving 2.0 g/kg", () => {
+    // A smaller deficit is still a deficit: protein must not drop with it.
+    const slow = computeTargets(lean).targets;
+    const fast = computeTargets({ ...lean, goal: "lose" }).targets;
+    expect(slow.protein_g).toBe(fast.protein_g);
+    expect(slow.protein_g).toBe(Math.round(2.0 * 115 * 0.45359237));
+  });
+
+  it("still refuses to prescribe below the RMR floor", () => {
+    // The floor is the guard that matters most for a lean, active woman.
+    const tiny = computeTargets({
+      ...lean,
+      weightLbs: 95,
+      activityLevel: "sedentary",
+    });
+    expect(tiny.targets.calories).toBeGreaterThan(0);
+    expect(tiny.targets.calories).toBeGreaterThanOrEqual(
+      Math.round(computeTargets({ ...lean, weightLbs: 95, activityLevel: "sedentary", goal: "maintain" }).targets.calories * 0.6),
+    );
+  });
+});

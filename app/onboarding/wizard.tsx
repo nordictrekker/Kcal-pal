@@ -18,7 +18,7 @@ export type WizardPrefill = {
   height_in: number | null;
   weight_lbs: number | null;
   activity_level: string;
-  goal: "lose" | "maintain" | "gain" | "muscle";
+  goal: "lose" | "lose_slow" | "maintain" | "gain" | "muscle";
   body_build: string | null;
   goal_weight_lbs: number | null;
   target_mode: "auto" | "manual";
@@ -37,7 +37,10 @@ const ACTIVITY_OPTIONS = [
 ];
 
 const GOAL_OPTIONS = [
-  { value: "lose", label: "Lose", hint: "Gentle deficit" },
+  // "lose" is -500 kcal/day (~1 lb/week). It was labelled "Gentle deficit",
+  // which it is not — that wording understated the size of the cut.
+  { value: "lose", label: "Lose", hint: "~1 lb/week" },
+  { value: "lose_slow", label: "Lose slowly", hint: "~0.5 lb/week" },
   { value: "maintain", label: "Maintain", hint: "Hold steady" },
   { value: "gain", label: "Gain", hint: "Build slowly" },
   { value: "muscle", label: "Build muscle", hint: "Lean surplus" },

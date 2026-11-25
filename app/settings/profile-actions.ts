@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export type ProfileResult = { ok: boolean; error?: string };
 
 const ACTIVITY = ["sedentary", "light", "moderate", "active", "very_active"];
-const GOALS = ["lose", "maintain", "gain", "muscle"];
+const GOALS = ["lose", "lose_slow", "maintain", "gain", "muscle"];
 const SEXES = ["female", "male", "other"];
 
 // Update the body + goal + cycle fields that drive smarter targets and
